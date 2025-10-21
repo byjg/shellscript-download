@@ -7,6 +7,7 @@ import Index from "./pages/Index";
 import InstallLoader from "./pages/InstallLoader";
 import List from "./pages/List";
 import NotFound from "./pages/NotFound";
+import { scriptRoutes } from "./generated/scriptRoutes";
 
 const queryClient = new QueryClient();
 
@@ -18,6 +19,9 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
+          {scriptRoutes.map((r) => (
+            <Route key={r.path} path={r.path} element={r.element} />
+          ))}
           {/*<Route path="/install/loader" element={<InstallLoader />} />*/}
           {/*<Route path="/list" element={<List />} />*/}
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
