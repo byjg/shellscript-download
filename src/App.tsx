@@ -19,11 +19,11 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
+          <Route path="/list" element={<List />} />
           {scriptRoutes.map((r) => (
             <Route key={r.path} path={r.path} element={r.element} />
           ))}
           {/*<Route path="/install/loader" element={<InstallLoader />} />*/}
-          <Route path="/list" element={<List />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           {/*<Route path="*" element={<NotFound />} />*/}
         </Routes>
