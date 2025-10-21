@@ -1,0 +1,10 @@
+name = "loader-launch"
+compatibility_date = "2025-10-21"
+
+[assets]
+directory = "./dist"
+# Either:
+# 1) return an empty 404 (no custom page):
+not_found_handling = "none"
+# or 2) serve dist/404.html *with* a 404 status:
+# not_found_handling = "404-page"
