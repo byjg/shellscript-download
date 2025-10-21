@@ -36,7 +36,7 @@ Examples:
   php-docker.sh 7.4
 
 To use via load.sh (from this repo):
-  load.sh php-docker -- 8.3
+  load.sh php-docker 8.3
 
 USAGE
 }
@@ -101,7 +101,7 @@ set -euo pipefail
 # Wrapper for composer via Docker (byjg/php:<version>-cli)
 # Mount current dir and persist Composer home between runs.
 docker run -it --rm \
-  -v "${PWD}":/workdir \
+  -v "\${PWD}":/workdir \
   -v "${COMPOSER_CACHE}:/tmp/.composer" \
   -e COMPOSER_HOME=/tmp/.composer \
   -w /workdir \
