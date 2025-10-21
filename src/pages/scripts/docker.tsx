@@ -4,6 +4,7 @@
 
 import React from "react";
 import { Link } from "react-router-dom";
+import { InstallCommand } from "@/components/InstallCommand.tsx";
 
 export default function Script_docker() {
   return (
@@ -19,9 +20,9 @@ Examples (following load.sh style):
   # Install Docker with sensible defaults
   load.sh docker
   # Show help
-  docker.sh --help
+  load.sh docker -- --help
   # Simulate actions without making changes
-  docker.sh --dry-run
+  load.sh docker -- --dry-run
 
 Description:
 - Installs Docker Engine using the official convenience script from get.docker.com
@@ -30,6 +31,7 @@ Description:
 - Idempotent: safe to re-run, it will skip already completed steps
 - Non-interactive: suitable for CI; prints clear logs and exits on first error
 - Supports a dry-run mode for previewing actions`}</pre>
+      <InstallCommand command="load.sh {base}" />
     </div>
   );
 }

@@ -5,7 +5,7 @@
 #
 # Example (following load.sh style):
 #   # Ensure this installer exists locally, then run it with PHP 8.3
-#   # load.sh php-docker 8.3
+#   # load.sh php-docker -- 8.3
 #
 # Description:
 # - Generates two wrapper scripts in "$HOME/.local/bin":

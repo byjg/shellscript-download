@@ -4,6 +4,7 @@
 
 import React from "react";
 import { Link } from "react-router-dom";
+import { InstallCommand } from "@/components/InstallCommand.tsx";
 
 export default function Script_php_docker() {
   return (
@@ -29,6 +30,7 @@ Notes:
 - Supported versions: 5.6, 7.0–7.4, 8.0–8.5
 - Requires Docker installed and available on PATH.
 - This script is idempotent and can be re-run to switch versions.`}</pre>
+      <InstallCommand command="load.sh {base}" />
     </div>
   );
 }

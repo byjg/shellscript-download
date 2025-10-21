@@ -7,7 +7,7 @@ interface InstructionStepProps {
 export const InstructionStep = ({ number, title, description }: InstructionStepProps) => {
   return (
     <div className="flex gap-6">
-      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent/70 text-2xl font-bold text-accent-foreground shadow-lg">
+      <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent/70 text-2xl font-bold text-accent-foreground shadow-lg ${number === "0" ? "invisible" : ""}`}>
         {number}
       </div>
       <div className="flex-1">

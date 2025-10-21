@@ -4,6 +4,7 @@
 
 import React from "react";
 import { Link } from "react-router-dom";
+import { InstallCommand } from "@/components/InstallCommand.tsx";
 
 export default function Script_load() {
   return (
@@ -20,6 +21,7 @@ Behavior:
   and save it to:   $HOME/.local/bin/<script>.sh
 - After ensuring the script exists, run it with the remaining arguments, unless --dont-run is passed.
 - Exits with the same code as the executed script when run.`}</pre>
+      <InstallCommand command="load.sh {base}" />
     </div>
   );
 }

@@ -94,6 +94,7 @@ function buildComponentTsx({ title, bodyText, base }) {
 
 import React from "react";
 import { Link } from "react-router-dom";
+import { InstallCommand } from "@/components/InstallCommand.tsx";
 
 export default function ${compName}() {
   return (
@@ -101,6 +102,7 @@ export default function ${compName}() {
       <Link to="/">← Home</Link>
       <h1 style={{fontSize: "1.5rem", margin: "0 0 1rem"}}>${title}</h1>
       <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem'}}>{` + "`" + escaped.replace(/`/g, '\\`') + "`" + `}</pre>
+      <InstallCommand command="load.sh {base}" />
     </div>
   );
 }
