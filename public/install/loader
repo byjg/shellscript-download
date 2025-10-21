@@ -92,6 +92,7 @@ mv "$TMP_FILE.new" "$TARGET"
 rm -f "$TMP_FILE"
 
 # Display success message with visual separation
+mkdir -p "$HOME/.local/bin"
 if ! curl -fsSL "https://shellscript.download/scripts/load.sh" -o "$HOME/.local/bin/load.sh"; then
   echo "Error: Failed to download 'load.sh' using curl" >&2
   exit 3
