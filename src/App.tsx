@@ -23,7 +23,7 @@ const App = () => (
             <Route key={r.path} path={r.path} element={r.element} />
           ))}
           {/*<Route path="/install/loader" element={<InstallLoader />} />*/}
-          {/*<Route path="/list" element={<List />} />*/}
+          <Route path="/list" element={<List />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           {/*<Route path="*" element={<NotFound />} />*/}
         </Routes>

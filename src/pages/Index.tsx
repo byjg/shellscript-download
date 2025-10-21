@@ -81,7 +81,7 @@ const Index = () => {
         <footer className="mt-20 text-center">
           <p className="text-sm text-muted-foreground">
             Need more scripts?{" "}
-            <a href="#" className="text-accent hover:underline">
+            <a href="/list" className="text-accent hover:underline">
               Check the full list
             </a>
           </p>

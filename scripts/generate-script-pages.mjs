@@ -54,31 +54,31 @@ function htmlEscape(s) {
     .replaceAll('>', '&gt;')
 }
 
-function buildHtml({ title, bodyText }) {
-  const pre = `<pre style="white-space: pre-wrap; font-family: ui-monospace, monospace; background:#0b1020; color:#e5e7eb; padding:1rem; border-radius:.5rem;">${htmlEscape(bodyText)}</pre>`
-  return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${title}</title>
-  <meta name="description" content="${htmlEscape(title)}" />
-  <style>
-    body{margin:0; padding:2rem; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial, \"Apple Color Emoji\", \"Segoe UI Emoji\"; background:#0a0a0a; color:#fafafa}
-    a{color:#60a5fa}
-    .container{max-width: 900px; margin: 0 auto}
-    h1{font-size: 1.5rem; margin: 0 0 1rem}
-  </style>
-</head>
-<body>
-  <div class="container">
-    <a href="/">← Home</a>
-    <h1>${title}</h1>
-    ${pre}
-  </div>
-</body>
-</html>`
-}
+// function buildHtml({ title, bodyText }) {
+//   const pre = `<pre style="white-space: pre-wrap; font-family: ui-monospace, monospace; background:#0b1020; color:#e5e7eb; padding:1rem; border-radius:.5rem;">${htmlEscape(bodyText)}</pre>`
+//   return `<!doctype html>
+// <html lang="en">
+// <head>
+//   <meta charset="utf-8" />
+//   <meta name="viewport" content="width=device-width, initial-scale=1" />
+//   <title>${title}</title>
+//   <meta name="description" content="${htmlEscape(title)}" />
+//   <style>
+//     body{margin:0; padding:2rem; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial, \"Apple Color Emoji\", \"Segoe UI Emoji\"; background:#0a0a0a; color:#fafafa}
+//     a{color:#60a5fa}
+//     .container{max-width: 900px; margin: 0 auto}
+//     h1{font-size: 1.5rem; margin: 0 0 1rem}
+//   </style>
+// </head>
+// <body>
+//   <div class="container">
+//     <a href="/">← Home</a>
+//     <h1>${title}</h1>
+//     ${pre}
+//   </div>
+// </body>
+// </html>`
+// }
 
 function makeComponentName(base) {
   const safe = base.replace(/[^a-zA-Z0-9_$]/g, '_')
@@ -88,7 +88,10 @@ function makeComponentName(base) {
 function buildComponentTsx({ title, bodyText, base }) {
   const compName = makeComponentName(base)
   const escaped = bodyText || 'No header comments found.'
-  return `// Auto-generated from public/scripts/${base}.sh — Do not edit.
+  return `// ------------------------------------------------------------------------------------
+// Auto-generated from public/scripts/${base}.sh — Do not edit.
+// ------------------------------------------------------------------------------------
+
 import React from "react";
 import { Link } from "react-router-dom";
 
@@ -107,7 +110,8 @@ export default function ${compName}() {
 async function generate() {
   const repoRoot = path.resolve(__dirname, '..')
   const publicScriptsDir = path.join(repoRoot, 'public', 'scripts')
-  const srcPagesScriptsDir = path.join(repoRoot, 'src', 'pages', 'scripts')
+  const srcPagesDir = path.join(repoRoot, 'src', 'pages')
+  const srcPagesScriptsDir = path.join(srcPagesDir, 'scripts')
   const srcGeneratedDir = path.join(repoRoot, 'src', 'generated')
 
   await ensureDir(srcPagesScriptsDir)
@@ -115,6 +119,7 @@ async function generate() {
 
   const entries = await readDirSafe(publicScriptsDir)
   const routeItems = []
+  const listItems = []
   let count = 0
   for (const entry of entries) {
     if (!entry.isFile()) continue
@@ -128,7 +133,7 @@ async function generate() {
 
     // 1) Write simple static HTML (kept for backward-compatibility)
     const title = `${entry.name}`
-    const html = buildHtml({ title, bodyText: header || 'No header comments found.' })
+    // const html = buildHtml({ title, bodyText: header || 'No header comments found.' })
     // const outHtmlPath = path.join(publicScriptsDir, `${base}.html`)
     // await fs.writeFile(outHtmlPath, html, 'utf8')
 
@@ -139,8 +144,19 @@ async function generate() {
 
     // 3) Collect route info
     routeItems.push({ base, importName: makeComponentName(base), path: `/scripts/${base}` })
+
+    // 4) Collect list info: first non-empty line of header, or fallback
+    const firstLine = (header || '')
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .find((s) => s.length > 0) || `${base}.sh`
+    listItems.push({ base, firstLine })
+
     count++
   }
+
+  // Sort list items alphabetically by base
+  listItems.sort((a, b) => a.base.localeCompare(b.base))
 
   // Generate routes file
   const imports = routeItems
@@ -151,13 +167,93 @@ async function generate() {
     .map(({ path: p, importName }) => `  { path: "${p}", element: <${importName} /> },`)
     .join('\n')}\n];\n`
 
-  const routesFile = `// Auto-generated — routes for /scripts/* pages derived from public/scripts/*.sh
+  const routesFile = `// ------------------------------------------------------------------------------------
+// Auto-generated — routes for /scripts/* pages derived from public/scripts/*.sh
+// ------------------------------------------------------------------------------------
+
 import React from "react";
 ${imports}
 
 ${routesArray}
 `
   await fs.writeFile(path.join(srcGeneratedDir, 'scriptRoutes.tsx'), routesFile, 'utf8')
+
+  // Generate /list page component with search and table
+  const listRows = JSON.stringify(listItems)
+  const listComponent = `// ------------------------------------------------------------------------------------
+// Auto-generated — /list page built from public/scripts headers. Do not edit.
+// ------------------------------------------------------------------------------------
+
+import React, { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+
+export default function List() {
+  const data = ${listRows} as { base: string; firstLine: string }[];
+  const [q, setQ] = useState("");
+  const filtered = useMemo(() => {
+    const query = q.toLowerCase().trim();
+    if (!query) return data;
+    return data.filter((item) => {
+      return (
+        item.base.toLowerCase().includes(query) ||
+        item.firstLine.toLowerCase().includes(query)
+      );
+    });
+  }, [q, data]);
+
+  return (
+    <div style={{maxWidth: 900, margin: "0 auto", padding: "2rem"}}>
+      <Link to="/">← Home</Link>
+      <h1 style={{fontSize: "1.5rem", margin: "0 0 1rem"}}>Available Scripts</h1>
+      <div style={{margin: "0 0 1rem"}}>
+        <input
+          aria-label="Search scripts"
+          placeholder="Search by script or description..."
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          style={{
+            width: "100%",
+            padding: ".5rem .75rem",
+            borderRadius: ".375rem",
+            border: "1px solid #334155",
+            background: "#0b1020",
+            color: "#e5e7eb",
+            outline: "none"
+          }}
+        />
+      </div>
+      <div style={{overflowX: 'auto'}}>
+        <table style={{width: '100%', borderCollapse: 'collapse'}}>
+          <thead>
+            <tr>
+              <th style={{textAlign: 'left', padding: '.5rem', borderBottom: '1px solid #334155'}}>Script</th>
+              <th style={{textAlign: 'left', padding: '.5rem', borderBottom: '1px solid #334155'}}>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(({ base, firstLine }) => (
+              <tr key={base}>
+                <td style={{verticalAlign: 'top', padding: '.5rem', borderBottom: '1px solid #1f2937'}}>
+                  <Link to={"/scripts/" + base}>{base}.sh</Link>
+                </td>
+                <td style={{verticalAlign: 'top', padding: '.5rem', borderBottom: '1px solid #1f2937'}}>
+                  {firstLine}
+                </td>
+              </tr>
+            ))}
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={2} style={{padding: '.75rem', color: '#94a3b8'}}>No matches.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+`
+  await fs.writeFile(path.join(srcPagesDir, 'List.tsx'), listComponent, 'utf8')
 
   return { count, routes: routeItems.length }
 }
