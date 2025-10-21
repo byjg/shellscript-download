@@ -34,11 +34,11 @@ const Index = () => {
             <span className="font-mono text-sm font-medium text-foreground">shellscript.download</span>
           </div>
           <h1 className="mb-6 text-5xl font-bold tracking-tight text-foreground md:text-6xl lg:text-7xl">
-            Install Scripts the
-            <span className="bg-gradient-to-r from-accent to-accent/70 bg-clip-text text-transparent"> Easy Way</span>
+            Download & Run Scripts
+            <span className="bg-gradient-to-r from-accent to-accent/70 bg-clip-text text-transparent"> Easily</span>
           </h1>
           <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
-            Download and install essential shell scripts for your Linux system with a single command.
+            Download and run pre-defined shell scripts in your Linux system with a single command.
             No manual configuration needed.
           </p>
         </header>
