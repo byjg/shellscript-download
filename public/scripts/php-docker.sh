@@ -5,7 +5,7 @@
 #
 # Example (following load.sh style):
 #   # Ensure this installer exists locally, then run it with PHP 8.3
-#   # $HOME/.local/bin/load.sh php-docker -- 8.3
+#   # load.sh php-docker 8.3
 #
 # Description:
 # - Generates two wrapper scripts in "$HOME/.local/bin":
@@ -32,11 +32,8 @@ Installs Docker-backed wrappers for php and composer under $HOME/.local/bin
 using the byjg/php:<version>-cli image.
 
 Examples:
-  php-docker.sh 8.3
-  php-docker.sh 7.4
-
-To use via load.sh (from this repo):
-  load.sh php-docker 8.3
+  load.sh php-docker -- 8.3
+  load.sh php-docker -- 7.4
 
 USAGE
 }

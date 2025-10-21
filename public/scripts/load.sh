@@ -11,6 +11,14 @@
 # - Exits with the same code as the executed script when run.
 set -euo pipefail
 
+# Disallow running as root (UID 0)
+if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+  echo "Error: load.sh must not be run as root (UID 0)." >&2
+  echo "Please run as a regular user without sudo." >&2
+  echo "If necessary the script will call the sudo internally" >&2
+  exit 1
+fi
+
 echo ">_ load.sh"
 echo
 
