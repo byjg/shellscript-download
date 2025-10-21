@@ -2,7 +2,6 @@
 // Auto-generated — routes for /scripts/* pages derived from public/scripts/*.sh
 // ------------------------------------------------------------------------------------
 
-import React from "react";
 import Script_docker from "../pages/scripts/docker";
 import Script_load from "../pages/scripts/load";
 import Script_php_docker from "../pages/scripts/php-docker";
