@@ -21,7 +21,7 @@ const App = () => (
           {/*<Route path="/install/loader" element={<InstallLoader />} />*/}
           {/*<Route path="/list" element={<List />} />*/}
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
+          {/*<Route path="*" element={<NotFound />} />*/}
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
