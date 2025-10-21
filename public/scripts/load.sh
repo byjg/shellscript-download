@@ -79,6 +79,7 @@ fi
 
 DEST_DIR="$HOME/.local/bin"
 DEST_PATH="$DEST_DIR/${SCRIPT_NAME}.sh"
+DEST_PATH_TMP="$DEST_DIR/.tmp.${SCRIPT_NAME}.sh"
 URL="https://shellscript.download/scripts/${SCRIPT_NAME}.sh"
 
 ensure_downloaded() {
@@ -95,7 +96,7 @@ ensure_downloaded() {
         exit 3
       fi
       # Proceed to download only after confirming HTTP 200
-      if ! curl -fsSL "${URL}" -o "${DEST_PATH}"; then
+      if ! curl -fsSL "${URL}" -o "${DEST_PATH_TMP}"; then
         echo "Error: Failed to download ${URL} using curl" >&2
         exit 3
       fi
@@ -108,7 +109,7 @@ ensure_downloaded() {
         exit 3
       fi
       # Proceed to download only after confirming HTTP 200
-      if ! wget -q -O "${DEST_PATH}" "${URL}"; then
+      if ! wget -q -O "${DEST_PATH_TMP}" "${URL}"; then
         echo "Error: Failed to download ${URL} using wget" >&2
         exit 3
       fi
@@ -116,6 +117,7 @@ ensure_downloaded() {
       echo "Error: Neither curl nor wget is installed; cannot download scripts." >&2
       exit 3
     fi
+    mv "${DEST_PATH_TMP}" "${DEST_PATH}"
     chmod +x "${DEST_PATH}" || true
   fi
 }
