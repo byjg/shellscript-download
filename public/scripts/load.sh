@@ -11,6 +11,9 @@
 # - Exits with the same code as the executed script when run.
 set -euo pipefail
 
+echo ">_ load.sh"
+echo
+
 print_usage() {
   cat <<'USAGE'
 load.sh [--update] [--dont-run] <script> [optional args...]
@@ -77,7 +80,7 @@ if [[ -z "${SCRIPT_NAME}" ]]; then
   exit 2
 fi
 
-DEST_DIR="$HOME/.local/bin"
+DEST_DIR="$HOME/.local/shellscript.download"
 DEST_PATH="$DEST_DIR/${SCRIPT_NAME}.sh"
 DEST_PATH_TMP="$DEST_DIR/.tmp.${SCRIPT_NAME}.sh"
 URL="https://shellscript.download/scripts/${SCRIPT_NAME}.sh"
