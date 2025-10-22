@@ -9,10 +9,7 @@ ubuntu:24.04 bash
 After inside run:
 
 ```bash
-apt update && apt install -y curl 
-
-# Install sudo package
-apt update && apt install -y sudo
+apt update && apt install -y curl sudo vim
 
 # Create user 'user' with home directory and bash shell
 useradd -m -s /bin/bash user

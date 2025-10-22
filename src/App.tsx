@@ -11,6 +11,11 @@ import { scriptRoutes } from "./generated/scriptRoutes";
 
 const queryClient = new QueryClient();
 
+const validateRoute = (route) => {
+    // Add validation logic here
+    return true;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -19,10 +24,12 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
-          <Route path="/list" element={<List />} />
-          {scriptRoutes.map((r) => (
-            <Route key={r.path} path={r.path} element={r.element} />
-          ))}
+          {/*<Route path="/list" element={<List />} />*/}
+          {scriptRoutes
+            .filter(validateRoute)
+            .map((r) => (
+              <Route key={r.path} path={r.path} element={r.element} />
+            ))}
           {/*<Route path="/install/loader" element={<InstallLoader />} />*/}
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           {/*<Route path="*" element={<NotFound />} />*/}

@@ -1,3 +1,3 @@
 # wrangler.toml (Pages)
-name = "loader-lunch"
+name = "loader-launch"
 pages_build_output_dir = "dist"

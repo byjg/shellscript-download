@@ -1,0 +1,227 @@
+#!/usr/bin/env bash
+# node-docker.sh: Create Docker-backed Node.js launchers (node, npm, npx, yarn)
+# Usage:
+#   node-docker.sh <node_version>
+#
+# Example (following load.sh style):
+#   # Ensure this installer exists locally, then run it with Node 22
+#   # load.sh node-docker -- 22
+#
+# Description:
+# - Generates wrapper scripts in "$HOME/.local/bin" for the selected Node version:
+#     - node<ver> → runs Node inside node:<ver>-alpine
+#     - npm<ver>  → runs npm inside node:<ver>-alpine (persisting ~/.npm and honoring ~/.npmrc)
+#     - npx<ver>  → runs npx inside node:<ver>-alpine
+#     - yarn<ver> → runs yarn inside node:<ver>-alpine (persisting ~/.cache/yarn)
+# - Also updates convenience symlinks: node, npm, npx, yarn → their <ver> counterparts.
+# - Pulls the specified Docker image and marks the wrappers executable.
+# - Intended for environments where Node.js tooling is not installed natively.
+#
+# Notes:
+# - Typical versions: 18, 20, 22 (any tag supported by docker hub node:<tag>-alpine)
+# - Requires Docker installed and available on PATH.
+# - Inspector: set NODE_INSPECT=1 and optionally NODE_INSPECT_PORT (default 9229) for node wrapper.
+# - This script is idempotent and can be re-run to switch versions.
+
+set -euo pipefail
+
+echo ">_ node-docker.sh"
+echo
+
+print_usage() {
+  cat <<'USAGE'
+node-docker.sh <node_version>
+
+Installs Docker-backed wrappers for Node.js tools (node, npm, npx, yarn)
+under $HOME/.local/bin using node:<version>-alpine Docker image.
+
+Examples:
+  load.sh node-docker -- 22
+  load.sh node-docker -- 20
+
+USAGE
+}
+
+# Help flag handling
+if [[ "${1-}" == "-h" || "${1-}" == "--help" ]]; then
+  print_usage
+  exit 0
+fi
+
+# Validate argument
+if [[ $# -lt 1 ]]; then
+  echo "Error: <php_version> is required." >&2
+  echo >&2
+  print_usage >&2
+  exit 2
+fi
+
+NODE_VERSION=$1
+NODE_IMAGE="node:${NODE_VERSION}-alpine"
+
+#case "$1" in
+#  "5.6"|"7.0"|"7.1"|"7.2"|"7.3"|"7.4"|"8.0"|"8.1"|"8.2"|"8.3"|"8.4"|"8.5")
+#    PHP_VERSION="$1"
+#    ;;
+#  *)
+#    echo "Error: Invalid PHP version. Supported versions are: 5.6, 7.0, 7.1, 7.2, 7.3, 7.4, 8.0, 8.1, 8.2, 8.3, 8.4, 8.5" >&2
+#    exit 1
+#    ;;
+#esac
+
+# Pre-flight: docker availability
+if ! command -v docker >/dev/null 2>&1; then
+  echo "Error: Docker is required but was not found on PATH." >&2
+  exit 3
+fi
+
+# Pull image and make wrappers executable
+# shellcheck disable=SC2154  # PHP_VERSION is set via case above
+if ! docker pull "$NODE_IMAGE"; then
+  echo "Error: Failed to pull Docker image ${NODE_IMAGE}" >&2
+  exit 4
+fi
+
+DEST_FOLDER="$HOME/.local/bin"
+NODE_NPM="$HOME/.npm${NODE_VERSION}"
+NODE_NPMRC="$HOME/.npmrc"
+CONTAINER_HOME="/tmp/home"
+mkdir -p "${DEST_FOLDER}"
+mkdir -p "$NODE_NPM"
+
+cat >"${DEST_FOLDER}/node${NODE_VERSION}" <<WRAP
+#!/usr/bin/env bash
+set -euo pipefail
+# Wrapper to run Node inside Docker, similar to your PHP wrapper.
+# Usage:
+#   node app.js
+#   NODE_INSPECT=1 ./node app.js
+#
+# Env:
+#   NODE_VERSION=22          # default if unset
+#   NODE_INSPECT=1           # enable inspector (maps port 9229)
+#   NODE_INSPECT_PORT=9229   # optional custom port on host/container
+
+NODE_INSPECT=1
+NODE_INSPECT_PORT=9229
+
+DOCKER_ARGS=(
+  -it --rm
+  -v "\${PWD}":/workdir
+  -w /workdir
+  -u "$(id -u)":"$(id -g)"
+  -e "HOME=${CONTAINER_HOME}"
+  -v "${NODE_NPM}:${CONTAINER_HOME}/.npm"
+)
+
+# Pass read-only .npmrc if present
+if [[ -f "${NODE_NPMRC}" ]]; then
+  DOCKER_ARGS+=( -v "${NODE_NPMRC}:${CONTAINER_HOME}/.npmrc:ro" )
+fi
+
+# Enable inspector if requested
+if [[ "${NODE_INSPECT:-}" != "" ]]; then
+  HOST_PORT="${NODE_INSPECT_PORT:-9229}"
+  DOCKER_ARGS+=( -p "\${HOST_PORT}:9229" -e "NODE_OPTIONS=--inspect=0.0.0.0:9229" )
+fi
+
+exec docker run "\${DOCKER_ARGS[@]}" "$NODE_IMAGE" node "\$@"
+WRAP
+chmod +x "${DEST_FOLDER}/node${NODE_VERSION}"
+
+cat >"${DEST_FOLDER}/npm${NODE_VERSION}" <<WRAP
+#!/usr/bin/env bash
+set -euo pipefail
+
+DOCKER_ARGS=(
+  -it --rm
+  -v "\${PWD}":/workdir
+  -w /workdir
+  -u "$(id -u)":"$(id -g)"
+  -e "HOME=${CONTAINER_HOME}"
+  -v "${NODE_NPM}:${CONTAINER_HOME}/.npm"
+)
+
+if [[ -f "${NODE_NPMRC}" ]]; then
+  DOCKER_ARGS+=( -v "${NODE_NPMRC}:${CONTAINER_HOME}/.npmrc:ro" )
+
+  # If you use a custom per-user global prefix, mount it
+  if grep -q '^prefix=' "${NODE_NPMRC}" 2>/dev/null; then
+    PREFIX_DIR="\$(awk -F= '/^prefix=/{print \$2}' "${NODE_NPMRC}")"
+    mkdir -p "\${PREFIX_DIR}"
+    DOCKER_ARGS+=( -v "\${PREFIX_DIR}:\${PREFIX_DIR}" )
+  fi
+fi
+
+exec docker run "\${DOCKER_ARGS[@]}" "$NODE_IMAGE" npm "\$@"
+WRAP
+chmod +x "${DEST_FOLDER}/npm${NODE_VERSION}"
+
+# create: ${DEST_FOLDER}/npx
+cat >"${DEST_FOLDER}/npx${NODE_VERSION}" <<WRAP
+#!/usr/bin/env bash
+set -euo pipefail
+# Wrapper to run npx inside Docker with persistent cache/config.
+
+IMAGE="node:${NODE_VERSION}-alpine"
+
+DOCKER_ARGS=(
+  -it --rm
+  -v "\${PWD}":/workdir
+  -w /workdir
+  -u "$(id -u)":"$(id -g)"
+  -e "HOME=${CONTAINER_HOME}"
+  -v "${NODE_NPM}:${CONTAINER_HOME}/.npm"
+)
+
+if [[ -f "${NODE_NPMRC}" ]]; then
+  DOCKER_ARGS+=( -v "${NODE_NPMRC}:${CONTAINER_HOME}/.npmrc:ro" )
+fi
+
+exec docker run "\${DOCKER_ARGS[@]}" "$NODE_IMAGE" npx "\$@"
+WRAP
+chmod +x "${DEST_FOLDER}/npx${NODE_VERSION}"
+
+# create: ${DEST_FOLDER}/yarn
+YARN_CACHE_DIR="${HOME}/.cache/yarn"
+mkdir -p "$YARN_CACHE_DIR"
+cat >"${DEST_FOLDER}/yarn${NODE_VERSION}" <<WRAP
+#!/usr/bin/env bash
+set -euo pipefail
+# Wrapper to run Yarn inside Docker.
+# Mirrors the behavior of npm/node wrappers.
+#
+# Usage:
+#   ./yarn install
+#   ./yarn run dev
+#   NODE_VERSION=22 ./yarn build
+#
+# Environment Variables:
+#   NODE_VERSION=22        # Node image tag (default 22)
+#   YARN_CACHE_DIR         # Override cache dir (default ~/.cache/yarn)
+
+DOCKER_ARGS=(
+  -it --rm
+  -v "\${PWD}":/workdir
+  -w /workdir
+  -u "$(id -u)":"$(id -g)"
+  -e "HOME=${CONTAINER_HOME}"
+  -v "${NODE_NPM}:${CONTAINER_HOME}/.npm"          # npm cache (some Yarn uses npm)
+  -v "${YARN_CACHE_DIR}:${CONTAINER_HOME}/.cache/yarn"
+)
+
+# Mount .yarnrc or .yarnrc.yml if present
+if [[ -f "${HOME}/.yarnrc" ]]; then
+  DOCKER_ARGS+=( -v "${HOME}/.yarnrc:${CONTAINER_HOME}/.yarnrc:ro" )
+elif [[ -f "${HOME}/.yarnrc.yml" ]]; then
+  DOCKER_ARGS+=( -v "${HOME}/.yarnrc.yml:${CONTAINER_HOME}/.yarnrc.yml:ro" )
+fi
+
+exec docker run "\${DOCKER_ARGS[@]}" "$NODE_IMAGE" yarn "\$@"
+WRAP
+chmod +x "${DEST_FOLDER}/yarn${NODE_VERSION}"
+
+ln -sf "${DEST_FOLDER}/node${NODE_VERSION}" "${DEST_FOLDER}/node"
+ln -sf "${DEST_FOLDER}/npm${NODE_VERSION}" "${DEST_FOLDER}/npm"
+ln -sf "${DEST_FOLDER}/npx${NODE_VERSION}" "${DEST_FOLDER}/npx"
+ln -sf "${DEST_FOLDER}/yarn${NODE_VERSION}" "${DEST_FOLDER}/yarn"

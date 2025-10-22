@@ -127,7 +127,9 @@ async function generate() {
   await ensureDir(srcGeneratedDir)
 
   const entries = await readDirSafe(publicScriptsDir)
-  const routeItems = []
+  const routeItems = [
+    { base: `List`, importName: `List`, path: `/list`, source: "" },
+  ]
   const listItems = []
   let count = 0
   for (const entry of entries) {
@@ -152,7 +154,7 @@ async function generate() {
     await fs.writeFile(outCompPath, componentTsx, 'utf8')
 
     // 3) Collect route info
-    routeItems.push({ base, importName: makeComponentName(base), path: `/scripts/${base}` })
+    routeItems.push({ base, importName: makeComponentName(base), path: `/scripts/${base}`, source: "/scripts" })
 
     // 4) Collect list info: first non-empty line of header, or fallback
     const firstLine = (header || '')
@@ -169,7 +171,7 @@ async function generate() {
 
   // Generate routes file
   const imports = routeItems
-    .map(({ base, importName }) => `import ${importName} from "../pages/scripts/${base}";`)
+    .map(({ base, importName , source}) => `import ${importName} from "../pages${source}/${base}";`)
     .join('\n')
 
   const routesArray = `export const scriptRoutes = [\n${routeItems
