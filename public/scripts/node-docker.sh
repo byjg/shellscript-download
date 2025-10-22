@@ -82,12 +82,25 @@ if ! docker pull "$NODE_IMAGE"; then
   exit 4
 fi
 
-DEST_FOLDER="$HOME/.shellscript/bin"
-NODE_NPM="$HOME/.npm${NODE_VERSION}"
+BASE_FOLDER="$HOME/.shellscript"
+DEST_FOLDER="$BASE_FOLDER/bin"
+NODE_NPM="$BASE_FOLDER/node/${NODE_VERSION}/.npm"
+NODE_MODULES="$BASE_FOLDER/node/${NODE_VERSION}/node_modules"
 NODE_NPMRC="$HOME/.npmrc"
 CONTAINER_HOME="/tmp/home"
+REGULAR_USER="-u \"$(id -u)\":\"$(id -g)\""
 mkdir -p "${DEST_FOLDER}"
 mkdir -p "$NODE_NPM"
+
+if [ ! -f "$NODE_MODULES" ]; then
+  docker run -it --rm  \
+    -v $NODE_MODULES:/tmp/xyz10 \
+    ${NODE_IMAGE} sh -c "cp -R /usr/local/lib/node_modules/* /tmp/xyz10"
+fi
+
+if [[ $EUID -ne 0 ]]; then
+  REGULAR_USER=""
+fi
 
 cat >"${DEST_FOLDER}/node${NODE_VERSION}" <<WRAP
 #!/usr/bin/env bash
@@ -109,8 +122,9 @@ DOCKER_ARGS=(
   -it --rm
   -v "\${PWD}":/workdir
   -w /workdir
-  -u "$(id -u)":"$(id -g)"
+  ${REGULAR_USER}
   -e "HOME=${CONTAINER_HOME}"
+  -v "${NODE_MODULES}:/usr/local/lib/node_modules"
   -v "${NODE_NPM}:${CONTAINER_HOME}/.npm"
 )
 
@@ -137,8 +151,9 @@ DOCKER_ARGS=(
   -it --rm
   -v "\${PWD}":/workdir
   -w /workdir
-  -u "$(id -u)":"$(id -g)"
+  ${REGULAR_USER}
   -e "HOME=${CONTAINER_HOME}"
+  -v "${NODE_MODULES}:/usr/local/lib/node_modules"
   -v "${NODE_NPM}:${CONTAINER_HOME}/.npm"
 )
 
@@ -169,8 +184,9 @@ DOCKER_ARGS=(
   -it --rm
   -v "\${PWD}":/workdir
   -w /workdir
-  -u "$(id -u)":"$(id -g)"
+  ${REGULAR_USER}
   -e "HOME=${CONTAINER_HOME}"
+  -v "${NODE_MODULES}:/usr/local/lib/node_modules"
   -v "${NODE_NPM}:${CONTAINER_HOME}/.npm"
 )
 
@@ -204,8 +220,9 @@ DOCKER_ARGS=(
   -it --rm
   -v "\${PWD}":/workdir
   -w /workdir
-  -u "$(id -u)":"$(id -g)"
+  ${REGULAR_USER}
   -e "HOME=${CONTAINER_HOME}"
+  -v "${NODE_MODULES}:/usr/local/lib/node_modules"
   -v "${NODE_NPM}:${CONTAINER_HOME}/.npm"          # npm cache (some Yarn uses npm)
   -v "${YARN_CACHE_DIR}:${CONTAINER_HOME}/.cache/yarn"
 )
