@@ -81,9 +81,9 @@ docker run -it --rm \
   -v "\${PWD}":/workdir \
   -w /workdir \
   -u $(id -u):$(id -g) \
-  byjg/php:${PHP_VERSION}-cli \
   -e XDEBUG_CLIENT_PORT=9003 \
   -p 9003:9003 \
+  byjg/php:${PHP_VERSION}-cli \
   php "\$@"
 WRAP
 
