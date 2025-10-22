@@ -72,7 +72,7 @@ DEST_FOLDER="$HOME/.local/bin"
 mkdir -p "${DEST_FOLDER}"
 
 # Create php wrapper
-cat >"${DEST_FOLDER}/php" <<WRAP
+cat >"${DEST_FOLDER}/php${PHP_VERSION}" <<WRAP
 #!/usr/bin/env bash
 set -euo pipefail
 # Wrapper for php via Docker (byjg/php:<version>-cli)
@@ -92,7 +92,7 @@ mkdir -p ${COMPOSER_CACHE}
 chown -R $(id -u):$(id -g) ${COMPOSER_CACHE}
 
 # Create composer wrapper
-cat >"${DEST_FOLDER}/composer" <<WRAP
+cat >"${DEST_FOLDER}/composer${PHP_VERSION}" <<WRAP
 #!/usr/bin/env bash
 set -euo pipefail
 # Wrapper for composer via Docker (byjg/php:<version>-cli)
@@ -113,4 +113,6 @@ if ! docker pull "byjg/php:${PHP_VERSION}-cli"; then
   echo "Error: Failed to pull Docker image byjg/php:${PHP_VERSION}-cli" >&2
   exit 4
 fi
-chmod a+x "${DEST_FOLDER}/php" "${DEST_FOLDER}/composer"
+chmod a+x "${DEST_FOLDER}/php${PHP_VERSION}" "${DEST_FOLDER}/composer${PHP_VERSION}"
+ln -sf "${DEST_FOLDER}/php${PHP_VERSION}" "${DEST_FOLDER}/php"
+ln -sf "${DEST_FOLDER}/composer${PHP_VERSION}" "${DEST_FOLDER}/composer"
