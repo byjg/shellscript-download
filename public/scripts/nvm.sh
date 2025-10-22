@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # nvm.sh: Install Node Version Manager (NVM) and set up a shell init snippet
 #
-# Usage:
-#   nvm.sh [--help] [--dry-run]
+# Usage (via loader):
+#   load.sh nvm -- [--help] [--dry-run]
 #
-# Examples (following load.sh style):
+# Examples:
 #   # Install NVM with sensible defaults
 #   load.sh nvm
 #   # Show help
@@ -28,7 +28,7 @@ require_cmd() { command -v "$1" >/dev/null 2>&1 || { err "Required command '$1' 
 
 print_usage() {
   cat <<'USAGE'
-nvm.sh
+load.sh nvm -- [options]
 
 Installs NVM and writes a shell init snippet under $HOME/.shellscript/shellrc/nvm-init.sh.
 

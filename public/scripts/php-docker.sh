@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # php-docker.sh: Create Docker-backed php and composer launchers
-# Usage:
-#   php-docker.sh <php_version>
+# Usage (via loader):
+#   load.sh php-docker -- <php_version>
 #
-# Example (following load.sh style):
-#   # Ensure this installer exists locally, then run it with PHP 8.3
-#   # load.sh php-docker -- 8.3
+# Examples:
+#   load.sh php-docker -- 8.3
+#   load.sh php-docker -- 7.4
 #
 # Description:
 # - Generates two wrapper scripts in "$HOME/.shellscript/bin":
@@ -14,9 +14,17 @@
 # - Pulls the specified Docker image and marks the wrappers executable.
 # - Intended for environments where PHP/Composer are not installed natively.
 #
+# Port usage (wrappers):
+# - php wrapper publishes:
+#     - 8080:8080 (PHP built-in web server or other services on 8080)
+#     - 9003:9003 (Xdebug v3 default debug port)
+#   Environment:
+#     - XDEBUG_CLIENT_PORT=9003
+#
 # Notes:
 # - Supported versions: 5.6, 7.0–7.4, 8.0–8.5
 # - Requires Docker installed and available on PATH.
+# - All scripts are intended to be invoked via load.sh; running this file directly is not required.
 # - This script is idempotent and can be re-run to switch versions.
 
 set -euo pipefail
@@ -82,6 +90,7 @@ docker run -it --rm \
   -w /workdir \
   -u $(id -u):$(id -g) \
   -e XDEBUG_CLIENT_PORT=9003 \
+  -p 8080:8080 \
   -p 9003:9003 \
   byjg/php:${PHP_VERSION}-cli \
   php "\$@"

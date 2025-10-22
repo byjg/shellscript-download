@@ -20,10 +20,10 @@ export default function Script_docker() {
       <InstallCommand command="load.sh docker" />
       <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem'}}>{`docker.sh: Install the Docker Engine on Linux in a safe, idempotent, shell-friendly way
 
-Usage:
-  docker.sh [--help] [--dry-run] [--no-group] [--channel CHANNEL]
+Usage (via loader):
+  load.sh docker -- [--help] [--dry-run] [--no-group] [--channel CHANNEL]
 
-Examples (following load.sh style):
+Examples:
   # Install Docker with sensible defaults
   load.sh docker
   # Show help

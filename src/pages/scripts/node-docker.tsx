@@ -19,12 +19,12 @@ export default function Script_node_docker() {
       <h1 style={{fontSize: "1.5rem", margin: "0 0 1rem"}}>node-docker.sh</h1>
       <InstallCommand command="load.sh node-docker" />
       <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem'}}>{`node-docker.sh: Create Docker-backed Node.js launchers (node, npm, npx, yarn)
-Usage:
-  node-docker.sh <node_version>
+Usage (via loader):
+  load.sh node-docker -- <node_version>
 
-Example (following load.sh style):
-  # Ensure this installer exists locally, then run it with Node 22
-  # load.sh node-docker -- 22
+Examples:
+  load.sh node-docker -- 22
+  load.sh node-docker -- 20
 
 Description:
 - Generates wrapper scripts in "$HOME/.shellscript/bin" for the selected Node version:

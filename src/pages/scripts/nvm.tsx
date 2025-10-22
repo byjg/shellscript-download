@@ -20,10 +20,10 @@ export default function Script_nvm() {
       <InstallCommand command="load.sh nvm" />
       <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem'}}>{`nvm.sh: Install Node Version Manager (NVM) and set up a shell init snippet
 
-Usage:
-  nvm.sh [--help] [--dry-run]
+Usage (via loader):
+  load.sh nvm -- [--help] [--dry-run]
 
-Examples (following load.sh style):
+Examples:
   # Install NVM with sensible defaults
   load.sh nvm
   # Show help

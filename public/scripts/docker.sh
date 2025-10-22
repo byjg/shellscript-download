@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # docker.sh: Install the Docker Engine on Linux in a safe, idempotent, shell-friendly way
 #
-# Usage:
-#   docker.sh [--help] [--dry-run] [--no-group] [--channel CHANNEL]
+# Usage (via loader):
+#   load.sh docker -- [--help] [--dry-run] [--no-group] [--channel CHANNEL]
 #
-# Examples (following load.sh style):
+# Examples:
 #   # Install Docker with sensible defaults
 #   load.sh docker
 #   # Show help
@@ -31,7 +31,7 @@ require_cmd() { command -v "$1" >/dev/null 2>&1 || { err "Required command '$1' 
 
 print_usage() {
   cat <<'USAGE'
-docker.sh
+load.sh docker -- [options]
 
 Installs the Docker Engine on Linux using the official convenience script.
 

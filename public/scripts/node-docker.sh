@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # node-docker.sh: Create Docker-backed Node.js launchers (node, npm, npx, yarn)
-# Usage:
-#   node-docker.sh <node_version>
+# Usage (via loader):
+#   load.sh node-docker -- <node_version>
 #
-# Example (following load.sh style):
-#   # Ensure this installer exists locally, then run it with Node 22
-#   # load.sh node-docker -- 22
+# Examples:
+#   load.sh node-docker -- 22
+#   load.sh node-docker -- 20
 #
 # Description:
 # - Generates wrapper scripts in "$HOME/.shellscript/bin" for the selected Node version:
@@ -30,10 +30,18 @@ echo
 
 print_usage() {
   cat <<'USAGE'
-node-docker.sh <node_version>
+load.sh node-docker -- <node_version>
 
 Installs Docker-backed wrappers for Node.js tools (node, npm, npx, yarn)
 under $HOME/.shellscript/bin using node:<version>-alpine Docker image.
+
+Port usage (wrappers):
+  - node wrapper publishes:
+      - 3000:3000 (commonly used by dev servers like Vite/Next.js)
+      - 9229:9229 when NODE_INSPECT is enabled (Node inspector)
+    Environment:
+      - Set NODE_INSPECT=1 to enable inspector (default enabled in wrapper)
+      - NODE_INSPECT_PORT to choose host port (default 9229)
 
 Examples:
   load.sh node-docker -- 22
@@ -123,6 +131,7 @@ DOCKER_ARGS=(
   -v "\${PWD}":/workdir
   -w /workdir
   ${REGULAR_USER}
+  -p "3000:3000"
   -e "HOME=${CONTAINER_HOME}"
   -v "${NODE_MODULES}:/usr/local/lib/node_modules"
   -v "${NODE_NPM}:${CONTAINER_HOME}/.npm"
