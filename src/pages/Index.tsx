@@ -2,6 +2,7 @@ import { Terminal, Container, Code, Server } from "lucide-react";
 import { InstallCommand } from "@/components/InstallCommand";
 import { InstructionStep } from "@/components/InstructionStep";
 import { ScriptCard } from "@/components/ScriptCard";
+import List from "@/components/List.tsx";
 
 const Index = () => {
   const scripts = [
@@ -69,7 +70,7 @@ const Index = () => {
           </div>
         </section>
 
-        <section className="mx-auto max-w-6xl">
+        <section className="mb-20 mx-auto max-w-6xl">
           <h2 className="mb-8 text-center text-3xl font-bold text-foreground">Available Scripts</h2>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {scripts.map((script) => (
@@ -78,14 +79,12 @@ const Index = () => {
           </div>
         </section>
 
-        <footer className="mt-20 text-center">
-          <p className="text-sm text-muted-foreground">
-            Need more scripts?{" "}
-            <a href="/list" className="text-accent hover:underline">
-              Check the full list
-            </a>
-          </p>
-        </footer>
+        <List />
+
+        {/*<footer className="mt-20">*/}
+        {/*  <p className="text-sm text-muted-foreground">*/}
+        {/*  </p>*/}
+        {/*</footer>*/}
       </div>
     </div>
   );

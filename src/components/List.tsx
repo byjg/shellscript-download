@@ -1,5 +1,5 @@
 // ------------------------------------------------------------------------------------
-// Auto-generated — /list page built from public/scripts headers. Do not edit.
+// Auto-generated — List component built from public/scripts headers. Do not edit.
 // ------------------------------------------------------------------------------------
 
 import { useMemo, useState } from "react";
@@ -21,15 +21,8 @@ export default function List() {
   }, [q, data]);
 
   return (
-    <div style={{maxWidth: 900, margin: "0 auto", padding: "2rem"}}>
-      <header className="mb-4 text-center">
-        <div className="inline-flex items-center gap-3 rounded-full border border-border bg-card/50 px-6 py-2 backdrop-blur-sm">
-          <Terminal className="h-5 w-5 text-accent" />
-          <span className="font-mono text-sm font-medium text-foreground">shellscript.download</span>
-        </div>
-      </header>
-      <Link to="/">← Home</Link>
-      <h1 style={{fontSize: "1.5rem", margin: "0 0 1rem"}}>Available Scripts</h1>
+    <section className="mx-auto max-w-6xl">
+      <h2 className="mb-8 text-center text-3xl font-bold text-foreground">All Scripts</h2>
       <div style={{margin: "0 0 1rem"}}>
         <input
           aria-label="Search scripts"
@@ -74,6 +67,6 @@ export default function List() {
           </tbody>
         </table>
       </div>
-    </div>
+    </section>
   );
 }
