@@ -101,7 +101,7 @@ mkdir -p "${DEST_FOLDER}"
 mkdir -p "$NODE_NPM"
 
 if [ ! -f "$NODE_MODULES" ]; then
-  docker run -it --rm  \
+  docker run -i --rm  \
     -v $NODE_MODULES:/tmp/xyz10 \
     ${NODE_IMAGE} sh -c "cp -R /usr/local/lib/node_modules/* /tmp/xyz10"
 fi
@@ -127,7 +127,7 @@ NODE_INSPECT=1
 NODE_INSPECT_PORT=9229
 
 DOCKER_ARGS=(
-  -it --rm
+  -i --rm
   -v "\${PWD}":/workdir
   -w /workdir
   ${REGULAR_USER}
@@ -157,7 +157,7 @@ cat >"${DEST_FOLDER}/npm${NODE_VERSION}" <<WRAP
 set -euo pipefail
 
 DOCKER_ARGS=(
-  -it --rm
+  -i --rm
   -v "\${PWD}":/workdir
   -w /workdir
   ${REGULAR_USER}
@@ -190,7 +190,7 @@ set -euo pipefail
 IMAGE="node:${NODE_VERSION}-alpine"
 
 DOCKER_ARGS=(
-  -it --rm
+  -i --rm
   -v "\${PWD}":/workdir
   -w /workdir
   ${REGULAR_USER}
@@ -226,7 +226,7 @@ set -euo pipefail
 #   YARN_CACHE_DIR         # Override cache dir (default ~/.cache/yarn)
 
 DOCKER_ARGS=(
-  -it --rm
+  -i --rm
   -v "\${PWD}":/workdir
   -w /workdir
   ${REGULAR_USER}

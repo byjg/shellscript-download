@@ -85,7 +85,7 @@ cat >"${DEST_FOLDER}/php${PHP_VERSION}" <<WRAP
 set -euo pipefail
 # Wrapper for php via Docker (byjg/php:<version>-cli)
 # Pass-through all args to php inside the container, mounting current dir.
-docker run -it --rm \
+docker run -i --rm \
   -v "\${PWD}":/workdir \
   -w /workdir \
   -u $(id -u):$(id -g) \
@@ -106,7 +106,7 @@ cat >"${DEST_FOLDER}/composer${PHP_VERSION}" <<WRAP
 set -euo pipefail
 # Wrapper for composer via Docker (byjg/php:<version>-cli)
 # Mount current dir and persist Composer home between runs.
-docker run -it --rm \
+docker run -i --rm \
   -v "\${PWD}":/workdir \
   -v "${COMPOSER_CACHE}:/tmp/.composer" \
   -e COMPOSER_HOME=/tmp/.composer \
