@@ -8,7 +8,7 @@
 #   # load.sh node-docker -- 22
 #
 # Description:
-# - Generates wrapper scripts in "$HOME/.local/bin" for the selected Node version:
+# - Generates wrapper scripts in "$HOME/.shellscript/bin" for the selected Node version:
 #     - node<ver> → runs Node inside node:<ver>-alpine
 #     - npm<ver>  → runs npm inside node:<ver>-alpine (persisting ~/.npm and honoring ~/.npmrc)
 #     - npx<ver>  → runs npx inside node:<ver>-alpine
@@ -33,7 +33,7 @@ print_usage() {
 node-docker.sh <node_version>
 
 Installs Docker-backed wrappers for Node.js tools (node, npm, npx, yarn)
-under $HOME/.local/bin using node:<version>-alpine Docker image.
+under $HOME/.shellscript/bin using node:<version>-alpine Docker image.
 
 Examples:
   load.sh node-docker -- 22
@@ -82,7 +82,7 @@ if ! docker pull "$NODE_IMAGE"; then
   exit 4
 fi
 
-DEST_FOLDER="$HOME/.local/bin"
+DEST_FOLDER="$HOME/.shellscript/bin"
 NODE_NPM="$HOME/.npm${NODE_VERSION}"
 NODE_NPMRC="$HOME/.npmrc"
 CONTAINER_HOME="/tmp/home"

@@ -34,7 +34,7 @@ Examples (following load.sh style):
 Description:
 - Installs NVM using the official install script from nvm-sh/nvm
 - Removes the trailing installer-added lines from common shell rc files to avoid duplication
-- Creates $HOME/.local/shellrc/nvm-init.sh which you can source from your rc
+- Creates $HOME/.shellscript/shellrc/nvm-init.sh which you can source from your rc
 - Idempotent and non-interactive; supports a dry-run mode`}</pre>
       <br/>
     </div>

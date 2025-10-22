@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
-# loader: setup shell to source all files in ~/.local/shellrc
+# loader: setup shell to source all files in ~/.shellscript/shellrc
 # This script is idempotent: it replaces any previous managed block.
-# It finds the first appropriate rc file for the current shell and ensures it sources ~/.local/shellrc/*.
+# It finds the first appropriate rc file for the current shell and ensures it sources ~/.shellscript/shellrc/*.
 
 set -euo pipefail
 
@@ -14,18 +14,18 @@ case "$SHELL_NAME" in
 esac
 
 # Ensure the shellrc directory exists
-mkdir -p "$HOME/.local/shellrc"
+mkdir -p "$HOME/.shellscript/shellrc"
 
-# Ensure default setup script exists/updated: ~/.local/shellrc/00-setup.sh
-# This script will ensure ~/.local/bin exists and is on PATH (without duplication)
-SETUP="$HOME/.local/shellrc/00-setup.sh"
+# Ensure default setup script exists/updated: ~/.shellscript/shellrc/00-setup.sh
+# This script will ensure ~/.shellscript/bin exists and is on PATH (without duplication)
+SETUP="$HOME/.shellscript/shellrc/00-setup.sh"
 cat > "$SETUP" <<'LOADER_SETUP'
-# ~/.local/shellrc/00-setup.sh - managed by shellscript.download - DO NOT CHANGE IT
-# Ensure ~/.local/bin exists and is in PATH
-mkdir -p "$HOME/.local/bin"
+# ~/.shellscript/shellrc/00-setup.sh - managed by shellscript.download - DO NOT CHANGE IT
+# Ensure ~/.shellscript/bin exists and is in PATH
+mkdir -p "$HOME/.shellscript/bin"
 case ":$PATH:" in
-  *":$HOME/.local/bin:"*) ;;
-  *) PATH="$HOME/.local/bin:$PATH" ;;
+  *":$HOME/.shellscript/bin:"*) ;;
+  *) PATH="$HOME/.shellscript/bin:$PATH" ;;
 esac
 export PATH
 LOADER_SETUP
@@ -70,14 +70,14 @@ awk -v start="$BLOCK_START" -v end="$BLOCK_END" '
 
   printf "%s\n" "$BLOCK_START"
   cat <<'LOADER_SHELLRC_BLOCK'
-# Load files from ~/.local/shellrc (managed by shellscript.download)
+# Load files from ~/.shellscript/shellrc (managed by shellscript.download)
 # Only load .sh files, ordered by name
-if [ -d "$HOME/.local/shellrc" ]; then
+if [ -d "$HOME/.shellscript/shellrc" ]; then
   # Read list via here-doc to avoid a pipeline subshell; ensure deterministic sort order
   while IFS= read -r __loader_file; do
     [ -r "$__loader_file" ] && . "$__loader_file"
   done <<EOF
-$(find "$HOME/.local/shellrc" -type f -name '*.sh' -print 2>/dev/null | LC_ALL=C sort)
+$(find "$HOME/.shellscript/shellrc" -type f -name '*.sh' -print 2>/dev/null | LC_ALL=C sort)
 EOF
   unset __loader_file
 fi
@@ -92,12 +92,12 @@ mv "$TMP_FILE.new" "$TARGET"
 rm -f "$TMP_FILE"
 
 # Display success message with visual separation
-mkdir -p "$HOME/.local/bin"
-if ! curl -fsSL "https://shellscript.download/scripts/load.sh" -o "$HOME/.local/bin/load.sh"; then
+mkdir -p "$HOME/.shellscript/bin"
+if ! curl -fsSL "https://shellscript.download/scripts/load.sh" -o "$HOME/.shellscript/bin/load.sh"; then
   echo "Error: Failed to download 'load.sh' using curl" >&2
   exit 3
 fi
-chmod a+x "$HOME/.local/bin/load.sh"
+chmod a+x "$HOME/.shellscript/bin/load.sh"
 echo "✓ Shell script download loader successfully installed!"
 
 # Show action items with clear formatting

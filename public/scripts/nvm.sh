@@ -15,7 +15,7 @@
 # Description:
 # - Installs NVM using the official install script from nvm-sh/nvm
 # - Removes the trailing installer-added lines from common shell rc files to avoid duplication
-# - Creates $HOME/.local/shellrc/nvm-init.sh which you can source from your rc
+# - Creates $HOME/.shellscript/shellrc/nvm-init.sh which you can source from your rc
 # - Idempotent and non-interactive; supports a dry-run mode
 
 set -euo pipefail
@@ -30,7 +30,7 @@ print_usage() {
   cat <<'USAGE'
 nvm.sh
 
-Installs NVM and writes a shell init snippet under $HOME/.local/shellrc/nvm-init.sh.
+Installs NVM and writes a shell init snippet under $HOME/.shellscript/shellrc/nvm-init.sh.
 
 Options:
   -h, --help    Show this help and exit
@@ -79,7 +79,7 @@ run "curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh 
 remove_nvm_lines
 
 # Write our shell init snippet
-DEST_FOLDER="$HOME/.local/shellrc"
+DEST_FOLDER="$HOME/.shellscript/shellrc"
 run "mkdir -p \"$DEST_FOLDER\""
 run "cat >\"${DEST_FOLDER}/nvm-init.sh\" <<'WRAP'\nexport NVM_DIR=\"$HOME/.nvm\"\n[ -s \"$NVM_DIR/nvm.sh\" ] && \\ . \"$NVM_DIR/nvm.sh\"  # This loads nvm\n[ -s \"$NVM_DIR/bash_completion\" ] && \\ . \"$NVM_DIR/bash_completion\"  # This loads nvm bash_completion\nWRAP"
 

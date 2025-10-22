@@ -27,7 +27,7 @@ Example (following load.sh style):
   # load.sh php-docker -- 8.3
 
 Description:
-- Generates two wrapper scripts in "$HOME/.local/bin":
+- Generates two wrapper scripts in "$HOME/.shellscript/bin":
     - php       → runs PHP inside the byjg/php:<version>-cli Docker image
     - composer  → runs Composer inside the same image, persisting your ~/.composer dir
 - Pulls the specified Docker image and marks the wrappers executable.

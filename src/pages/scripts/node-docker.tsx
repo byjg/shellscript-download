@@ -27,7 +27,7 @@ Example (following load.sh style):
   # load.sh node-docker -- 22
 
 Description:
-- Generates wrapper scripts in "$HOME/.local/bin" for the selected Node version:
+- Generates wrapper scripts in "$HOME/.shellscript/bin" for the selected Node version:
     - node<ver> → runs Node inside node:<ver>-alpine
     - npm<ver>  → runs npm inside node:<ver>-alpine (persisting ~/.npm and honoring ~/.npmrc)
     - npx<ver>  → runs npx inside node:<ver>-alpine

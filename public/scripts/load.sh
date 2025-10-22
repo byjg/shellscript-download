@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# load.sh: Download and optionally run shell scripts from shellscript.download
+# load.sh: Download and optionally run shell scripts from https://shellscript.download
 # Usage:
 #   load.sh [--update] [--dont-run] <script> [optional args...]
 #
 # Behavior:
-# - If <script> does not exist locally at "$HOME/.local/bin/<script>.sh" OR if --update is passed,
+# - If <script> does not exist locally at "$HOME/.shellscript/bin/<script>.sh" OR if --update is passed,
 #   download it from: https://shellscript.download/scripts/<script>.sh
-#   and save it to:   $HOME/.local/bin/<script>.sh
+#   and save it to:   $HOME/.shellscript/bin/<script>.sh
 # - After ensuring the script exists, run it with the remaining arguments, unless --dont-run is passed.
 # - Exits with the same code as the executed script when run.
 set -euo pipefail
@@ -88,7 +88,7 @@ if [[ -z "${SCRIPT_NAME}" ]]; then
   exit 2
 fi
 
-DEST_DIR="$HOME/.local/shellscript.download"
+DEST_DIR="$HOME/.shellscript/downloads"
 DEST_PATH="$DEST_DIR/${SCRIPT_NAME}.sh"
 DEST_PATH_TMP="$DEST_DIR/.tmp.${SCRIPT_NAME}.sh"
 URL="https://shellscript.download/scripts/${SCRIPT_NAME}.sh"

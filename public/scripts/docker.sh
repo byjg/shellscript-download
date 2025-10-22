@@ -77,7 +77,7 @@ if [[ "${OSTYPE:-}" != linux* ]]; then
 fi
 
 # Prepare destination folder for downloaded installer
-DEST_FOLDER="$HOME/.local/shellscript.download"
+DEST_FOLDER="$HOME/.shellscript/downloads"
 run "mkdir -p \"$DEST_FOLDER\""
 
 # Download installer script

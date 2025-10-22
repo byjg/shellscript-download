@@ -8,7 +8,7 @@
 #   # load.sh php-docker -- 8.3
 #
 # Description:
-# - Generates two wrapper scripts in "$HOME/.local/bin":
+# - Generates two wrapper scripts in "$HOME/.shellscript/bin":
 #     - php       → runs PHP inside the byjg/php:<version>-cli Docker image
 #     - composer  → runs Composer inside the same image, persisting your ~/.composer dir
 # - Pulls the specified Docker image and marks the wrappers executable.
@@ -28,7 +28,7 @@ print_usage() {
   cat <<'USAGE'
 php-docker.sh <php_version>
 
-Installs Docker-backed wrappers for php and composer under $HOME/.local/bin
+Installs Docker-backed wrappers for php and composer under $HOME/.shellscript/bin
 using the byjg/php:<version>-cli image.
 
 Examples:
@@ -68,7 +68,7 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 3
 fi
 
-DEST_FOLDER="$HOME/.local/bin"
+DEST_FOLDER="$HOME/.shellscript/bin"
 mkdir -p "${DEST_FOLDER}"
 
 # Create php wrapper
