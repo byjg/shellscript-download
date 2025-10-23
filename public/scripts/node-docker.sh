@@ -162,6 +162,7 @@ DOCKER_ARGS=(
   -w /workdir
   ${REGULAR_USER}
   -e "HOME=${CONTAINER_HOME}"
+  --network host
   -v "${NODE_MODULES}:/usr/local/lib/node_modules"
   -v "${NODE_NPM}:${CONTAINER_HOME}/.npm"
 )
@@ -195,6 +196,7 @@ DOCKER_ARGS=(
   -w /workdir
   ${REGULAR_USER}
   -e "HOME=${CONTAINER_HOME}"
+  --network host
   -v "${NODE_MODULES}:/usr/local/lib/node_modules"
   -v "${NODE_NPM}:${CONTAINER_HOME}/.npm"
 )
@@ -231,6 +233,7 @@ DOCKER_ARGS=(
   -w /workdir
   ${REGULAR_USER}
   -e "HOME=${CONTAINER_HOME}"
+  --network host
   -v "${NODE_MODULES}:/usr/local/lib/node_modules"
   -v "${NODE_NPM}:${CONTAINER_HOME}/.npm"          # npm cache (some Yarn uses npm)
   -v "${YARN_CACHE_DIR}:${CONTAINER_HOME}/.cache/yarn"
