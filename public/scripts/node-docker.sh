@@ -19,8 +19,7 @@
 #
 # Notes:
 # - Typical versions: 18, 20, 22 (any tag supported by docker hub node:<tag>-alpine)
-# - Requires Docker installed and available on PATH.
-# - Inspector: set NODE_INSPECT=1 and optionally NODE_INSPECT_PORT (default 9229) for node wrapper.
+# - Requires Docker installed and available on PATH. Install with `load.sh docker`
 # - This script is idempotent and can be re-run to switch versions.
 
 set -euo pipefail
@@ -34,14 +33,6 @@ load.sh node-docker -- <node_version>
 
 Installs Docker-backed wrappers for Node.js tools (node, npm, npx, yarn)
 under $HOME/.shellscript/bin using node:<version>-alpine Docker image.
-
-Port usage (wrappers):
-  - node wrapper publishes:
-      - 3000:3000 (commonly used by dev servers like Vite/Next.js)
-      - 9229:9229 when NODE_INSPECT is enabled (Node inspector)
-    Environment:
-      - Set NODE_INSPECT=1 to enable inspector (default enabled in wrapper)
-      - NODE_INSPECT_PORT to choose host port (default 9229)
 
 Examples:
   load.sh node-docker -- 22

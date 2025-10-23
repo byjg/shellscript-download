@@ -7,7 +7,7 @@ import { Link } from "react-router-dom";
 import { Terminal } from "lucide-react";
 
 export default function List() {
-  const data = [{"base":"docker","firstLine":"docker.sh: Install the Docker Engine on Linux in a safe, idempotent, shell-friendly way"},{"base":"load","firstLine":"load.sh: Download and optionally run shell scripts from https://shellscript.download"},{"base":"node-docker","firstLine":"node-docker.sh: Create Docker-backed Node.js launchers (node, npm, npx, yarn)"},{"base":"nvm","firstLine":"nvm.sh: Install Node Version Manager (NVM) and set up a shell init snippet"},{"base":"php-docker","firstLine":"php-docker.sh: Create Docker-backed php and composer launchers"}] as { base: string; firstLine: string }[];
+  const data = [{"base":"docker","firstLine":"docker.sh: Install the Docker Engine on Linux in a safe, idempotent, shell-friendly way"},{"base":"load","firstLine":"load.sh: Fetch a script from https://shellscript.download, cache it locally,"},{"base":"node-docker","firstLine":"node-docker.sh: Create Docker-backed Node.js launchers (node, npm, npx, yarn)"},{"base":"nvm","firstLine":"nvm.sh: Install Node Version Manager (NVM) and set up a shell init snippet"},{"base":"php-docker","firstLine":"php-docker.sh: Create Docker-backed php and composer launchers"}] as { base: string; firstLine: string }[];
   const [q, setQ] = useState("");
   const filtered = useMemo(() => {
     const query = q.toLowerCase().trim();

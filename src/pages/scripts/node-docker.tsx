@@ -38,8 +38,7 @@ Description:
 
 Notes:
 - Typical versions: 18, 20, 22 (any tag supported by docker hub node:<tag>-alpine)
-- Requires Docker installed and available on PATH.
-- Inspector: set NODE_INSPECT=1 and optionally NODE_INSPECT_PORT (default 9229) for node wrapper.
+- Requires Docker installed and available on PATH. Install with \`load.sh docker\`
 - This script is idempotent and can be re-run to switch versions.`}</pre>
       <br/>
     </div>

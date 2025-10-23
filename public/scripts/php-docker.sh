@@ -9,22 +9,15 @@
 #
 # Description:
 # - Generates two wrapper scripts in "$HOME/.shellscript/bin":
-#     - php       → runs PHP inside the byjg/php:<version>-cli Docker image
-#     - composer  → runs Composer inside the same image, persisting your ~/.composer dir
-# - Pulls the specified Docker image and marks the wrappers executable.
+#     - php<ver>      → runs PHP inside the byjg/php:<version>-cli Docker image
+#     - composer<ver> → runs Composer inside the same image, persisting your
+#                       ~/.composer dir
+# - Also updates convenience symlinks: php, composer → their <ver> counterparts.
 # - Intended for environments where PHP/Composer are not installed natively.
-#
-# Port usage (wrappers):
-# - php wrapper publishes:
-#     - 8080:8080 (PHP built-in web server or other services on 8080)
-#     - 9003:9003 (Xdebug v3 default debug port)
-#   Environment:
-#     - XDEBUG_CLIENT_PORT=9003
 #
 # Notes:
 # - Supported versions: 5.6, 7.0–7.4, 8.0–8.5
-# - Requires Docker installed and available on PATH.
-# - All scripts are intended to be invoked via load.sh; running this file directly is not required.
+# - Requires Docker installed and available on PATH. Install with `load.sh docker`
 # - This script is idempotent and can be re-run to switch versions.
 
 set -euo pipefail
