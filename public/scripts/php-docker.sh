@@ -85,15 +85,33 @@ cat >"${DEST_FOLDER}/php${PHP_VERSION}" <<WRAP
 set -euo pipefail
 # Wrapper for php via Docker (byjg/php:<version>-cli)
 # Pass-through all args to php inside the container, mounting current dir.
+ARGS=()
+for arg in "\$@"; do
+    # Check if argument is an absolute path (starts with /)
+    if [[ "\$arg" = /* ]]; then
+        # Convert absolute path to relative path from PWD
+        RELATIVE_PATH="\${arg#\$PWD/}"
+        # If the path is actually under PWD, use the relative path
+        if [[ "\$RELATIVE_PATH" != "\$arg" ]]; then
+            ARGS+=("\$RELATIVE_PATH")
+        else
+            # Path is outside PWD, keep it as is (will likely fail in container)
+            ARGS+=("\$arg")
+        fi
+    else
+        # Not an absolute path, keep as is
+        ARGS+=("\$arg")
+    fi
+done
+
 docker run -i --rm \
   -v "\${PWD}":/workdir \
   -w /workdir \
   -u $(id -u):$(id -g) \
   -e XDEBUG_CLIENT_PORT=9003 \
-  -p 8080:8080 \
-  -p 9003:9003 \
+  --network host \
   byjg/php:${PHP_VERSION}-cli \
-  php "\$@"
+  php "\${ARGS[@]}"
 WRAP
 
 COMPOSER_CACHE="${HOME}/.cache/composer.${PHP_VERSION}.sh"

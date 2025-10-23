@@ -131,7 +131,7 @@ DOCKER_ARGS=(
   -v "\${PWD}":/workdir
   -w /workdir
   ${REGULAR_USER}
-  -p "3000:3000"
+  --network host
   -e "HOME=${CONTAINER_HOME}"
   -v "${NODE_MODULES}:/usr/local/lib/node_modules"
   -v "${NODE_NPM}:${CONTAINER_HOME}/.npm"
@@ -145,7 +145,7 @@ fi
 # Enable inspector if requested
 if [[ "${NODE_INSPECT:-}" != "" ]]; then
   HOST_PORT="${NODE_INSPECT_PORT:-9229}"
-  DOCKER_ARGS+=( -p "\${HOST_PORT}:9229" -e "NODE_OPTIONS=--inspect=0.0.0.0:9229" )
+  DOCKER_ARGS+=( -e "NODE_OPTIONS=--inspect=0.0.0.0:9229" )
 fi
 
 exec docker run "\${DOCKER_ARGS[@]}" "$NODE_IMAGE" node "\$@"
