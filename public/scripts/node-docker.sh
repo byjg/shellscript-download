@@ -127,7 +127,7 @@ if [ ! -f "$NODE_MODULES" ]; then
     ${NODE_IMAGE} sh -c "cp -R /usr/local/lib/node_modules/* /tmp/xyz10"
 fi
 
-if [[ $EUID -ne 0 ]]; then
+if [[ $EUID -eq 0 ]]; then
   REGULAR_USER=""
 fi
 
