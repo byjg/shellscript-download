@@ -20,10 +20,14 @@ export default function Script_node_docker() {
       <InstallCommand command="load.sh node-docker" />
       <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem'}}>{`node-docker.sh: Create Docker-backed Node.js launchers (node, npm, npx, yarn)
 Usage (via loader):
-  load.sh node-docker -- <node_version>
+  load.sh node-docker -- [--tty] <node_version>
+
+  Options:
+    --tty    Enable TTY mode for wrappers (docker run will use -it instead of -i)
 
 Examples:
   load.sh node-docker -- 22
+  load.sh node-docker -- --tty 22
   load.sh node-docker -- 20
 
 Description:

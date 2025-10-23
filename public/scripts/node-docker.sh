@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 # node-docker.sh: Create Docker-backed Node.js launchers (node, npm, npx, yarn)
 # Usage (via loader):
-#   load.sh node-docker -- <node_version>
+#   load.sh node-docker -- [--tty] <node_version>
+#
+#   Options:
+#     --tty    Enable TTY mode for wrappers (docker run will use -it instead of -i)
 #
 # Examples:
 #   load.sh node-docker -- 22
+#   load.sh node-docker -- --tty 22
 #   load.sh node-docker -- 20
 #
 # Description:
@@ -29,13 +33,17 @@ echo
 
 print_usage() {
   cat <<'USAGE'
-load.sh node-docker -- <node_version>
+load.sh node-docker -- [--tty] <node_version>
 
 Installs Docker-backed wrappers for Node.js tools (node, npm, npx, yarn)
 under $HOME/.shellscript/bin using node:<version>-alpine Docker image.
 
+Options:
+  --tty    Enable TTY mode for wrappers (docker run will use -it instead of -i)
+
 Examples:
   load.sh node-docker -- 22
+  load.sh node-docker -- --tty 22
   load.sh node-docker -- 20
 
 USAGE
@@ -47,9 +55,31 @@ if [[ "${1-}" == "-h" || "${1-}" == "--help" ]]; then
   exit 0
 fi
 
+# Parse optional flags
+TTY_ARG=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --tty)
+      TTY_ARG="-t"
+      shift
+      ;;
+    -h|--help)
+      print_usage
+      exit 0
+      ;;
+    --)
+      shift
+      break
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
 # Validate argument
 if [[ $# -lt 1 ]]; then
-  echo "Error: <php_version> is required." >&2
+  echo "Error: <node_version> is required." >&2
   echo >&2
   print_usage >&2
   exit 2
@@ -92,7 +122,7 @@ mkdir -p "${DEST_FOLDER}"
 mkdir -p "$NODE_NPM"
 
 if [ ! -f "$NODE_MODULES" ]; then
-  docker run -i --rm  \
+  docker run -i ${TTY_ARG} --rm  \
     -v $NODE_MODULES:/tmp/xyz10 \
     ${NODE_IMAGE} sh -c "cp -R /usr/local/lib/node_modules/* /tmp/xyz10"
 fi
@@ -118,7 +148,7 @@ NODE_INSPECT=1
 NODE_INSPECT_PORT=9229
 
 DOCKER_ARGS=(
-  -i --rm
+  -i ${TTY_ARG} --rm
   -v "\${PWD}":/workdir
   -w /workdir
   ${REGULAR_USER}
@@ -148,7 +178,7 @@ cat >"${DEST_FOLDER}/npm${NODE_VERSION}" <<WRAP
 set -euo pipefail
 
 DOCKER_ARGS=(
-  -i --rm
+  -i ${TTY_ARG} --rm
   -v "\${PWD}":/workdir
   -w /workdir
   ${REGULAR_USER}
@@ -182,7 +212,7 @@ set -euo pipefail
 IMAGE="node:${NODE_VERSION}-alpine"
 
 DOCKER_ARGS=(
-  -i --rm
+  -i ${TTY_ARG} --rm
   -v "\${PWD}":/workdir
   -w /workdir
   ${REGULAR_USER}
@@ -219,7 +249,7 @@ set -euo pipefail
 #   YARN_CACHE_DIR         # Override cache dir (default ~/.cache/yarn)
 
 DOCKER_ARGS=(
-  -i --rm
+  -i ${TTY_ARG} --rm
   -v "\${PWD}":/workdir
   -w /workdir
   ${REGULAR_USER}
