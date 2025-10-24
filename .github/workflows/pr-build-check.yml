@@ -1,0 +1,41 @@
+name: PR Build Check
+
+on:
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  check-build-artifacts:
+    name: Check Build Artifacts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run build
+        run: npm run build
+
+      - name: Check for uncommitted changes
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "❌ Error: Build created uncommitted changes!"
+            echo ""
+            echo "The following files were modified by the build:"
+            git status --porcelain
+            echo ""
+            echo "Please run 'npm run build' locally and commit the generated files."
+            exit 1
+          else
+            echo "✅ Success: No uncommitted changes after build"
+          fi
