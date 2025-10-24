@@ -115,11 +115,13 @@ BASE_FOLDER="$HOME/.shellscript"
 DEST_FOLDER="$BASE_FOLDER/bin"
 NODE_NPM="$BASE_FOLDER/node/${NODE_VERSION}/.npm"
 NODE_MODULES="$BASE_FOLDER/node/${NODE_VERSION}/node_modules"
+NODE_BIN="$BASE_FOLDER/node/${NODE_VERSION}/bin"
 NODE_NPMRC="$HOME/.npmrc"
 CONTAINER_HOME="/tmp/home"
 REGULAR_USER="-u \"$(id -u)\":\"$(id -g)\""
 mkdir -p "${DEST_FOLDER}"
 mkdir -p "$NODE_NPM"
+mkdir -p "$NODE_BIN"
 
 if [ ! -f "$NODE_MODULES" ]; then
   docker run -i ${TTY_ARG} --rm  \
@@ -181,11 +183,13 @@ set -euo pipefail
 
 # Check if this is a global operation that requires root privileges
 RUN_AS_USER="${REGULAR_USER}"
+IS_GLOBAL=false
 for arg in "\$@"; do
   case "\$arg" in
     -g|--global)
       # Global operations need root access, remove user restriction
       RUN_AS_USER=""
+      IS_GLOBAL=true
       break
       ;;
   esac
@@ -202,6 +206,11 @@ DOCKER_ARGS=(
   -v "${NODE_NPM}:${CONTAINER_HOME}/.npm"
 )
 
+# Mount host bin folder for global installs
+if [[ "\${IS_GLOBAL}" == "true" ]]; then
+  DOCKER_ARGS+=( -v "${NODE_BIN}:/host-bin" )
+fi
+
 if [[ -f "${NODE_NPMRC}" ]]; then
   DOCKER_ARGS+=( -v "${NODE_NPMRC}:${CONTAINER_HOME}/.npmrc:ro" )
 
@@ -213,7 +222,34 @@ if [[ -f "${NODE_NPMRC}" ]]; then
   fi
 fi
 
-exec docker run "\${DOCKER_ARGS[@]}" "$NODE_IMAGE" npm "\$@"
+# For global installs, wrap the command to capture new files
+if [[ "\${IS_GLOBAL}" == "true" ]]; then
+  exec docker run "\${DOCKER_ARGS[@]}" "$NODE_IMAGE" sh -c '
+    # Capture files before npm install
+    ls -1 /usr/local/bin > /tmp/before.txt 2>/dev/null || touch /tmp/before.txt
+
+    # Run npm command
+    npm "\$@"
+    NPM_EXIT=\$?
+
+    # If npm succeeded, copy new files to host
+    if [ \$NPM_EXIT -eq 0 ]; then
+      ls -1 /usr/local/bin > /tmp/after.txt 2>/dev/null || touch /tmp/after.txt
+
+      # Find new files (in after but not in before)
+      for file in \$(comm -13 /tmp/before.txt /tmp/after.txt); do
+        if [ -f "/usr/local/bin/\$file" ]; then
+          cp -p "/usr/local/bin/\$file" "/host-bin/\$file"
+          echo "Copied new file to host: \$file"
+        fi
+      done
+    fi
+
+    exit \$NPM_EXIT
+  ' -- "\$@"
+else
+  exec docker run "\${DOCKER_ARGS[@]}" "$NODE_IMAGE" npm "\$@"
+fi
 WRAP
 chmod +x "${DEST_FOLDER}/npm${NODE_VERSION}"
 
