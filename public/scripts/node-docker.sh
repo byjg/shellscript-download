@@ -128,7 +128,9 @@ if [ ! -f "$NODE_MODULES" ]; then
 fi
 
 if [[ $EUID -eq 0 ]]; then
-  REGULAR_USER=""
+  echo "Error: This script should not be run as root/sudo." >&2
+  echo "Please run as a regular user." >&2
+  exit 5
 fi
 
 cat >"${DEST_FOLDER}/node${NODE_VERSION}" <<WRAP
