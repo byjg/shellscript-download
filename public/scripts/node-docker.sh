@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # node-docker.sh: Create Docker-backed Node.js launchers (node, npm, npx, yarn)
 # Usage (via loader):
-#   load.sh node-docker -- [--tty] <node_version>
+#   load.sh node-docker -- [--no-tty] <node_version>
 #
 #   Options:
-#     --tty    Enable TTY mode for wrappers (docker run will use -it instead of -i)
+#     --no-tty    Enable TTY mode for wrappers (docker run will use -it instead of -i)
 #
 # Examples:
 #   load.sh node-docker -- 22
-#   load.sh node-docker -- --tty 22
+#   load.sh node-docker -- --no-tty 22
 #   load.sh node-docker -- 20
 #
 # Description:
@@ -33,17 +33,17 @@ echo
 
 print_usage() {
   cat <<'USAGE'
-load.sh node-docker -- [--tty] <node_version>
+load.sh node-docker -- [--no-tty] <node_version>
 
 Installs Docker-backed wrappers for Node.js tools (node, npm, npx, yarn)
 under $HOME/.shellscript/bin using node:<version>-alpine Docker image.
 
 Options:
-  --tty    Enable TTY mode for wrappers (docker run will use -it instead of -i)
+  --no-tty    Disable TTY mode for wrappers (docker run will use -i instead of -it)
 
 Examples:
   load.sh node-docker -- 22
-  load.sh node-docker -- --tty 22
+  load.sh node-docker -- --no-tty 22
   load.sh node-docker -- 20
 
 USAGE
@@ -56,11 +56,11 @@ if [[ "${1-}" == "-h" || "${1-}" == "--help" ]]; then
 fi
 
 # Parse optional flags
-TTY_ARG=""
+TTY_ARG="-t"
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --tty)
-      TTY_ARG="-t"
+    --no-tty)
+      TTY_ARG=""
       shift
       ;;
     -h|--help)
@@ -113,27 +113,42 @@ fi
 
 BASE_FOLDER="$HOME/.shellscript"
 DEST_FOLDER="$BASE_FOLDER/bin"
-NODE_NPM="$BASE_FOLDER/node/${NODE_VERSION}/.npm"
-NODE_MODULES="$BASE_FOLDER/node/${NODE_VERSION}/node_modules"
+SHELLRC_FOLDER="$BASE_FOLDER/shellrc"
+NODE_NPM="$BASE_FOLDER/node/${NODE_VERSION}/home"
+NODE_MODULES="$BASE_FOLDER/node/${NODE_VERSION}/lib/node_modules"
 NODE_BIN="$BASE_FOLDER/node/${NODE_VERSION}/bin"
 NODE_NPMRC="$HOME/.npmrc"
 CONTAINER_HOME="/tmp/home"
 REGULAR_USER="-u \"$(id -u)\":\"$(id -g)\""
-mkdir -p "${DEST_FOLDER}"
-mkdir -p "$NODE_NPM"
-mkdir -p "$NODE_BIN"
-
-if [ ! -f "$NODE_MODULES" ]; then
-  docker run -i ${TTY_ARG} --rm  \
-    -v $NODE_MODULES:/tmp/xyz10 \
-    ${NODE_IMAGE} sh -c "cp -R /usr/local/lib/node_modules/* /tmp/xyz10"
-fi
 
 if [[ $EUID -eq 0 ]]; then
   echo "Error: This script should not be run as root/sudo." >&2
   echo "Please run as a regular user." >&2
   exit 5
 fi
+
+echo "[Debug] Creating $BASE_FOLDER/node/${NODE_VERSION} folder"
+mkdir -p "${DEST_FOLDER}"
+mkdir -p "${SHELLRC_FOLDER}"
+mkdir -p "$NODE_NPM"
+mkdir -p "$NODE_BIN"
+touch "$NODE_NPMRC"
+cp "$NODE_NPMRC" "$NODE_NPM/.npmrc"
+
+echo "[Debug] Update Path"
+cat >"${SHELLRC_FOLDER}/node-init.sh" <<WRAP
+export PATH="\$PATH:$NODE_BIN"
+WRAP
+
+if [ ! -d "$NODE_MODULES" ]; then
+  echo "[Debug] Creating Global Node Modules $NODE_MODULES"
+  docker run -i ${TTY_ARG} --rm  \
+    -v $NODE_MODULES:/tmp/xyz10 \
+    ${NODE_IMAGE} sh -c "cp -R /usr/local/lib/node_modules/* /tmp/xyz10"
+else
+  echo "[Debug] Preserving Global Node Modules $NODE_MODULES"
+fi
+
 
 cat >"${DEST_FOLDER}/node${NODE_VERSION}" <<WRAP
 #!/usr/bin/env bash
@@ -159,13 +174,8 @@ DOCKER_ARGS=(
   --network host
   -e "HOME=${CONTAINER_HOME}"
   -v "${NODE_MODULES}:/usr/local/lib/node_modules"
-  -v "${NODE_NPM}:${CONTAINER_HOME}/.npm"
+  -v "${NODE_NPM}:${CONTAINER_HOME}"
 )
-
-# Pass read-only .npmrc if present
-if [[ -f "${NODE_NPMRC}" ]]; then
-  DOCKER_ARGS+=( -v "${NODE_NPMRC}:${CONTAINER_HOME}/.npmrc:ro" )
-fi
 
 # Enable inspector if requested
 if [[ "${NODE_INSPECT:-}" != "" ]]; then
@@ -203,7 +213,7 @@ DOCKER_ARGS=(
   -e "HOME=${CONTAINER_HOME}"
   --network host
   -v "${NODE_MODULES}:/usr/local/lib/node_modules"
-  -v "${NODE_NPM}:${CONTAINER_HOME}/.npm"
+  -v "${NODE_NPM}:${CONTAINER_HOME}"
 )
 
 # Mount host bin folder for global installs
@@ -211,16 +221,15 @@ if [[ "\${IS_GLOBAL}" == "true" ]]; then
   DOCKER_ARGS+=( -v "${NODE_BIN}:/host-bin" )
 fi
 
-if [[ -f "${NODE_NPMRC}" ]]; then
-  DOCKER_ARGS+=( -v "${NODE_NPMRC}:${CONTAINER_HOME}/.npmrc:ro" )
-
-  # If you use a custom per-user global prefix, mount it
-  if grep -q '^prefix=' "${NODE_NPMRC}" 2>/dev/null; then
-    PREFIX_DIR="\$(awk -F= '/^prefix=/{print \$2}' "${NODE_NPMRC}")"
-    mkdir -p "\${PREFIX_DIR}"
-    DOCKER_ARGS+=( -v "\${PREFIX_DIR}:\${PREFIX_DIR}" )
-  fi
-fi
+#TODO
+#if [[ -f "${NODE_NPMRC}" ]]; then
+#  # If you use a custom per-user global prefix, mount it
+#  if grep -q '^prefix=' "${NODE_NPMRC}" 2>/dev/null; then
+#    PREFIX_DIR="\$(awk -F= '/^prefix=/{print \$2}' "${NODE_NPMRC}")"
+#    mkdir -p "\${PREFIX_DIR}"
+#    DOCKER_ARGS+=( -v "\${PREFIX_DIR}:\${PREFIX_DIR}" )
+#  fi
+#fi
 
 # For global installs, wrap the command to capture new files
 if [[ "\${IS_GLOBAL}" == "true" ]]; then
@@ -239,7 +248,7 @@ if [[ "\${IS_GLOBAL}" == "true" ]]; then
       # Find new files (in after but not in before)
       for file in \$(comm -13 /tmp/before.txt /tmp/after.txt); do
         if [ -f "/usr/local/bin/\$file" ]; then
-          cp -p "/usr/local/bin/\$file" "/host-bin/\$file"
+          cp -pa "/usr/local/bin/\$file" "/host-bin/\$file"
           echo "Copied new file to host: \$file"
         fi
       done
@@ -269,12 +278,8 @@ DOCKER_ARGS=(
   -e "HOME=${CONTAINER_HOME}"
   --network host
   -v "${NODE_MODULES}:/usr/local/lib/node_modules"
-  -v "${NODE_NPM}:${CONTAINER_HOME}/.npm"
+  -v "${NODE_NPM}:${CONTAINER_HOME}"
 )
-
-if [[ -f "${NODE_NPMRC}" ]]; then
-  DOCKER_ARGS+=( -v "${NODE_NPMRC}:${CONTAINER_HOME}/.npmrc:ro" )
-fi
 
 exec docker run "\${DOCKER_ARGS[@]}" "$NODE_IMAGE" npx "\$@"
 WRAP
@@ -306,7 +311,7 @@ DOCKER_ARGS=(
   -e "HOME=${CONTAINER_HOME}"
   --network host
   -v "${NODE_MODULES}:/usr/local/lib/node_modules"
-  -v "${NODE_NPM}:${CONTAINER_HOME}/.npm"          # npm cache (some Yarn uses npm)
+  -v "${NODE_NPM}:${CONTAINER_HOME}"
   -v "${YARN_CACHE_DIR}:${CONTAINER_HOME}/.cache/yarn"
 )
 
