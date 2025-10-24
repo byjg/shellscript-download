@@ -166,6 +166,27 @@ set -euo pipefail
 NODE_INSPECT=1
 NODE_INSPECT_PORT=9229
 
+ARGS=()
+for arg in "\$@"; do
+    arg=\$(echo "\$arg" | sed "s|${NODE_BIN}|/usr/local/host-bin|g")
+
+    # Check if argument is an absolute path (starts with /)
+    if [[ "\$arg" = /* ]]; then
+        # Convert absolute path to relative path from PWD
+        RELATIVE_PATH="\${arg#\$PWD/}"
+        # If the path is actually under PWD, use the relative path
+        if [[ "\$RELATIVE_PATH" != "\$arg" ]]; then
+            ARGS+=("\$RELATIVE_PATH")
+        else
+            # Path is outside PWD, keep it as is (will likely fail in container)
+            ARGS+=("\$arg")
+        fi
+    else
+        # Not an absolute path, keep as is
+        ARGS+=("\$arg")
+    fi
+done
+
 DOCKER_ARGS=(
   -i ${TTY_ARG} --rm
   -v "\${PWD}":/workdir
@@ -173,6 +194,7 @@ DOCKER_ARGS=(
   ${REGULAR_USER}
   --network host
   -e "HOME=${CONTAINER_HOME}"
+  -v "${NODE_BIN}:/usr/local/host-bin"
   -v "${NODE_MODULES}:/usr/local/lib/node_modules"
   -v "${NODE_NPM}:${CONTAINER_HOME}"
 )
@@ -183,7 +205,7 @@ if [[ "${NODE_INSPECT:-}" != "" ]]; then
   DOCKER_ARGS+=( -e "NODE_OPTIONS=--inspect=0.0.0.0:9229" )
 fi
 
-exec docker run "\${DOCKER_ARGS[@]}" "$NODE_IMAGE" node "\$@"
+exec docker run "\${DOCKER_ARGS[@]}" "$NODE_IMAGE" node "\${ARGS[@]}"
 WRAP
 chmod +x "${DEST_FOLDER}/node${NODE_VERSION}"
 
