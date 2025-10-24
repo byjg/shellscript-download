@@ -128,7 +128,9 @@ if [ ! -f "$NODE_MODULES" ]; then
 fi
 
 if [[ $EUID -eq 0 ]]; then
-  REGULAR_USER=""
+  echo "Error: This script should not be run as root/sudo." >&2
+  echo "Please run as a regular user." >&2
+  exit 5
 fi
 
 cat >"${DEST_FOLDER}/node${NODE_VERSION}" <<WRAP
@@ -177,11 +179,23 @@ cat >"${DEST_FOLDER}/npm${NODE_VERSION}" <<WRAP
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Check if this is a global operation that requires root privileges
+RUN_AS_USER="${REGULAR_USER}"
+for arg in "\$@"; do
+  case "\$arg" in
+    -g|--global)
+      # Global operations need root access, remove user restriction
+      RUN_AS_USER=""
+      break
+      ;;
+  esac
+done
+
 DOCKER_ARGS=(
   -i ${TTY_ARG} --rm
   -v "\${PWD}":/workdir
   -w /workdir
-  ${REGULAR_USER}
+  \${RUN_AS_USER}
   -e "HOME=${CONTAINER_HOME}"
   --network host
   -v "${NODE_MODULES}:/usr/local/lib/node_modules"
