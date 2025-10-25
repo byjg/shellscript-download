@@ -114,9 +114,8 @@ fi
 BASE_FOLDER="$HOME/.shellscript"
 DEST_FOLDER="$BASE_FOLDER/bin"
 SHELLRC_FOLDER="$BASE_FOLDER/shellrc"
-NODE_NPM="$BASE_FOLDER/node/${NODE_VERSION}/home"
-NODE_MODULES="$BASE_FOLDER/node/${NODE_VERSION}/lib/node_modules"
-NODE_BIN="$BASE_FOLDER/node/${NODE_VERSION}/bin"
+NODE_NPM="$BASE_FOLDER/node/${NODE_VERSION}"
+NODE_BIN="$NODE_NPM/.npm-global/bin"
 NODE_NPMRC="$HOME/.npmrc"
 CONTAINER_HOME="/tmp/home"
 REGULAR_USER="-u \"$(id -u)\":\"$(id -g)\""
@@ -131,23 +130,19 @@ echo "[Debug] Creating $BASE_FOLDER/node/${NODE_VERSION} folder"
 mkdir -p "${DEST_FOLDER}"
 mkdir -p "${SHELLRC_FOLDER}"
 mkdir -p "$NODE_NPM"
+mkdir -p "$NODE_NPM/.npm"
 mkdir -p "$NODE_BIN"
 touch "$NODE_NPMRC"
 cp "$NODE_NPMRC" "$NODE_NPM/.npmrc"
+
+# Configure npm to use custom prefix for global installs
+sed -i '/^prefix=/d' "$NODE_NPM/.npmrc"
+echo "prefix=${CONTAINER_HOME}/.npm-global" >> "$NODE_NPM/.npmrc"
 
 echo "[Debug] Update Path"
 cat >"${SHELLRC_FOLDER}/node-init.sh" <<WRAP
 export PATH="\$PATH:$NODE_BIN"
 WRAP
-
-if [ ! -d "$NODE_MODULES" ]; then
-  echo "[Debug] Creating Global Node Modules $NODE_MODULES"
-  docker run -i ${TTY_ARG} --rm  \
-    -v $NODE_MODULES:/tmp/xyz10 \
-    ${NODE_IMAGE} sh -c "cp -R /usr/local/lib/node_modules/* /tmp/xyz10"
-else
-  echo "[Debug] Preserving Global Node Modules $NODE_MODULES"
-fi
 
 
 cat >"${DEST_FOLDER}/node${NODE_VERSION}" <<WRAP
@@ -168,7 +163,7 @@ NODE_INSPECT_PORT=9229
 
 ARGS=()
 for arg in "\$@"; do
-    arg=\$(echo "\$arg" | sed "s|${NODE_BIN}|/usr/local/host-bin|g")
+    arg=\$(echo "\$arg" | sed "s|${NODE_BIN}|${CONTAINER_HOME}/.npm-global/bin|g")
 
     # Check if argument is an absolute path (starts with /)
     if [[ "\$arg" = /* ]]; then
@@ -194,8 +189,6 @@ DOCKER_ARGS=(
   ${REGULAR_USER}
   --network host
   -e "HOME=${CONTAINER_HOME}"
-  -v "${NODE_BIN}:/usr/local/host-bin"
-  -v "${NODE_MODULES}:/usr/local/lib/node_modules"
   -v "${NODE_NPM}:${CONTAINER_HOME}"
 )
 
@@ -205,7 +198,7 @@ if [[ "${NODE_INSPECT:-}" != "" ]]; then
   DOCKER_ARGS+=( -e "NODE_OPTIONS=--inspect=0.0.0.0:9229" )
 fi
 
-exec docker run "\${DOCKER_ARGS[@]}" "$NODE_IMAGE" node "\${ARGS[@]}"
+exec docker run "\${DOCKER_ARGS[@]}" "$NODE_IMAGE" /usr/local/bin/node "\${ARGS[@]}"
 WRAP
 chmod +x "${DEST_FOLDER}/node${NODE_VERSION}"
 
@@ -213,74 +206,24 @@ cat >"${DEST_FOLDER}/npm${NODE_VERSION}" <<WRAP
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Check if this is a global operation that requires root privileges
-RUN_AS_USER="${REGULAR_USER}"
-IS_GLOBAL=false
-for arg in "\$@"; do
-  case "\$arg" in
-    -g|--global)
-      # Global operations need root access, remove user restriction
-      RUN_AS_USER=""
-      IS_GLOBAL=true
-      break
-      ;;
-  esac
-done
-
 DOCKER_ARGS=(
   -i ${TTY_ARG} --rm
   -v "\${PWD}":/workdir
   -w /workdir
-  \${RUN_AS_USER}
+  ${REGULAR_USER}
   -e "HOME=${CONTAINER_HOME}"
   --network host
-  -v "${NODE_MODULES}:/usr/local/lib/node_modules"
   -v "${NODE_NPM}:${CONTAINER_HOME}"
 )
 
-# Mount host bin folder for global installs
-if [[ "\${IS_GLOBAL}" == "true" ]]; then
-  DOCKER_ARGS+=( -v "${NODE_BIN}:/host-bin" )
-fi
-
-#TODO
-#if [[ -f "${NODE_NPMRC}" ]]; then
-#  # If you use a custom per-user global prefix, mount it
-#  if grep -q '^prefix=' "${NODE_NPMRC}" 2>/dev/null; then
-#    PREFIX_DIR="\$(awk -F= '/^prefix=/{print \$2}' "${NODE_NPMRC}")"
-#    mkdir -p "\${PREFIX_DIR}"
-#    DOCKER_ARGS+=( -v "\${PREFIX_DIR}:\${PREFIX_DIR}" )
-#  fi
-#fi
-
-# For global installs, wrap the command to capture new files
-if [[ "\${IS_GLOBAL}" == "true" ]]; then
-  exec docker run "\${DOCKER_ARGS[@]}" "$NODE_IMAGE" sh -c '
-    # Capture files before npm install
-    ls -1 /usr/local/bin > /tmp/before.txt 2>/dev/null || touch /tmp/before.txt
-
-    # Run npm command
-    npm "\$@"
-    NPM_EXIT=\$?
-
-    # If npm succeeded, copy new files to host
-    if [ \$NPM_EXIT -eq 0 ]; then
-      ls -1 /usr/local/bin > /tmp/after.txt 2>/dev/null || touch /tmp/after.txt
-
-      # Find new files (in after but not in before)
-      for file in \$(comm -13 /tmp/before.txt /tmp/after.txt); do
-        if [ -f "/usr/local/bin/\$file" ]; then
-          cp -pa "/usr/local/bin/\$file" "/host-bin/\$file"
-          echo "Copied new file to host: \$file"
-        fi
-      done
-    fi
-
-    exit \$NPM_EXIT
-  ' -- "\$@"
+if [ -f "$NODE_BIN/npm" ]; then
+  NPM_PATH="$CONTAINER_HOME/.npm-global/bin/npm"
 else
-  exec docker run "\${DOCKER_ARGS[@]}" "$NODE_IMAGE" npm "\$@"
+  NPM_PATH="/usr/local/bin/npm"
 fi
+
+
+exec docker run "\${DOCKER_ARGS[@]}" "$NODE_IMAGE" "\$NPM_PATH" "\$@"
 WRAP
 chmod +x "${DEST_FOLDER}/npm${NODE_VERSION}"
 
@@ -299,11 +242,16 @@ DOCKER_ARGS=(
   ${REGULAR_USER}
   -e "HOME=${CONTAINER_HOME}"
   --network host
-  -v "${NODE_MODULES}:/usr/local/lib/node_modules"
   -v "${NODE_NPM}:${CONTAINER_HOME}"
 )
 
-exec docker run "\${DOCKER_ARGS[@]}" "$NODE_IMAGE" npx "\$@"
+if [ -f "$NODE_BIN/npx" ]; then
+  NPX_PATH="$CONTAINER_HOME/.npm-global/bin/npx"
+else
+  NPX_PATH="/usr/local/bin/npx"
+fi
+
+exec docker run "\${DOCKER_ARGS[@]}" "$NODE_IMAGE" "\$NPX_PATH" "\$@"
 WRAP
 chmod +x "${DEST_FOLDER}/npx${NODE_VERSION}"
 
@@ -332,10 +280,15 @@ DOCKER_ARGS=(
   ${REGULAR_USER}
   -e "HOME=${CONTAINER_HOME}"
   --network host
-  -v "${NODE_MODULES}:/usr/local/lib/node_modules"
   -v "${NODE_NPM}:${CONTAINER_HOME}"
   -v "${YARN_CACHE_DIR}:${CONTAINER_HOME}/.cache/yarn"
 )
+
+if [ -f "$NODE_BIN/yarn" ]; then
+  YARN_PATH="$CONTAINER_HOME/.npm-global/bin/yarn"
+else
+  YARN_PATH="/usr/local/bin/yarn"
+fi
 
 # Mount .yarnrc or .yarnrc.yml if present
 if [[ -f "${HOME}/.yarnrc" ]]; then
@@ -344,7 +297,7 @@ elif [[ -f "${HOME}/.yarnrc.yml" ]]; then
   DOCKER_ARGS+=( -v "${HOME}/.yarnrc.yml:${CONTAINER_HOME}/.yarnrc.yml:ro" )
 fi
 
-exec docker run "\${DOCKER_ARGS[@]}" "$NODE_IMAGE" yarn "\$@"
+exec docker run "\${DOCKER_ARGS[@]}" "$NODE_IMAGE" "\$YARN_PATH "\$@"
 WRAP
 chmod +x "${DEST_FOLDER}/yarn${NODE_VERSION}"
 
