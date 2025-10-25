@@ -117,8 +117,9 @@ SHELLRC_FOLDER="$BASE_FOLDER/shellrc"
 NODE_NPM="$BASE_FOLDER/node/${NODE_VERSION}"
 NODE_BIN="$NODE_NPM/.npm-global/bin"
 NODE_NPMRC="$HOME/.npmrc"
-CONTAINER_HOME="/tmp/home"
+CONTAINER_HOME="${HOME}"
 REGULAR_USER="-u \"$(id -u)\":\"$(id -g)\""
+WORKDIR="/c/\${PWD}"
 
 if [[ $EUID -eq 0 ]]; then
   echo "Error: This script should not be run as root/sudo." >&2
@@ -184,8 +185,8 @@ done
 
 DOCKER_ARGS=(
   -i ${TTY_ARG} --rm
-  -v "\${PWD}":/workdir
-  -w /workdir
+  -v "\${PWD}":"${WORKDIR}"
+  -w "${WORKDIR}"
   ${REGULAR_USER}
   --network host
   -e "HOME=${CONTAINER_HOME}"
@@ -208,8 +209,8 @@ set -euo pipefail
 
 DOCKER_ARGS=(
   -i ${TTY_ARG} --rm
-  -v "\${PWD}":/workdir
-  -w /workdir
+  -v "\${PWD}":"${WORKDIR}"
+  -w "${WORKDIR}"
   ${REGULAR_USER}
   -e "HOME=${CONTAINER_HOME}"
   --network host
@@ -237,8 +238,8 @@ IMAGE="node:${NODE_VERSION}-alpine"
 
 DOCKER_ARGS=(
   -i ${TTY_ARG} --rm
-  -v "\${PWD}":/workdir
-  -w /workdir
+  -v "\${PWD}":"${WORKDIR}"
+  -w "${WORKDIR}"
   ${REGULAR_USER}
   -e "HOME=${CONTAINER_HOME}"
   --network host
@@ -275,8 +276,8 @@ set -euo pipefail
 
 DOCKER_ARGS=(
   -i ${TTY_ARG} --rm
-  -v "\${PWD}":/workdir
-  -w /workdir
+  -v "\${PWD}":"${WORKDIR}"
+  -w "${WORKDIR}"
   ${REGULAR_USER}
   -e "HOME=${CONTAINER_HOME}"
   --network host
