@@ -116,13 +116,27 @@ cat >"${DEST_FOLDER}/composer${PHP_VERSION}" <<WRAP
 #!/usr/bin/env bash
 set -euo pipefail
 # Wrapper for composer via Docker (byjg/php:<version>-cli)
-# Mount current dir and persist Composer home between runs.
+# Mount current dir and persist Composer home between runs. Forward SSH agent if available.
+
+# Prepare optional SSH agent forwarding
+DOCKER_SSH_ARGS=()
+if [[ -n "\${SSH_AUTH_SOCK:-}" && -S "\${SSH_AUTH_SOCK}" ]]; then
+  DOCKER_SSH_ARGS=(
+    -v "$HOME/.ssh:$HOME/.ssh:ro"
+    -v "/etc/passwd:/etc/passwd:ro"
+    -v "/etc/group:/etc/group:ro"
+    -v "\${SSH_AUTH_SOCK}:\${SSH_AUTH_SOCK}"
+    -e SSH_AUTH_SOCK=\${SSH_AUTH_SOCK}
+  )
+fi
+
 docker run -i --rm \
   -v "\${PWD}":/workdir \
   -v "${COMPOSER_CACHE}:/tmp/.composer" \
   -e COMPOSER_HOME=/tmp/.composer \
   -w /workdir \
   -u $(id -u):$(id -g) \
+  "\${DOCKER_SSH_ARGS[@]}" \
   byjg/php:${PHP_VERSION}-cli \
   composer "\$@"
 WRAP
