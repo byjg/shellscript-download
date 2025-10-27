@@ -69,8 +69,22 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 3
 fi
 
-DEST_FOLDER="$HOME/.shellscript/bin"
+echo "[Debug] Create Folders"
+BASE_FOLDER="$HOME/.shellscript"
+SHELLRC_FOLDER="$BASE_FOLDER/shellrc"
+DEST_FOLDER="$BASE_FOLDER/bin"
+PHP_HOME="$BASE_FOLDER/php/${PHP_VERSION}"
+PHP_BIN="${PHP_HOME}/vendor/bin"
+COMPOSER_CACHE="${PHP_HOME}/cache"
 mkdir -p "${DEST_FOLDER}"
+mkdir -p "${PHP_HOME}"
+mkdir -p "${PHP_BIN}"
+mkdir -p "${COMPOSER_CACHE}"
+
+echo "[Debug] Update Path"
+cat >"${SHELLRC_FOLDER}/php-init.sh" <<WRAP
+export PATH="\$PATH:$PHP_BIN"
+WRAP
 
 # Create php wrapper
 cat >"${DEST_FOLDER}/php${PHP_VERSION}" <<WRAP
@@ -115,9 +129,6 @@ docker run \${TTY_ARG} --rm \
   php "\${ARGS[@]}"
 WRAP
 
-COMPOSER_CACHE="${HOME}/.cache/composer.${PHP_VERSION}.sh"
-mkdir -p ${COMPOSER_CACHE}
-chown -R $(id -u):$(id -g) ${COMPOSER_CACHE}
 
 # Create composer wrapper
 cat >"${DEST_FOLDER}/composer${PHP_VERSION}" <<WRAP
@@ -148,7 +159,7 @@ fi
 
 docker run \${TTY_ARG} --rm \
   -v "\${PWD}":/workdir \
-  -v "${COMPOSER_CACHE}:/tmp/.composer" \
+  -v "${PHP_HOME}:/tmp/.composer" \
   -e COMPOSER_HOME=/tmp/.composer \
   -w /workdir \
   -u $(id -u):$(id -g) \
