@@ -97,7 +97,15 @@ for arg in "\$@"; do
     fi
 done
 
-docker run -i --rm \
+TTY_ARG=""
+if [ -t 0 ]; then
+    TTY_ARG="-i"
+fi
+if [ -t 1 ]; then
+    TTY_ARG="\${TTY_ARG} -t"
+fi
+
+docker run \${TTY_ARG} --rm \
   -v "\${PWD}":/workdir \
   -w /workdir \
   -u $(id -u):$(id -g) \
@@ -130,7 +138,15 @@ if [[ -n "\${SSH_AUTH_SOCK:-}" && -S "\${SSH_AUTH_SOCK}" ]]; then
   )
 fi
 
-docker run -i --rm \
+TTY_ARG=""
+if [ -t 0 ]; then
+    TTY_ARG="-i"
+fi
+if [ -t 1 ]; then
+    TTY_ARG="\${TTY_ARG} -t"
+fi
+
+docker run \${TTY_ARG} --rm \
   -v "\${PWD}":/workdir \
   -v "${COMPOSER_CACHE}:/tmp/.composer" \
   -e COMPOSER_HOME=/tmp/.composer \

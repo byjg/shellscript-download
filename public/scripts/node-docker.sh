@@ -1,14 +1,11 @@
 #!/usr/bin/env bash
 # node-docker.sh: Create Docker-backed Node.js launchers (node, npm, npx, yarn)
 # Usage (via loader):
-#   load.sh node-docker -- [--no-tty] <node_version>
+#   load.sh node-docker -- <node_version>
 #
-#   Options:
-#     --no-tty    Enable TTY mode for wrappers (docker run will use -it instead of -i)
 #
 # Examples:
 #   load.sh node-docker -- 22
-#   load.sh node-docker -- --no-tty 22
 #   load.sh node-docker -- 20
 #
 # Description:
@@ -33,17 +30,13 @@ echo
 
 print_usage() {
   cat <<'USAGE'
-load.sh node-docker -- [--no-tty] <node_version>
+load.sh node-docker -- <node_version>
 
 Installs Docker-backed wrappers for Node.js tools (node, npm, npx, yarn)
 under $HOME/.shellscript/bin using node:<version>-alpine Docker image.
 
-Options:
-  --no-tty    Disable TTY mode for wrappers (docker run will use -i instead of -it)
-
 Examples:
   load.sh node-docker -- 22
-  load.sh node-docker -- --no-tty 22
   load.sh node-docker -- 20
 
 USAGE
@@ -56,13 +49,8 @@ if [[ "${1-}" == "-h" || "${1-}" == "--help" ]]; then
 fi
 
 # Parse optional flags
-TTY_ARG="-t"
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --no-tty)
-      TTY_ARG=""
-      shift
-      ;;
     -h|--help)
       print_usage
       exit 0
@@ -162,6 +150,15 @@ set -euo pipefail
 NODE_INSPECT=1
 NODE_INSPECT_PORT=9229
 
+TTY_ARG=""
+if [ -t 0 ]; then
+    TTY_ARG="-i"
+fi
+if [ -t 1 ]; then
+    TTY_ARG="\${TTY_ARG} -t"
+fi
+
+
 ARGS=()
 for arg in "\$@"; do
     arg=\$(echo "\$arg" | sed "s|${NODE_BIN}|${CONTAINER_HOME}/.npm-global/bin|g")
@@ -184,7 +181,7 @@ for arg in "\$@"; do
 done
 
 DOCKER_ARGS=(
-  -i ${TTY_ARG} --rm
+  \${TTY_ARG} --rm
   -v "\${PWD}":"${WORKDIR}"
   -w "${WORKDIR}"
   ${REGULAR_USER}
@@ -207,8 +204,16 @@ cat >"${DEST_FOLDER}/npm${NODE_VERSION}" <<WRAP
 #!/usr/bin/env bash
 set -euo pipefail
 
+TTY_ARG=""
+if [ -t 0 ]; then
+    TTY_ARG="-i"
+fi
+if [ -t 1 ]; then
+    TTY_ARG="\${TTY_ARG} -t"
+fi
+
 DOCKER_ARGS=(
-  -i ${TTY_ARG} --rm
+  \${TTY_ARG} --rm
   -v "\${PWD}":"${WORKDIR}"
   -w "${WORKDIR}"
   ${REGULAR_USER}
@@ -234,10 +239,16 @@ cat >"${DEST_FOLDER}/npx${NODE_VERSION}" <<WRAP
 set -euo pipefail
 # Wrapper to run npx inside Docker with persistent cache/config.
 
-IMAGE="node:${NODE_VERSION}-alpine"
+TTY_ARG=""
+if [ -t 0 ]; then
+    TTY_ARG="-i"
+fi
+if [ -t 1 ]; then
+    TTY_ARG="\${TTY_ARG} -t"
+fi
 
 DOCKER_ARGS=(
-  -i ${TTY_ARG} --rm
+  \${TTY_ARG} --rm
   -v "\${PWD}":"${WORKDIR}"
   -w "${WORKDIR}"
   ${REGULAR_USER}
@@ -274,8 +285,16 @@ set -euo pipefail
 #   NODE_VERSION=22        # Node image tag (default 22)
 #   YARN_CACHE_DIR         # Override cache dir (default ~/.cache/yarn)
 
+TTY_ARG=""
+if [ -t 0 ]; then
+    TTY_ARG="-i"
+fi
+if [ -t 1 ]; then
+    TTY_ARG="\${TTY_ARG} -t"
+fi
+
 DOCKER_ARGS=(
-  -i ${TTY_ARG} --rm
+  \${TTY_ARG} --rm
   -v "\${PWD}":"${WORKDIR}"
   -w "${WORKDIR}"
   ${REGULAR_USER}
