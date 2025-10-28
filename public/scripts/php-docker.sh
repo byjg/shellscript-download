@@ -75,16 +75,30 @@ SHELLRC_FOLDER="$BASE_FOLDER/shellrc"
 DEST_FOLDER="$BASE_FOLDER/bin"
 PHP_HOME="$BASE_FOLDER/php/${PHP_VERSION}"
 PHP_BIN="${PHP_HOME}/vendor/bin"
+PHP_INI="${PHP_HOME}/php.ini"
 COMPOSER_CACHE="${PHP_HOME}/cache"
 mkdir -p "${DEST_FOLDER}"
 mkdir -p "${PHP_HOME}"
 mkdir -p "${PHP_BIN}"
 mkdir -p "${COMPOSER_CACHE}"
+touch "$PHP_INI"
 
 echo "[Debug] Update Path"
 cat >"${SHELLRC_FOLDER}/php-init.sh" <<WRAP
 export PATH="\$PATH:$PHP_BIN"
 WRAP
+
+# Pull image and make wrappers executable
+# shellcheck disable=SC2154  # PHP_VERSION is set via case above
+if ! docker pull "byjg/php:${PHP_VERSION}-cli"; then
+  echo "Error: Failed to pull Docker image byjg/php:${PHP_VERSION}-cli" >&2
+  exit 4
+fi
+docker run -it --rm \
+  -v /tmp/cp-composer:/tmp/cp-composer \
+  byjg/php:${PHP_VERSION}-cli \
+  sh -c "cp /root/.composer/*.pub /tmp/cp-composer/"
+cp /tmp/cp-composer/*.pub "${PHP_HOME}"
 
 # Create php wrapper
 cat >"${DEST_FOLDER}/php${PHP_VERSION}" <<WRAP
@@ -120,8 +134,10 @@ if [ -t 1 ]; then
 fi
 
 docker run \${TTY_ARG} --rm \
-  -v "\${PWD}":/workdir \
-  -w /workdir \
+  -v "\${PWD}":"\${PWD}" \
+  -v "/tmp:/tmp" \
+  -v "$PHP_INI":"/etc/php${PHP_VERSION//./}/conf.d/99-php.ini" \
+  -w "\${PWD}" \
   -u $(id -u):$(id -g) \
   -e XDEBUG_CLIENT_PORT=9003 \
   --network host \
@@ -161,6 +177,7 @@ docker run \${TTY_ARG} --rm \
   -v "\${PWD}":/workdir \
   -v "${PHP_HOME}:/tmp/.composer" \
   -e COMPOSER_HOME=/tmp/.composer \
+  -v "$PHP_INI":"/etc/php${PHP_VERSION//./}/conf.d/99-php.ini" \
   -w /workdir \
   -u $(id -u):$(id -g) \
   "\${DOCKER_SSH_ARGS[@]}" \
@@ -168,12 +185,6 @@ docker run \${TTY_ARG} --rm \
   composer "\$@"
 WRAP
 
-# Pull image and make wrappers executable
-# shellcheck disable=SC2154  # PHP_VERSION is set via case above
-if ! docker pull "byjg/php:${PHP_VERSION}-cli"; then
-  echo "Error: Failed to pull Docker image byjg/php:${PHP_VERSION}-cli" >&2
-  exit 4
-fi
 chmod a+x "${DEST_FOLDER}/php${PHP_VERSION}" "${DEST_FOLDER}/composer${PHP_VERSION}"
 ln -sf "${DEST_FOLDER}/php${PHP_VERSION}" "${DEST_FOLDER}/php"
 ln -sf "${DEST_FOLDER}/composer${PHP_VERSION}" "${DEST_FOLDER}/composer"
