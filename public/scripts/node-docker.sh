@@ -92,12 +92,59 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 3
 fi
 
-# Pull image and make wrappers executable
+# Pull base image and build a customized one with git + bash, and set SHELL
 # shellcheck disable=SC2154  # PHP_VERSION is set via case above
 if ! docker pull "$NODE_IMAGE"; then
   echo "Error: Failed to pull Docker image ${NODE_IMAGE}" >&2
   exit 4
 fi
+
+# Create a derived image that has bash and git installed and SHELL set to /bin/bash
+CUSTOM_IMAGE="node:${NODE_VERSION}-alpine-git-bash"
+
+# Always rebuild the custom image: remove existing one if present
+if docker image inspect "$CUSTOM_IMAGE" >/dev/null 2>&1; then
+  echo "[Debug] Removing existing image ${CUSTOM_IMAGE} before rebuild"
+  docker rmi -f "$CUSTOM_IMAGE" >/dev/null 2>&1 || true
+fi
+
+echo "[Debug] Creating custom image ${CUSTOM_IMAGE} from ${NODE_IMAGE} (installing git and bash)"
+TEMP_CONT="node-setup-${NODE_VERSION}-$$"
+CLEANUP() {
+  # best-effort remove temp container
+  docker rm -f "$TEMP_CONT" >/dev/null 2>&1 || true
+}
+trap CLEANUP EXIT
+
+# Ensure no leftover container with the same name
+docker rm -f "$TEMP_CONT" >/dev/null 2>&1 || true
+
+# Start a long-running container
+if ! docker run -d --name "$TEMP_CONT" "$NODE_IMAGE" sh -c "sleep infinity"; then
+  echo "Error: Failed to start temporary container from ${NODE_IMAGE}" >&2
+  exit 4
+fi
+
+# Install bash and git inside the container
+if ! docker exec "$TEMP_CONT" sh -lc "apk update && apk add --no-cache bash git"; then
+  echo "Error: Failed to install bash and git inside temporary container" >&2
+  exit 4
+fi
+
+# Commit the container as a new image with SHELL env set
+if ! docker commit \
+    --change 'ENV SHELL=/bin/bash' \
+    "$TEMP_CONT" "$CUSTOM_IMAGE" >/dev/null; then
+  echo "Error: Failed to commit custom image ${CUSTOM_IMAGE}" >&2
+  exit 4
+fi
+
+# Stop and remove temp container (trap will also try)
+docker rm -f "$TEMP_CONT" >/dev/null 2>&1 || true
+trap - EXIT
+
+# Use the custom image for the wrappers
+NODE_IMAGE="$CUSTOM_IMAGE"
 
 BASE_FOLDER="$HOME/.shellscript"
 DEST_FOLDER="$BASE_FOLDER/bin"
