@@ -20,9 +20,9 @@ const Index = () => {
     },
     {
       icon: Server,
-      title: "PHP Rest Reference",
+      title: "PHP Rest API",
       description: "Reference architecture for building REST APIs with PHP",
-      command: "php-rest-reference",
+      command: "php-rest-api",
     },
   ];
 
