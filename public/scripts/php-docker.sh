@@ -135,6 +135,7 @@ fi
 
 docker run \${TTY_ARG} --rm \
   -v "\${PWD}":"\${PWD}" \
+  -v "${HOME}/.cache:${HOME}/.cache" \
   -v "/tmp:/tmp" \
   -v "$PHP_INI":"/etc/php${PHP_VERSION//./}/conf.d/99-php.ini" \
   -w "\${PWD}" \
