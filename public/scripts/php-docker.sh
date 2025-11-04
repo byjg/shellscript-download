@@ -133,6 +133,12 @@ if [ -t 1 ]; then
     TTY_ARG="\${TTY_ARG} -t"
 fi
 
+# Prepare environment variables
+ENV_ARGS=()
+while IFS='=' read -r -d '' name value; do
+  ENV_ARGS+=(-e "\${name}=\${value}")
+done < <(env -0)
+
 docker run \${TTY_ARG} --rm \
   -v "\${PWD}":"\${PWD}" \
   -v "${HOME}/.cache:${HOME}/.cache" \
@@ -140,7 +146,7 @@ docker run \${TTY_ARG} --rm \
   -v "$PHP_INI":"/etc/php${PHP_VERSION//./}/conf.d/99-php.ini" \
   -w "\${PWD}" \
   -u $(id -u):$(id -g) \
-  -e XDEBUG_CLIENT_PORT=9003 \
+  "\${ENV_ARGS[@]}" \
   --network host \
   byjg/php:${PHP_VERSION}-cli \
   php "\${ARGS[@]}"
@@ -174,13 +180,19 @@ if [ -t 1 ]; then
     TTY_ARG="\${TTY_ARG} -t"
 fi
 
+# Prepare environment variables
+ENV_ARGS=()
+while IFS='=' read -r -d '' name value; do
+  ENV_ARGS+=(-e "\${name}=\${value}")
+done < <(env -0)
+
 docker run \${TTY_ARG} --rm \
   -v "\${PWD}":/workdir \
   -v "${PHP_HOME}:/tmp/.composer" \
-  -e COMPOSER_HOME=/tmp/.composer \
   -v "$PHP_INI":"/etc/php${PHP_VERSION//./}/conf.d/99-php.ini" \
   -w /workdir \
   -u $(id -u):$(id -g) \
+  "\${ENV_ARGS[@]}" \
   "\${DOCKER_SSH_ARGS[@]}" \
   byjg/php:${PHP_VERSION}-cli \
   composer "\$@"
