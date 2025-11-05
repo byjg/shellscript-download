@@ -88,17 +88,65 @@ cat >"${SHELLRC_FOLDER}/php-init.sh" <<WRAP
 export PATH="\$PATH:$PHP_BIN"
 WRAP
 
-# Pull image and make wrappers executable
+# Pull base image and build a customized one with updated composer
 # shellcheck disable=SC2154  # PHP_VERSION is set via case above
-if ! docker pull "byjg/php:${PHP_VERSION}-cli"; then
-  echo "Error: Failed to pull Docker image byjg/php:${PHP_VERSION}-cli" >&2
+PHP_BASE_IMAGE="byjg/php:${PHP_VERSION}-cli"
+if ! docker pull "$PHP_BASE_IMAGE"; then
+  echo "Error: Failed to pull Docker image ${PHP_BASE_IMAGE}" >&2
   exit 4
 fi
+
+# Create a derived image with updated composer
+CUSTOM_IMAGE="byjg/php:${PHP_VERSION}-cli-custom"
+
+# Always rebuild the custom image: remove existing one if present
+if docker image inspect "$CUSTOM_IMAGE" >/dev/null 2>&1; then
+  echo "[Debug] Removing existing image ${CUSTOM_IMAGE} before rebuild"
+  docker rmi -f "$CUSTOM_IMAGE" >/dev/null 2>&1 || true
+fi
+
+echo "[Debug] Creating custom image ${CUSTOM_IMAGE} from ${PHP_BASE_IMAGE} (running composer self-update)"
+TEMP_CONT="php-setup-${PHP_VERSION}-$$"
+CLEANUP() {
+  # best-effort remove temp container
+  docker rm -f "$TEMP_CONT" >/dev/null 2>&1 || true
+}
+trap CLEANUP EXIT
+
+# Ensure no leftover container with the same name
+docker rm -f "$TEMP_CONT" >/dev/null 2>&1 || true
+
+# Start a long-running container
+if ! docker run -d --name "$TEMP_CONT" "$PHP_BASE_IMAGE" sh -c "sleep infinity"; then
+  echo "Error: Failed to start temporary container from ${PHP_BASE_IMAGE}" >&2
+  exit 4
+fi
+
+# Run composer self-update inside the container
+if ! docker exec "$TEMP_CONT" sh -c "composer self-update"; then
+  echo "Error: Failed to run composer self-update inside temporary container" >&2
+  exit 4
+fi
+
+# Commit the container as a new image
+if ! docker commit "$TEMP_CONT" "$CUSTOM_IMAGE" >/dev/null; then
+  echo "Error: Failed to commit custom image ${CUSTOM_IMAGE}" >&2
+  exit 4
+fi
+
+# Stop and remove temp container (trap will also try)
+docker rm -f "$TEMP_CONT" >/dev/null 2>&1 || true
+trap - EXIT
+
+# Copy composer keys from the custom image
 docker run -it --rm \
   -v /tmp/cp-composer:/tmp/cp-composer \
-  byjg/php:${PHP_VERSION}-cli \
+  "$CUSTOM_IMAGE" \
   sh -c "cp /root/.composer/*.pub /tmp/cp-composer/"
 cp /tmp/cp-composer/*.pub "${PHP_HOME}"
+
+# Use the custom image for the wrappers
+PHP_IMAGE="$CUSTOM_IMAGE"
 
 # Create php wrapper
 cat >"${DEST_FOLDER}/php${PHP_VERSION}" <<WRAP
@@ -133,9 +181,15 @@ if [ -t 1 ]; then
     TTY_ARG="\${TTY_ARG} -t"
 fi
 
-# Prepare environment variables
+# Prepare environment variables (exclude host-specific vars)
 ENV_ARGS=()
 while IFS='=' read -r -d '' name value; do
+  # Skip environment variables that should not be passed to the container
+  case "\$name" in
+    PATH|HOME|USER|LOGNAME|HOSTNAME|PWD|OLDPWD|SHELL|TERM|SHLVL|_)
+      continue
+      ;;
+  esac
   ENV_ARGS+=(-e "\${name}=\${value}")
 done < <(env -0)
 
@@ -148,7 +202,7 @@ docker run \${TTY_ARG} --rm \
   -u $(id -u):$(id -g) \
   "\${ENV_ARGS[@]}" \
   --network host \
-  byjg/php:${PHP_VERSION}-cli \
+  $PHP_IMAGE \
   php "\${ARGS[@]}"
 WRAP
 
@@ -180,21 +234,29 @@ if [ -t 1 ]; then
     TTY_ARG="\${TTY_ARG} -t"
 fi
 
-# Prepare environment variables
+# Prepare environment variables (exclude host-specific vars)
 ENV_ARGS=()
 while IFS='=' read -r -d '' name value; do
+  # Skip environment variables that should not be passed to the container
+  case "\$name" in
+    PATH|HOME|USER|LOGNAME|HOSTNAME|PWD|OLDPWD|SHELL|TERM|SHLVL|_)
+      continue
+      ;;
+  esac
   ENV_ARGS+=(-e "\${name}=\${value}")
 done < <(env -0)
 
 docker run \${TTY_ARG} --rm \
   -v "\${PWD}":/workdir \
   -v "${PHP_HOME}:/tmp/.composer" \
+  -v "${COMPOSER_CACHE}:${HOME}/.cache/composer" \
   -v "$PHP_INI":"/etc/php${PHP_VERSION//./}/conf.d/99-php.ini" \
   -w /workdir \
+  -e "HOME=${HOME}" \
   -u $(id -u):$(id -g) \
   "\${ENV_ARGS[@]}" \
   "\${DOCKER_SSH_ARGS[@]}" \
-  byjg/php:${PHP_VERSION}-cli \
+  $PHP_IMAGE \
   composer "\$@"
 WRAP
 
