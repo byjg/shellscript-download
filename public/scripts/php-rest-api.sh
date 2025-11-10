@@ -29,7 +29,8 @@
 #   --name            Composer package name (vendor/package format, e.g., mycompany/myapp)
 #
 # Optional Arguments:
-#   --mysql-uri       MySQL connection string (default: mysql://root:mysqlp455w0rd@mysql-container/mydb)
+#   --mysql-uri       MySQL connection string (default values: schema=mysql, host=mysql-container,
+#                     user=root, password=mysqlp455w0rd, dev db=localdev, test db=localtest)
 #   --install-examples Install example code (Y or n, default: Y)
 #   --version         Composer version constraint (default: ^6.0)
 #   --php-version     PHP version for Docker (8.1, 8.2, 8.3, 8.4, default: current PHP version)
@@ -66,7 +67,8 @@ Required Arguments:
 
 Optional Arguments:
   --mysql-uri       MySQL connection string
-                    (default: mysql://root:mysqlp455w0rd@mysql-container/mydb)
+                    (default values: schema=mysql, host=mysql-container,
+                     user=root, password=mysqlp455w0rd, dev db=localdev, test db=localtest)
   --install-examples Install example code (Y or n, default: Y)
   --version         Composer version constraint (default: ^6.0)
   --php-version     PHP version for Docker (8.1-8.4, default: current)
@@ -91,13 +93,65 @@ USAGE
 FOLDER=""
 NAMESPACE=""
 COMPOSER_NAME=""
-MYSQL_URI="mysql://root:mysqlp455w0rd@mysql-container/mydb"
+MYSQL_URI=""
 INSTALL_EXAMPLES="true"
 VERSION="^6.0"
 PHP_VERSION=""
 TIMEZONE="UTC"
 GIT_NAME=""
 GIT_EMAIL=""
+DB_SCHEMA="mysql"
+DB_HOST="mysql-container"
+DB_USER="root"
+DB_PASSWORD="mysqlp455w0rd"
+DB_NAME_DEV="localdev"
+DB_NAME_TEST="localtest"
+
+parse_mysql_uri() {
+  local uri="$1"
+  local schema rest creds host_db user pass host db
+
+  if [[ "${uri}" != *"://"* || "${uri}" != *@* || "${uri}" != */* ]]; then
+    err "Invalid --mysql-uri format. Expected mysql://user:password@host/database"
+    exit 2
+  fi
+
+  schema="${uri%%://*}"
+  rest="${uri#*://}"
+  creds="${rest%%@*}"
+  host_db="${rest#*@}"
+  host="${host_db%%/*}"
+  db="${host_db#*/}"
+
+  if [[ -z "${schema}" || -z "${creds}" || -z "${host}" || -z "${db}" ]]; then
+    err "Invalid --mysql-uri format. Expected mysql://user:password@host/database"
+    exit 2
+  fi
+
+  if [[ "${creds}" == *:* ]]; then
+    user="${creds%%:*}"
+    pass="${creds#*:}"
+  else
+    user="${creds}"
+    pass=""
+  fi
+
+  # Strip query/fragment from database name if present
+  db="${db%%\?*}"
+  db="${db%%#*}"
+
+  if [[ -z "${user}" || -z "${db}" ]]; then
+    err "Invalid --mysql-uri format. Expected mysql://user:password@host/database"
+    exit 2
+  fi
+
+  DB_SCHEMA="${schema}"
+  DB_USER="${user}"
+  DB_PASSWORD="${pass}"
+  DB_HOST="${host}"
+  DB_NAME_DEV="${db}"
+  DB_NAME_TEST="${db}_test"
+}
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -201,6 +255,11 @@ if ! [[ "${COMPOSER_NAME}" =~ ^[a-z0-9_-]+/[a-z0-9_-]+$ ]]; then
   exit 2
 fi
 
+# Override DB defaults if a mysql uri is provided
+if [[ -n "${MYSQL_URI}" ]]; then
+  parse_mysql_uri "${MYSQL_URI}"
+fi
+
 # Validate PHP version if provided
 if [[ -n "${PHP_VERSION}" ]]; then
   case "${PHP_VERSION}" in
@@ -267,7 +326,12 @@ cat > "${SETUP_JSON}" <<EOF
   "php_version": "${PHP_VERSION}",
   "namespace": "${NAMESPACE}",
   "composer_name": "${COMPOSER_NAME}",
-  "mysql_connection": "${MYSQL_URI}",
+  "db_schema": "${DB_SCHEMA}",
+  "db_host": "${DB_HOST}",
+  "db_user": "${DB_USER}",
+  "db_password": "${DB_PASSWORD}",
+  "db_name_dev": "${DB_NAME_DEV}",
+  "db_name_test": "${DB_NAME_TEST}",
   "timezone": "${TIMEZONE}",
   "install_examples": ${INSTALL_EXAMPLES}
 }
