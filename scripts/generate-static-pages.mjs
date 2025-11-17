@@ -192,14 +192,11 @@ async function generate() {
     count++
   }
 
-  // Generate _redirects file for Cloudflare Pages
-  const redirectsContent = `# Auto-generated redirects for script pages (SEO-friendly)
-${redirects.join('\n')}
-
-# SPA fallback for all other routes (React Router handles them)
-/*                        /index.html                    200
-`
-  await fs.writeFile(path.join(distDir, '_redirects'), redirectsContent, 'utf8')
+  // Note: We don't create a _redirects file here because:
+  // 1. Cloudflare Pages automatically serves .html files for extensionless URLs
+  //    (e.g., /scripts/docker will serve /scripts/docker.html)
+  // 2. For missing routes, we rely on the 404.html redirect mechanism
+  //    which is already set up to redirect to index.html for React Router
 
   return { count }
 }
