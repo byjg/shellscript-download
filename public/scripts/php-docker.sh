@@ -96,57 +96,8 @@ if ! docker pull "$PHP_BASE_IMAGE"; then
   exit 4
 fi
 
-# Create a derived image with updated composer
-CUSTOM_IMAGE="byjg/php:${PHP_VERSION}-cli-custom"
-
-# Always rebuild the custom image: remove existing one if present
-if docker image inspect "$CUSTOM_IMAGE" >/dev/null 2>&1; then
-  echo "[Debug] Removing existing image ${CUSTOM_IMAGE} before rebuild"
-  docker rmi -f "$CUSTOM_IMAGE" >/dev/null 2>&1 || true
-fi
-
-echo "[Debug] Creating custom image ${CUSTOM_IMAGE} from ${PHP_BASE_IMAGE} (running composer self-update)"
-TEMP_CONT="php-setup-${PHP_VERSION}-$$"
-CLEANUP() {
-  # best-effort remove temp container
-  docker rm -f "$TEMP_CONT" >/dev/null 2>&1 || true
-}
-trap CLEANUP EXIT
-
-# Ensure no leftover container with the same name
-docker rm -f "$TEMP_CONT" >/dev/null 2>&1 || true
-
-# Start a long-running container
-if ! docker run -d --name "$TEMP_CONT" "$PHP_BASE_IMAGE" sh -c "sleep infinity"; then
-  echo "Error: Failed to start temporary container from ${PHP_BASE_IMAGE}" >&2
-  exit 4
-fi
-
-# Run composer self-update inside the container
-if ! docker exec "$TEMP_CONT" sh -c "composer self-update"; then
-  echo "Error: Failed to run composer self-update inside temporary container" >&2
-  exit 4
-fi
-
-# Commit the container as a new image
-if ! docker commit "$TEMP_CONT" "$CUSTOM_IMAGE" >/dev/null; then
-  echo "Error: Failed to commit custom image ${CUSTOM_IMAGE}" >&2
-  exit 4
-fi
-
-# Stop and remove temp container (trap will also try)
-docker rm -f "$TEMP_CONT" >/dev/null 2>&1 || true
-trap - EXIT
-
-# Copy composer keys from the custom image
-docker run -it --rm \
-  -v /tmp/cp-composer:/tmp/cp-composer \
-  "$CUSTOM_IMAGE" \
-  sh -c "cp /root/.composer/*.pub /tmp/cp-composer/"
-cp /tmp/cp-composer/*.pub "${PHP_HOME}"
-
 # Use the custom image for the wrappers
-PHP_IMAGE="$CUSTOM_IMAGE"
+PHP_IMAGE="$PHP_BASE_IMAGE"
 
 # Create php wrapper
 cat >"${DEST_FOLDER}/php${PHP_VERSION}" <<WRAP
