@@ -1,14 +1,33 @@
+# shellscript.download robots.txt
+
+# Allow all search engines to crawl everything
+User-agent: *
+Allow: /
+
+# Crawl delay (polite crawling)
+Crawl-delay: 1
+
+# Specific bot configurations
 User-agent: Googlebot
 Allow: /
+Crawl-delay: 0
 
 User-agent: Bingbot
 Allow: /
+Crawl-delay: 1
 
+# Social media crawlers (for link previews)
 User-agent: Twitterbot
 Allow: /
 
 User-agent: facebookexternalhit
 Allow: /
 
-User-agent: *
+User-agent: LinkedInBot
 Allow: /
+
+User-agent: Slackbot
+Allow: /
+
+# Sitemap location
+Sitemap: https://shellscript.download/sitemap.xml

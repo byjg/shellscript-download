@@ -48,6 +48,7 @@ function buildStaticHtml({ title, description, bodyText, scriptName }) {
   <meta property="og:title" content="${htmlEscape(title)} - shellscript.download">
   <meta property="og:description" content="${htmlEscape(description)}">
   <meta property="og:type" content="website">
+  <link rel="canonical" href="https://shellscript.download/scripts/${htmlEscape(scriptName)}">
   <style>
     body {
       margin: 0;
@@ -130,6 +131,11 @@ function buildStaticHtml({ title, description, bodyText, scriptName }) {
         <span>shellscript.download</span>
       </div>
     </header>
+    <div style="background: hsl(142 76% 36% / 0.1); border: 1px solid hsl(142 76% 36% / 0.3); border-radius: 0.5rem; padding: 1rem; margin-bottom: 1.5rem; text-align: center;">
+      <p style="margin: 0; color: hsl(210 40% 98%);">
+        📱 For the full interactive experience, visit <a href="/" style="color: hsl(142 76% 36%); font-weight: 600;">shellscript.download</a>
+      </p>
+    </div>
     <a href="/" class="back-link">← Home</a>
     <h1>${htmlEscape(title)}</h1>
     <div class="install-command">
@@ -183,14 +189,47 @@ async function generate() {
       scriptName: base
     })
 
+    // Save static HTML - crawlers will find these, and they're accessible at /scripts/docker.html
     const outHtmlPath = path.join(distScriptsDir, `${base}.html`)
     await fs.writeFile(outHtmlPath, html, 'utf8')
 
-    // Add redirect rule for Cloudflare Pages
-    redirects.push(`/scripts/${base}           /scripts/${base}.html           200`)
-
     count++
   }
+
+  // Generate sitemap.xml for SEO
+  const sitemapUrls = []
+
+  // Add home page
+  sitemapUrls.push({
+    loc: 'https://shellscript.download/',
+    priority: '1.0',
+    changefreq: 'weekly'
+  })
+
+  // Add all script pages
+  for (const entry of entries) {
+    if (!entry.isFile()) continue
+    const ext = path.extname(entry.name).toLowerCase()
+    if (!['.sh', '.bash', '.zsh'].includes(ext)) continue
+
+    const base = path.basename(entry.name, ext)
+    sitemapUrls.push({
+      loc: `https://shellscript.download/scripts/${base}`,
+      priority: '0.8',
+      changefreq: 'monthly'
+    })
+  }
+
+  const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${sitemapUrls.map(({ loc, priority, changefreq }) => `  <url>
+    <loc>${loc}</loc>
+    <changefreq>${changefreq}</changefreq>
+    <priority>${priority}</priority>
+  </url>`).join('\n')}
+</urlset>
+`
+  await fs.writeFile(path.join(distDir, 'sitemap.xml'), sitemap, 'utf8')
 
   // Note: We don't create a _redirects file here because:
   // 1. Cloudflare Pages automatically serves .html files for extensionless URLs
