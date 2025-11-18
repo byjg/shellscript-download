@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # php-docker.sh: Create Docker-backed php and composer launchers
 # Usage (via loader):
-#   load.sh php-docker -- <php_version>
+#   load.sh php-docker -- <php_version> [--add package1,package2,...]
 #
 # Examples:
 #   load.sh php-docker -- 8.3
 #   load.sh php-docker -- 7.4
+#   load.sh php-docker -- 8.3 --add php83-gd,php83-intl,php83-pdo_mysql
 #
 # Description:
 # - Generates two wrapper scripts in "$HOME/.shellscript/bin":
@@ -15,10 +16,15 @@
 # - Also updates convenience symlinks: php, composer → their <ver> counterparts.
 # - Intended for environments where PHP/Composer are not installed natively.
 #
+# Options:
+# - --add <packages>    Install additional Alpine packages (comma-separated list)
+#                       Example: --add php83-gd,php83-intl,git,bash
+#
 # Notes:
 # - Supported versions: 5.6, 7.0–7.4, 8.0–8.5
 # - Requires Docker installed and available on PATH. Install with `load.sh docker`
 # - This script is idempotent and can be re-run to switch versions.
+# - Packages are installed via Alpine's apk package manager in the Docker image.
 
 set -euo pipefail
 
@@ -27,14 +33,19 @@ echo
 
 print_usage() {
   cat <<'USAGE'
-php-docker.sh <php_version>
+php-docker.sh <php_version> [--add package1,package2,...]
 
 Installs Docker-backed wrappers for php and composer under $HOME/.shellscript/bin
 using the byjg/php:<version>-cli image.
 
+Options:
+  --add <packages>      Install additional Alpine packages (comma-separated list)
+                        Example: --add php83-gd,php83-intl,git,bash
+
 Examples:
   load.sh php-docker -- 8.3
   load.sh php-docker -- 7.4
+  load.sh php-docker -- 8.3 --add php83-gd,php83-intl,git
 
 USAGE
 }
@@ -53,15 +64,28 @@ if [[ $# -lt 1 ]]; then
   exit 2
 fi
 
-case "$1" in
-  "5.6"|"7.0"|"7.1"|"7.2"|"7.3"|"7.4"|"8.0"|"8.1"|"8.2"|"8.3"|"8.4"|"8.5")
-    PHP_VERSION="$1"
-    ;;
-  *)
-    echo "Error: Invalid PHP version. Supported versions are: 5.6, 7.0, 7.1, 7.2, 7.3, 7.4, 8.0, 8.1, 8.2, 8.3, 8.4, 8.5" >&2
-    exit 1
-    ;;
-esac
+PACKAGES=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    "5.6"|"7.0"|"7.1"|"7.2"|"7.3"|"7.4"|"8.0"|"8.1"|"8.2"|"8.3"|"8.4"|"8.5")
+      PHP_VERSION="$1"
+      shift
+      ;;
+    "--add")
+      shift
+      if [[ $# -eq 0 ]]; then
+        echo "Error: --add requires a package list" >&2
+        exit 1
+      fi
+      PACKAGES="$1"
+      shift
+      ;;
+    *)
+      echo "Error: Invalid argument '$1'. Supported versions are: 5.6, 7.0, 7.1, 7.2, 7.3, 7.4, 8.0, 8.1, 8.2, 8.3, 8.4, 8.5" >&2
+      exit 1
+      ;;
+  esac
+done
 
 # Pre-flight: docker availability
 if ! command -v docker >/dev/null 2>&1; then
@@ -97,7 +121,20 @@ if ! docker pull "$PHP_BASE_IMAGE"; then
 fi
 
 # Use the custom image for the wrappers
-PHP_IMAGE="$PHP_BASE_IMAGE"
+PHP_IMAGE="${PHP_BASE_IMAGE}-load"
+docker image rm "$PHP_IMAGE" 2>/dev/null || true
+docker tag "$PHP_BASE_IMAGE" "$PHP_IMAGE"
+
+if [[ -n "$PACKAGES" ]]; then
+  echo "Installing Alpine packages: $PACKAGES"
+  docker rm temp 2>/dev/null || true
+  IFS=',' read -ra PKG_ARRAY <<< "$PACKAGES"
+  docker run -it --user root --name temp "$PHP_IMAGE" apk add --no-cache "${PKG_ARRAY[@]}"
+  docker commit temp "$PHP_IMAGE"
+  docker rm temp
+fi
+
+
 
 # Create php wrapper
 cat >"${DEST_FOLDER}/php${PHP_VERSION}" <<WRAP
