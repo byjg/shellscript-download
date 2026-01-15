@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+# maven.sh: Download and install Apache Maven
+#
+# Usage (via loader):
+#   load.sh maven -- [--version <version>] [--help] [--dry-run]
+#
+# Examples:
+#   # Install Maven with default version (3.9.12)
+#   load.sh maven
+#   # Install specific Maven version
+#   load.sh maven -- --version 3.8.8
+#   # Show help
+#   load.sh maven -- --help
+#   # Simulate actions without making changes
+#   load.sh maven -- --dry-run
+#
+# Description:
+# - Downloads Apache Maven binary from the official Apache archive
+# - Extracts it to $HOME/.shellscript/maven
+# - Creates wrapper scripts in $HOME/.shellscript/bin (mvn, mvnDebug)
+# - Creates $HOME/.shellscript/shellrc/maven-init.sh for environment variables
+# - Idempotent and non-interactive; supports a dry-run mode
+
+set -euo pipefail
+IFS=$'\n\t'
+
+log()  { printf "[maven.sh] %s\n" "$*"; }
+err()  { printf "[maven.sh][ERROR] %s\n" "$*" >&2; }
+run()  { if [[ "$DRY_RUN" == "1" ]]; then printf "[dry-run] %s\n" "$*"; else eval "$@"; fi }
+require_cmd() { command -v "$1" >/dev/null 2>&1 || { err "Required command '$1' not found"; exit 1; }; }
+
+print_usage() {
+  cat <<'USAGE'
+load.sh maven -- [options]
+
+Downloads and installs Apache Maven binary distribution.
+
+Options:
+  -h, --help           Show this help and exit
+  --version <version>  Maven version to install (default: 3.9.12)
+  --dry-run            Print actions without executing them
+
+Examples:
+  load.sh maven
+  load.sh maven -- --version 3.8.8
+  load.sh maven -- --dry-run
+USAGE
+}
+
+# Parse flags
+DRY_RUN=0
+MAVEN_VERSION="3.9.12"
+
+while [[ ${1-} ]]; do
+  case "$1" in
+    -h|--help) print_usage; exit 0 ;;
+    --dry-run) DRY_RUN=1 ;;
+    --version)
+      shift || { err "--version requires a value"; exit 2; }
+      MAVEN_VERSION="$1"
+      ;;
+    *) err "Unknown option: $1"; print_usage; exit 2 ;;
+  esac
+  shift || true
+done
+
+log ">_ maven.sh"
+
+# Preconditions
+require_cmd curl
+require_cmd tar
+
+# Configuration
+MAVEN_HOME="$HOME/.shellscript/maven"
+BIN_DIR="$HOME/.shellscript/bin"
+SHELLRC_DIR="$HOME/.shellscript/shellrc"
+MAVEN_ARCHIVE="apache-maven-${MAVEN_VERSION}-bin.tar.gz"
+DOWNLOAD_URL="https://archive.apache.org/dist/maven/maven-3/${MAVEN_VERSION}/binaries/${MAVEN_ARCHIVE}"
+TEMP_DIR=$(mktemp -d)
+
+cleanup() {
+  if [[ -d "$TEMP_DIR" ]]; then
+    rm -rf "$TEMP_DIR"
+  fi
+}
+trap cleanup EXIT
+
+log "Installing Apache Maven ${MAVEN_VERSION}"
+
+# Download Maven
+log "Downloading Maven from ${DOWNLOAD_URL}"
+run "curl -fsSL -o \"${TEMP_DIR}/${MAVEN_ARCHIVE}\" \"${DOWNLOAD_URL}\""
+
+# Extract Maven
+log "Extracting Maven to ${MAVEN_HOME}"
+run "mkdir -p \"${MAVEN_HOME}\""
+run "tar -xzf \"${TEMP_DIR}/${MAVEN_ARCHIVE}\" -C \"${TEMP_DIR}\""
+run "rm -rf \"${MAVEN_HOME}/current\""
+run "mv \"${TEMP_DIR}/apache-maven-${MAVEN_VERSION}\" \"${MAVEN_HOME}/current\""
+
+# Create bin directory
+run "mkdir -p \"${BIN_DIR}\""
+
+# Create mvn wrapper
+log "Creating mvn wrapper in ${BIN_DIR}"
+run "cat >\"${BIN_DIR}/mvn\" <<'WRAP'
+#!/usr/bin/env bash
+exec \"${HOME}/.shellscript/maven/current/bin/mvn\" \"\$@\"
+WRAP"
+run "chmod +x \"${BIN_DIR}/mvn\""
+
+# Create mvnDebug wrapper
+log "Creating mvnDebug wrapper in ${BIN_DIR}"
+run "cat >\"${BIN_DIR}/mvnDebug\" <<'WRAP'
+#!/usr/bin/env bash
+exec \"${HOME}/.shellscript/maven/current/bin/mvnDebug\" \"\$@\"
+WRAP"
+run "chmod +x \"${BIN_DIR}/mvnDebug\""
+
+# Write shell init snippet
+run "mkdir -p \"${SHELLRC_DIR}\""
+run "cat >\"${SHELLRC_DIR}/maven-init.sh\" <<'WRAP'
+export MAVEN_HOME=\"$HOME/.shellscript/maven/current\"
+export M2_HOME=\"$HOME/.shellscript/maven/current\"
+WRAP"
+
+log "Done. Maven ${MAVEN_VERSION} installed to ${MAVEN_HOME}/current"
+log "Source ${SHELLRC_DIR}/maven-init.sh from your shell rc for MAVEN_HOME environment variable"
