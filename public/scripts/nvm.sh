@@ -35,6 +35,7 @@ Installs NVM and writes a shell init snippet under $HOME/.shellscript/shellrc/nv
 Options:
   -h, --help    Show this help and exit
   --dry-run     Print actions without executing them
+  --manifest    Print installation manifest and exit
 
 Examples:
   load.sh nvm
@@ -42,11 +43,20 @@ Examples:
 USAGE
 }
 
+print_manifest() {
+  cat <<'MANIFEST'
+BIN_FILES=
+FOLDERS=$HOME/.nvm
+SHELLRC_FILE=$HOME/.shellscript/shellrc/nvm-init.sh
+MANIFEST
+}
+
 # Parse flags
 DRY_RUN=0
 while [[ ${1-} ]]; do
   case "$1" in
     -h|--help) print_usage; exit 0 ;;
+    --manifest) print_manifest; exit 0 ;;
     --dry-run) DRY_RUN=1 ;;
     *) err "Unknown option: $1"; print_usage; exit 2 ;;
   esac
@@ -81,6 +91,15 @@ remove_nvm_lines
 # Write our shell init snippet
 DEST_FOLDER="$HOME/.shellscript/shellrc"
 run "mkdir -p \"$DEST_FOLDER\""
-run "cat >\"${DEST_FOLDER}/nvm-init.sh\" <<'WRAP'\nexport NVM_DIR=\"$HOME/.nvm\"\n[ -s \"$NVM_DIR/nvm.sh\" ] && \\ . \"$NVM_DIR/nvm.sh\"  # This loads nvm\n[ -s \"$NVM_DIR/bash_completion\" ] && \\ . \"$NVM_DIR/bash_completion\"  # This loads nvm bash_completion\nWRAP"
+
+if [[ "$DRY_RUN" == "1" ]]; then
+  log "[dry-run] Writing ${DEST_FOLDER}/nvm-init.sh"
+else
+  cat >"${DEST_FOLDER}/nvm-init.sh" <<'WRAP'
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+WRAP
+fi
 
 log "Done. Source ${DEST_FOLDER}/nvm-init.sh from your shell rc (e.g., echo 'source \"$DEST_FOLDER/nvm-init.sh\"' >> ~/.bashrc)"

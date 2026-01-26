@@ -75,6 +75,7 @@ Optional Arguments:
   --timezone        Server timezone (default: UTC)
   --git-name        Git user name (default: from git config)
   --git-email       Git user email (default: from git config)
+  --manifest        Print installation manifest and exit
   -h, --help        Show this help and exit
 
 Examples:
@@ -86,7 +87,23 @@ Examples:
     --mysql-uri=mysql://root:secret@mysql-container/mydb \
     --install-examples=n --version="^6.0" --php-version=8.4
 
+  # Show manifest
+  load.sh php-rest-api -- myproject --namespace=MyApp --name=mycompany/myapp --manifest
+
 USAGE
+}
+
+print_manifest() {
+  local folder="$1"
+  # Convert to absolute path if relative
+  if [[ "${folder}" != /* ]]; then
+    folder="$(pwd)/${folder}"
+  fi
+  cat <<MANIFEST
+BIN_FILES=
+FOLDERS=${folder}
+SHELLRC_FILE=
+MANIFEST
 }
 
 # Default values
@@ -106,6 +123,7 @@ DB_USER="root"
 DB_PASSWORD="mysqlp455w0rd"
 DB_NAME_DEV="localdev"
 DB_NAME_TEST="localtest"
+SHOW_MANIFEST=0
 
 parse_mysql_uri() {
   local uri="$1"
@@ -201,6 +219,10 @@ while [[ $# -gt 0 ]]; do
       GIT_EMAIL="${1#*=}"
       shift
       ;;
+    --manifest)
+      SHOW_MANIFEST=1
+      shift
+      ;;
     -*)
       err "Unknown option: $1"
       echo >&2
@@ -253,6 +275,12 @@ fi
 if ! [[ "${COMPOSER_NAME}" =~ ^[a-z0-9_-]+/[a-z0-9_-]+$ ]]; then
   err "Composer name must be in vendor/package format (e.g., mycompany/myapp)"
   exit 2
+fi
+
+# If manifest requested, print and exit
+if [[ $SHOW_MANIFEST -eq 1 ]]; then
+  print_manifest "$FOLDER"
+  exit 0
 fi
 
 # Override DB defaults if a mysql uri is provided

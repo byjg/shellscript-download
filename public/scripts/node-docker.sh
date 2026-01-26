@@ -30,16 +30,29 @@ echo
 
 print_usage() {
   cat <<'USAGE'
-load.sh node-docker -- <node_version>
+load.sh node-docker -- <node_version> [--manifest]
 
 Installs Docker-backed wrappers for Node.js tools (node, npm, npx, yarn)
 under $HOME/.shellscript/bin using node:<version>-alpine Docker image.
 
+Options:
+  --manifest    Print installation manifest and exit
+
 Examples:
   load.sh node-docker -- 22
   load.sh node-docker -- 20
+  load.sh node-docker -- 22 --manifest
 
 USAGE
+}
+
+print_manifest() {
+  local version="${1:-VERSION}"
+  cat <<MANIFEST
+BIN_FILES=node${version} npm${version} npx${version} yarn${version} node npm npx yarn
+FOLDERS=\$HOME/.shellscript/node/${version}
+SHELLRC_FILE=\$HOME/.shellscript/shellrc/node-init.sh
+MANIFEST
 }
 
 # Help flag handling
@@ -49,11 +62,16 @@ if [[ "${1-}" == "-h" || "${1-}" == "--help" ]]; then
 fi
 
 # Parse optional flags
+SHOW_MANIFEST=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -h|--help)
       print_usage
       exit 0
+      ;;
+    --manifest)
+      SHOW_MANIFEST=1
+      shift
       ;;
     --)
       shift
@@ -74,6 +92,12 @@ if [[ $# -lt 1 ]]; then
 fi
 
 NODE_VERSION=$1
+
+# If manifest requested, print and exit
+if [[ $SHOW_MANIFEST -eq 1 ]]; then
+  print_manifest "$NODE_VERSION"
+  exit 0
+fi
 NODE_IMAGE="node:${NODE_VERSION}-alpine"
 
 #case "$1" in

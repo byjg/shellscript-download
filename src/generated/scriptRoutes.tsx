@@ -9,6 +9,7 @@ import Script_node_docker from "../pages/scripts/node-docker";
 import Script_nvm from "../pages/scripts/nvm";
 import Script_php_docker from "../pages/scripts/php-docker";
 import Script_php_rest_api from "../pages/scripts/php-rest-api";
+import Script_remove from "../pages/scripts/remove";
 
 export const scriptRoutes = [
   { path: "/scripts/docker", element: <Script_docker /> },
@@ -18,5 +19,6 @@ export const scriptRoutes = [
   { path: "/scripts/nvm", element: <Script_nvm /> },
   { path: "/scripts/php-docker", element: <Script_php_docker /> },
   { path: "/scripts/php-rest-api", element: <Script_php_rest_api /> },
+  { path: "/scripts/remove", element: <Script_remove /> },
 ];
 

@@ -40,11 +40,20 @@ Options:
   --dry-run         Print actions without executing them
   --no-group        Skip creating 'docker' group and user membership changes
   --channel CH      Pass a channel to the installer (e.g., 'stable', 'test', 'nightly')
+  --manifest        Print installation manifest and exit
 
 Examples:
   load.sh docker
   load.sh docker -- --dry-run
 USAGE
+}
+
+print_manifest() {
+  cat <<'MANIFEST'
+BIN_FILES=
+FOLDERS=$HOME/.docker
+SHELLRC_FILE=
+MANIFEST
 }
 
 # Parse flags
@@ -54,6 +63,7 @@ CHANNEL=""
 while [[ ${1-} ]]; do
   case "$1" in
     -h|--help) print_usage; exit 0 ;;
+    --manifest) print_manifest; exit 0 ;;
     --dry-run) DRY_RUN=1 ;;
     --no-group) NO_GROUP=1 ;;
     --channel) CHANNEL=${2-}; shift || true ;;

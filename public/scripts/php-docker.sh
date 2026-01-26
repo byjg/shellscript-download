@@ -33,7 +33,7 @@ echo
 
 print_usage() {
   cat <<'USAGE'
-php-docker.sh <php_version> [--add package1,package2,...]
+php-docker.sh <php_version> [--add package1,package2,...] [--manifest]
 
 Installs Docker-backed wrappers for php and composer under $HOME/.shellscript/bin
 using the byjg/php:<version>-cli image.
@@ -41,13 +41,24 @@ using the byjg/php:<version>-cli image.
 Options:
   --add <packages>      Install additional Alpine packages (comma-separated list)
                         Example: --add php83-gd,php83-intl,git,bash
+  --manifest            Print installation manifest and exit
 
 Examples:
   load.sh php-docker -- 8.3
   load.sh php-docker -- 7.4
   load.sh php-docker -- 8.3 --add php83-gd,php83-intl,git
+  load.sh php-docker -- 8.3 --manifest
 
 USAGE
+}
+
+print_manifest() {
+  local version="${1:-VERSION}"
+  cat <<MANIFEST
+BIN_FILES=php${version} composer${version} php composer
+FOLDERS=\$HOME/.shellscript/php/${version}
+SHELLRC_FILE=\$HOME/.shellscript/shellrc/php-init.sh
+MANIFEST
 }
 
 # Help flag handling
@@ -65,6 +76,8 @@ if [[ $# -lt 1 ]]; then
 fi
 
 PACKAGES=""
+SHOW_MANIFEST=0
+PHP_VERSION=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     "5.6"|"7.0"|"7.1"|"7.2"|"7.3"|"7.4"|"8.0"|"8.1"|"8.2"|"8.3"|"8.4"|"8.5")
@@ -80,12 +93,34 @@ while [[ $# -gt 0 ]]; do
       PACKAGES="$1"
       shift
       ;;
+    "--manifest")
+      SHOW_MANIFEST=1
+      shift
+      ;;
     *)
       echo "Error: Invalid argument '$1'. Supported versions are: 5.6, 7.0, 7.1, 7.2, 7.3, 7.4, 8.0, 8.1, 8.2, 8.3, 8.4, 8.5" >&2
       exit 1
       ;;
   esac
 done
+
+# If manifest requested, print and exit
+if [[ $SHOW_MANIFEST -eq 1 ]]; then
+  if [[ -z "$PHP_VERSION" ]]; then
+    echo "Error: <php_version> is required for manifest" >&2
+    exit 2
+  fi
+  print_manifest "$PHP_VERSION"
+  exit 0
+fi
+
+# Validate PHP version was provided for normal installation
+if [[ -z "$PHP_VERSION" ]]; then
+  echo "Error: <php_version> is required." >&2
+  echo >&2
+  print_usage >&2
+  exit 2
+fi
 
 # Pre-flight: docker availability
 if ! command -v docker >/dev/null 2>&1; then
