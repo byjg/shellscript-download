@@ -35,6 +35,7 @@ Installs NVM and writes a shell init snippet under $HOME/.shellscript/shellrc/nv
 Options:
   -h, --help    Show this help and exit
   --dry-run     Print actions without executing them
+  --manifest    Print installation manifest and exit
 
 Examples:
   load.sh nvm
@@ -42,11 +43,20 @@ Examples:
 USAGE
 }
 
+print_manifest() {
+  cat <<'MANIFEST'
+BIN_FILES=
+FOLDERS=$HOME/.nvm
+SHELLRC_FILE=$HOME/.shellscript/shellrc/nvm-init.sh
+MANIFEST
+}
+
 # Parse flags
 DRY_RUN=0
 while [[ ${1-} ]]; do
   case "$1" in
     -h|--help) print_usage; exit 0 ;;
+    --manifest) print_manifest; exit 0 ;;
     --dry-run) DRY_RUN=1 ;;
     *) err "Unknown option: $1"; print_usage; exit 2 ;;
   esac

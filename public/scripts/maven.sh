@@ -39,12 +39,21 @@ Options:
   -h, --help           Show this help and exit
   --version <version>  Maven version to install (default: 3.9.12)
   --dry-run            Print actions without executing them
+  --manifest           Print installation manifest and exit
 
 Examples:
   load.sh maven
   load.sh maven -- --version 3.8.8
   load.sh maven -- --dry-run
 USAGE
+}
+
+print_manifest() {
+  cat <<'MANIFEST'
+BIN_FILES=mvn mvnDebug
+FOLDERS=$HOME/.shellscript/maven
+SHELLRC_FILE=$HOME/.shellscript/shellrc/maven-init.sh
+MANIFEST
 }
 
 # Parse flags
@@ -54,6 +63,7 @@ MAVEN_VERSION="3.9.12"
 while [[ ${1-} ]]; do
   case "$1" in
     -h|--help) print_usage; exit 0 ;;
+    --manifest) print_manifest; exit 0 ;;
     --dry-run) DRY_RUN=1 ;;
     --version)
       shift || { err "--version requires a value"; exit 2; }
