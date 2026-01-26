@@ -81,6 +81,15 @@ remove_nvm_lines
 # Write our shell init snippet
 DEST_FOLDER="$HOME/.shellscript/shellrc"
 run "mkdir -p \"$DEST_FOLDER\""
-run "cat >\"${DEST_FOLDER}/nvm-init.sh\" <<'WRAP'\nexport NVM_DIR=\"$HOME/.nvm\"\n[ -s \"$NVM_DIR/nvm.sh\" ] && \\ . \"$NVM_DIR/nvm.sh\"  # This loads nvm\n[ -s \"$NVM_DIR/bash_completion\" ] && \\ . \"$NVM_DIR/bash_completion\"  # This loads nvm bash_completion\nWRAP"
+
+if [[ "$DRY_RUN" == "1" ]]; then
+  log "[dry-run] Writing ${DEST_FOLDER}/nvm-init.sh"
+else
+  cat >"${DEST_FOLDER}/nvm-init.sh" <<'WRAP'
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+WRAP
+fi
 
 log "Done. Source ${DEST_FOLDER}/nvm-init.sh from your shell rc (e.g., echo 'source \"$DEST_FOLDER/nvm-init.sh\"' >> ~/.bashrc)"
