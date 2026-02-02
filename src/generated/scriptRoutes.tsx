@@ -3,6 +3,7 @@
 // ------------------------------------------------------------------------------------
 
 import Script_docker from "../pages/scripts/docker";
+import Script_java_temurin from "../pages/scripts/java-temurin";
 import Script_load from "../pages/scripts/load";
 import Script_maven from "../pages/scripts/maven";
 import Script_node_docker from "../pages/scripts/node-docker";
@@ -13,6 +14,7 @@ import Script_remove from "../pages/scripts/remove";
 
 export const scriptRoutes = [
   { path: "/scripts/docker", element: <Script_docker /> },
+  { path: "/scripts/java-temurin", element: <Script_java_temurin /> },
   { path: "/scripts/load", element: <Script_load /> },
   { path: "/scripts/maven", element: <Script_maven /> },
   { path: "/scripts/node-docker", element: <Script_node_docker /> },

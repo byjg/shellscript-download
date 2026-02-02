@@ -82,7 +82,7 @@ if [[ -z "$SCRIPT_NAME" ]]; then
   exit 2
 fi
 
-log ">_ remove.sh ${PURGE:+--purge }${SCRIPT_NAME}"
+log ">_ remove.sh $([ "$PURGE" == "1" ] && echo "--purge ")${SCRIPT_NAME}"
 
 # Standard directories
 BASE_DIR="$HOME/.shellscript"
