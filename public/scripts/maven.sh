@@ -5,7 +5,7 @@ set -euo pipefail
 
 log()  { printf "[maven.sh] %s\n" "$*"; }
 err()  { printf "[maven.sh][ERROR] %s\n" "$*" >&2; }
-run()  { if [[ "$DRY_RUN" == "1" ]]; then printf "[dry-run] %s\n" "$*"; else eval "$@"; fi }
+run()  { if [[ "$DRY_RUN" == "1" ]]; then printf "[dry-run] %s\n" "$*"; else bash -c "$@"; fi }
 require_cmd() { command -v "$1" >/dev/null 2>&1 || { err "Required command '$1' not found"; exit 1; }; }
 
 print_usage() {
@@ -107,7 +107,8 @@ WRAP"
 run "chmod +x \"${BIN_DIR}/mvnDebug\""
 
 # Write shell init snippet
-  cat >"${SHELLRC_DIR}/maven-init.sh" <<'WRAP'
+run "mkdir -p \"${SHELLRC_DIR}\""
+cat >"${SHELLRC_DIR}/maven-init.sh" <<'WRAP'
 export MAVEN_HOME="$HOME/.shellscript/maven/current"
 export M2_HOME="$HOME/.shellscript/maven/current"
 WRAP

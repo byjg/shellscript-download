@@ -5,7 +5,7 @@ set -euo pipefail
 
 log()  { printf "[remove.sh] %s\n" "$*"; }
 err()  { printf "[remove.sh][ERROR] %s\n" "$*" >&2; }
-run()  { if [[ "$DRY_RUN" == "1" ]]; then printf "[dry-run] %s\n" "$*"; else eval "$@"; fi }
+run()  { if [[ "$DRY_RUN" == "1" ]]; then printf "[dry-run] %s\n" "$*"; else bash -c "$@"; fi }
 
 print_usage() {
   cat <<'USAGE'
