@@ -2,7 +2,6 @@
 # docker.sh: Install the Docker Engine on Linux in a safe, idempotent, shell-friendly way
 
 set -euo pipefail
-IFS=$'\n\t'
 
 log()  { printf "[docker.sh] %s\n" "$*"; }
 err()  { printf "[docker.sh][ERROR] %s\n" "$*" >&2; }

@@ -2,11 +2,10 @@
 # java-oracle.sh: Download and install Oracle JDK
 
 set -euo pipefail
-IFS=$'\n\t'
 
 log()  { printf "[java-oracle.sh] %s\n" "$*"; }
 err()  { printf "[java-oracle.sh][ERROR] %s\n" "$*" >&2; }
-run()  { if [[ "$DRY_RUN" == "1" ]]; then printf "[dry-run] %s\n" "$*"; else eval "$@"; fi }
+run()  { if [[ "$DRY_RUN" == "1" ]]; then printf "[dry-run] %s\n" "$*"; else bash -c "$@"; fi }
 require_cmd() { command -v "$1" >/dev/null 2>&1 || { err "Required command '$1' not found"; exit 1; }; }
 
 print_usage() {

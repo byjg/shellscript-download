@@ -2,7 +2,6 @@
 # java-corretto.sh: Download and install Amazon Corretto OpenJDK
 
 set -euo pipefail
-IFS=$'\n\t'
 
 log()  { printf "[java-corretto.sh] %s\n" "$*"; }
 err()  { printf "[java-corretto.sh][ERROR] %s\n" "$*" >&2; }
@@ -119,38 +118,27 @@ log "Extracting Java to ${INSTALL_DIR}"
 run "mkdir -p \"${JAVA_HOME_BASE}\""
 
 if [[ "$DRY_RUN" != "1" ]]; then
-  # Extract to a temp location
+  # Extract to a temp location to find the actual directory name
   TEMP_EXTRACT_DIR=$(mktemp -d)
   tar -xzf "${TEMP_ARCHIVE}" -C "${TEMP_EXTRACT_DIR}"
 
-  # Find the Corretto JDK directory inside usr/lib/jvm/
-  # The structure is: usr/lib/jvm/java-{version}-amazon-corretto/
-  JVM_DIR="${TEMP_EXTRACT_DIR}/usr/lib/jvm"
+  # Find the extracted JDK directory (should be jdk-*.*)
+  EXTRACTED_DIR=$(ls -1 "${TEMP_EXTRACT_DIR}" | head -1)
 
-  if [[ ! -d "$JVM_DIR" ]]; then
-    err "Expected directory structure not found: usr/lib/jvm/"
+  if [[ -z "$EXTRACTED_DIR" ]]; then
+    err "Failed to find extracted JDK directory"
     rm -rf "${TEMP_EXTRACT_DIR}"
     exit 1
   fi
 
-  # Find the java-*-amazon-corretto directory
-  CORRETTO_DIR=$(find "$JVM_DIR" -maxdepth 1 -type d -name "java-*-amazon-corretto" | head -1)
-
-  if [[ -z "$CORRETTO_DIR" ]]; then
-    err "Could not find java-*-amazon-corretto directory in extracted archive"
-    rm -rf "${TEMP_EXTRACT_DIR}"
-    exit 1
-  fi
-
-  # Move the contents of the Corretto directory to the install location
+  # Move to final location
   rm -rf "${INSTALL_DIR}"
-  mkdir -p "${INSTALL_DIR}"
-  mv "${CORRETTO_DIR}"/* "${INSTALL_DIR}/"
+  mv "${TEMP_EXTRACT_DIR}/${EXTRACTED_DIR}" "${INSTALL_DIR}"
   rm -rf "${TEMP_EXTRACT_DIR}"
 
   log "Extracted to ${INSTALL_DIR}"
 else
-  log "[dry-run] Would extract usr/lib/jvm/java-${JAVA_VERSION}-amazon-corretto/ to ${INSTALL_DIR}"
+  log "[dry-run] Would extract to ${INSTALL_DIR}"
 fi
 
 # Write shell init snippet

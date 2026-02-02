@@ -2,7 +2,6 @@
 # maven.sh: Download and install Apache Maven
 
 set -euo pipefail
-IFS=$'\n\t'
 
 log()  { printf "[maven.sh] %s\n" "$*"; }
 err()  { printf "[maven.sh][ERROR] %s\n" "$*" >&2; }

@@ -2,7 +2,6 @@
 # java-temurin.sh: Download and install Eclipse Temurin Java (OpenJDK)
 
 set -euo pipefail
-IFS=$'\n\t'
 
 log()  { printf "[java-temurin.sh] %s\n" "$*"; }
 err()  { printf "[java-temurin.sh][ERROR] %s\n" "$*" >&2; }

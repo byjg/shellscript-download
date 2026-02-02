@@ -2,7 +2,6 @@
 # nvm.sh: Install Node Version Manager (NVM) and set up a shell init snippet
 
 set -euo pipefail
-IFS=$'\n\t'
 
 log()  { printf "[nvm.sh] %s\n" "$*"; }
 err()  { printf "[nvm.sh][ERROR] %s\n" "$*" >&2; }
