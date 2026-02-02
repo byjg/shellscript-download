@@ -19,28 +19,22 @@ export default function Script_remove() {
         <Link to="/" className="text-accent hover:text-accent/80 transition-colors">← Home</Link>
         <h1 className="text-foreground" style={{fontSize: "1.5rem", margin: "1rem 0"}}>remove.sh</h1>
         <InstallCommand command="load.sh remove" />
-        <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem', marginTop: '1rem'}}>{`remove.sh: Remove installed tools from shellscript.download
+        <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem', marginTop: '1rem'}}>{`load.sh remove -- [--purge] [--dry-run] <script-name>
 
-Usage:
-  load.sh remove -- <script-name>         - Remove binaries and shell rc files
-  load.sh remove -- --purge <script-name> - Remove everything including tool folders
+Removes installed tools from shellscript.download.
+
+Options:
+  --purge       Also remove tool folders (binaries/downloads)
+  --dry-run     Print actions without executing them
+  -h, --help    Show this help and exit
+
+Arguments:
+  <script-name> Name of the script/tool to remove (e.g., maven, nvm)
 
 Examples:
-  # Remove Maven binaries and shell rc files (keeps downloaded folders)
   load.sh remove -- maven
-  # Remove all traces of Maven including downloaded folders
   load.sh remove -- --purge maven
-  # Remove NVM completely
-  load.sh remove -- --purge nvm
-  # Dry-run to preview actions
-  load.sh remove -- --dry-run --purge maven
-
-Description:
-- Fetches the script's manifest to know what was installed
-- Removes binaries from $HOME/.shellscript/bin/
-- Removes shell rc files from $HOME/.shellscript/shellrc/
-- With --purge: also removes tool folders from $HOME/.shellscript/<tool-name>/
-- Supports dry-run mode to preview actions`}</pre>
+  load.sh remove -- --dry-run --purge nvm`}</pre>
         <br/>
       </div>
     </div>

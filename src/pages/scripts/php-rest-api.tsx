@@ -19,12 +19,27 @@ export default function Script_php_rest_api() {
         <Link to="/" className="text-accent hover:text-accent/80 transition-colors">← Home</Link>
         <h1 className="text-foreground" style={{fontSize: "1.5rem", margin: "1rem 0"}}>php-rest-api.sh</h1>
         <InstallCommand command="load.sh php-rest-api" />
-        <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem', marginTop: '1rem'}}>{`php-rest-api.sh: Install byjg/rest-reference-architecture in unattended mode
+        <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem', marginTop: '1rem'}}>{`php-rest-api.sh <folder> --namespace=<name> --name=<name/name> [options]
 
-Usage (via loader):
-  load.sh php-rest-api -- <folder> --namespace=<name> --name=<name/name> \
-    [--mysql-uri=<uri>] [--install-examples=Y|n] [--version=<version>] \
-    [--php-version=<version>] [--timezone=<tz>] [--git-name=<name>] [--git-email=<email>]
+Installs byjg/rest-reference-architecture in unattended mode.
+
+Required Arguments:
+  <folder>          Target folder name where the project will be created
+  --namespace       Project namespace (CamelCase, e.g., MyApp, Tutorial)
+  --name            Composer package name (vendor/package, e.g., mycompany/myapp)
+
+Optional Arguments:
+  --mysql-uri       MySQL connection string
+                    (default values: schema=mysql, host=mysql-container,
+                     user=root, password=mysqlp455w0rd, dev db=localdev, test db=localtest)
+  --install-examples Install example code (Y or n, default: Y)
+  --version         Composer version constraint (default: ^6.0)
+  --php-version     PHP version for Docker (8.1-8.4, default: current)
+  --timezone        Server timezone (default: UTC)
+  --git-name        Git user name (default: from git config)
+  --git-email       Git user email (default: from git config)
+  --manifest        Print installation manifest and exit
+  -h, --help        Show this help and exit
 
 Examples:
   # Minimal installation
@@ -33,37 +48,11 @@ Examples:
   # Full configuration
   load.sh php-rest-api -- myproject --namespace=MyApp --name=mycompany/myapp \
     --mysql-uri=mysql://root:secret@mysql-container/mydb \
-    --install-examples=n --version="^6.0" --php-version=8.4 \
-    --timezone=America/New_York
+    --install-examples=n --version="^6.0" --php-version=8.4
 
-Description:
-- Creates a setup.json file in the parent directory for unattended installation
-- Runs composer create-project with byjg/rest-reference-architecture
-- Automatically configures the project using the provided parameters
-- Cleans up the setup.json file after successful installation
-- Idempotent: safe to re-run, though it will recreate the project folder
-
-Required Arguments:
-  <folder>          Target folder name where the project will be created
-  --namespace       Project namespace (CamelCase, e.g., MyApp, Tutorial)
-  --name            Composer package name (vendor/package format, e.g., mycompany/myapp)
-
-Optional Arguments:
-  --mysql-uri       MySQL connection string (default values: schema=mysql, host=mysql-container,
-                    user=root, password=mysqlp455w0rd, dev db=localdev, test db=localtest)
-  --install-examples Install example code (Y or n, default: Y)
-  --version         Composer version constraint (default: ^6.0)
-  --php-version     PHP version for Docker (8.1, 8.2, 8.3, 8.4, default: current PHP version)
-  --timezone        Server timezone (default: UTC)
-  --git-name        Git user name for the project (default: from git config or "Your Name")
-  --git-email       Git user email for the project (default: from git config or "your.email@example.com")
-  -h, --help        Show this help and exit
-
-Notes:
-- Requires composer installed on the system or use load.sh php-docker first
-- The setup.json file will be created in the parent directory of the target folder
-- The setup.json file is automatically removed after successful installation
-- If the target folder exists, the script will fail (safety measure)`}</pre>
+  # Show manifest
+  load.sh php-rest-api -- myproject --namespace=MyApp --name=mycompany/myapp --manifest
+`}</pre>
         <br/>
       </div>
     </div>

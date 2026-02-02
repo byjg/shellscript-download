@@ -47,6 +47,45 @@ function extractHeaderComments(content) {
   return result.join('\n')
 }
 
+function extractPrintUsage(content) {
+  // Extract content from print_usage() function's heredoc
+  const lines = content.split(/\r?\n/)
+  const result = []
+  let inUsageFunction = false
+  let inHeredoc = false
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+
+    // Start of print_usage function
+    if (line.match(/^\s*print_usage\(\)\s*\{/)) {
+      inUsageFunction = true
+      continue
+    }
+
+    // Inside print_usage function
+    if (inUsageFunction) {
+      // Start of heredoc
+      if (line.match(/cat\s*<<'?USAGE'?/)) {
+        inHeredoc = true
+        continue
+      }
+
+      // End of heredoc
+      if (inHeredoc && line.trim() === 'USAGE') {
+        break
+      }
+
+      // Collect heredoc content
+      if (inHeredoc) {
+        result.push(line)
+      }
+    }
+  }
+
+  return result.join('\n')
+}
+
 function htmlEscape(s) {
   return s
     .replaceAll('&', '&amp;')
@@ -142,23 +181,27 @@ async function generate() {
     const filePath = path.join(publicScriptsDir, entry.name)
     const content = await fs.readFile(filePath, 'utf8')
     const header = extractHeaderComments(content)
+    const usage = extractPrintUsage(content)
     const base = path.basename(entry.name, ext)
+
+    // Use print_usage content if available, otherwise fall back to header comments
+    const documentation = usage || header || 'No documentation found.'
 
     // 1) Write simple static HTML (kept for backward-compatibility)
     const title = `${entry.name}`
-    // const html = buildHtml({ title, bodyText: header || 'No header comments found.' })
+    // const html = buildHtml({ title, bodyText: documentation })
     // const outHtmlPath = path.join(publicScriptsDir, `${base}.html`)
     // await fs.writeFile(outHtmlPath, html, 'utf8')
 
     // 2) Write a React component page
-    const componentTsx = buildComponentTsx({ title, bodyText: header, base })
+    const componentTsx = buildComponentTsx({ title, bodyText: documentation, base })
     const outCompPath = path.join(srcPagesScriptsDir, `${base}.tsx`)
     await fs.writeFile(outCompPath, componentTsx, 'utf8')
 
     // 3) Collect route info
     routeItems.push({ base, importName: makeComponentName(base), path: `/scripts/${base}`, source: "/scripts" })
 
-    // 4) Collect list info: first non-empty line of header, or fallback
+    // 4) Collect list info: first non-empty line of header (for short description), or fallback
     const firstLine = (header || '')
       .split(/\r?\n/)
       .map((s) => s.trim())

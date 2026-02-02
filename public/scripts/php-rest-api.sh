@@ -1,28 +1,5 @@
 #!/usr/bin/env bash
 # php-rest-api.sh: Install byjg/rest-reference-architecture in unattended mode
-#
-# Usage (via loader):
-#   load.sh php-rest-api -- <folder> --namespace=<name> --name=<name/name> \
-#     [--mysql-uri=<uri>] [--install-examples=Y|n] [--version=<version>] \
-#     [--php-version=<version>] [--timezone=<tz>] [--git-name=<name>] [--git-email=<email>]
-#
-# Examples:
-#   # Minimal installation
-#   load.sh php-rest-api -- myproject --namespace=MyApp --name=mycompany/myapp
-#
-#   # Full configuration
-#   load.sh php-rest-api -- myproject --namespace=MyApp --name=mycompany/myapp \
-#     --mysql-uri=mysql://root:secret@mysql-container/mydb \
-#     --install-examples=n --version="^6.0" --php-version=8.4 \
-#     --timezone=America/New_York
-#
-# Description:
-# - Creates a setup.json file in the parent directory for unattended installation
-# - Runs composer create-project with byjg/rest-reference-architecture
-# - Automatically configures the project using the provided parameters
-# - Cleans up the setup.json file after successful installation
-# - Idempotent: safe to re-run, though it will recreate the project folder
-#
 # Required Arguments:
 #   <folder>          Target folder name where the project will be created
 #   --namespace       Project namespace (CamelCase, e.g., MyApp, Tutorial)

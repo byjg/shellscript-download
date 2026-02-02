@@ -1,26 +1,5 @@
 #!/usr/bin/env bash
 # remove.sh: Remove installed tools from shellscript.download
-#
-# Usage:
-#   load.sh remove -- <script-name>         - Remove binaries and shell rc files
-#   load.sh remove -- --purge <script-name> - Remove everything including tool folders
-#
-# Examples:
-#   # Remove Maven binaries and shell rc files (keeps downloaded folders)
-#   load.sh remove -- maven
-#   # Remove all traces of Maven including downloaded folders
-#   load.sh remove -- --purge maven
-#   # Remove NVM completely
-#   load.sh remove -- --purge nvm
-#   # Dry-run to preview actions
-#   load.sh remove -- --dry-run --purge maven
-#
-# Description:
-# - Fetches the script's manifest to know what was installed
-# - Removes binaries from $HOME/.shellscript/bin/
-# - Removes shell rc files from $HOME/.shellscript/shellrc/
-# - With --purge: also removes tool folders from $HOME/.shellscript/<tool-name>/
-# - Supports dry-run mode to preview actions
 
 set -euo pipefail
 

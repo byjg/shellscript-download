@@ -19,32 +19,22 @@ export default function Script_php_docker() {
         <Link to="/" className="text-accent hover:text-accent/80 transition-colors">← Home</Link>
         <h1 className="text-foreground" style={{fontSize: "1.5rem", margin: "1rem 0"}}>php-docker.sh</h1>
         <InstallCommand command="load.sh php-docker" />
-        <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem', marginTop: '1rem'}}>{`php-docker.sh: Create Docker-backed php and composer launchers
-Usage (via loader):
-  load.sh php-docker -- <php_version> [--add package1,package2,...]
+        <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem', marginTop: '1rem'}}>{`php-docker.sh <php_version> [--add package1,package2,...] [--manifest]
+
+Installs Docker-backed wrappers for php and composer under $HOME/.shellscript/bin
+using the byjg/php:<version>-cli image.
+
+Options:
+  --add <packages>      Install additional Alpine packages (comma-separated list)
+                        Example: --add php83-gd,php83-intl,git,bash
+  --manifest            Print installation manifest and exit
 
 Examples:
   load.sh php-docker -- 8.3
   load.sh php-docker -- 7.4
-  load.sh php-docker -- 8.3 --add php83-gd,php83-intl,php83-pdo_mysql
-
-Description:
-- Generates two wrapper scripts in "$HOME/.shellscript/bin":
-    - php<ver>      → runs PHP inside the byjg/php:<version>-cli Docker image
-    - composer<ver> → runs Composer inside the same image, persisting your
-                      ~/.composer dir
-- Also updates convenience symlinks: php, composer → their <ver> counterparts.
-- Intended for environments where PHP/Composer are not installed natively.
-
-Options:
-- --add <packages>    Install additional Alpine packages (comma-separated list)
-                      Example: --add php83-gd,php83-intl,git,bash
-
-Notes:
-- Supported versions: 5.6, 7.0–7.4, 8.0–8.5
-- Requires Docker installed and available on PATH. Install with \`load.sh docker\`
-- This script is idempotent and can be re-run to switch versions.
-- Packages are installed via Alpine's apk package manager in the Docker image.`}</pre>
+  load.sh php-docker -- 8.3 --add php83-gd,php83-intl,git
+  load.sh php-docker -- 8.3 --manifest
+`}</pre>
         <br/>
       </div>
     </div>

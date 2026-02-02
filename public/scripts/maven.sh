@@ -1,25 +1,5 @@
 #!/usr/bin/env bash
 # maven.sh: Download and install Apache Maven
-#
-# Usage (via loader):
-#   load.sh maven -- [--version <version>] [--help] [--dry-run]
-#
-# Examples:
-#   # Install Maven with default version (3.9.12)
-#   load.sh maven
-#   # Install specific Maven version
-#   load.sh maven -- --version 3.8.8
-#   # Show help
-#   load.sh maven -- --help
-#   # Simulate actions without making changes
-#   load.sh maven -- --dry-run
-#
-# Description:
-# - Downloads Apache Maven binary from the official Apache archive
-# - Extracts it to $HOME/.shellscript/maven
-# - Creates wrapper scripts in $HOME/.shellscript/bin (mvn, mvnDebug)
-# - Creates $HOME/.shellscript/shellrc/maven-init.sh for environment variables
-# - Idempotent and non-interactive; supports a dry-run mode
 
 set -euo pipefail
 IFS=$'\n\t'

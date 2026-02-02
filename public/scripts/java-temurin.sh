@@ -1,25 +1,5 @@
 #!/usr/bin/env bash
 # java-temurin.sh: Download and install Eclipse Temurin Java (OpenJDK)
-#
-# Usage (via loader):
-#   load.sh java-temurin -- [--version <version>] [--help] [--dry-run]
-#
-# Examples:
-#   # Install Java Temurin with default version (21)
-#   load.sh java-temurin
-#   # Install specific Java version
-#   load.sh java-temurin -- --version 17
-#   # Show help
-#   load.sh java-temurin -- --help
-#   # Simulate actions without making changes
-#   load.sh java-temurin -- --dry-run
-#
-# Description:
-# - Downloads Eclipse Temurin (Adoptium) OpenJDK binary for x86_64 Linux
-# - Extracts it to $HOME/.shellscript/java-temurin/<version>
-# - Creates $HOME/.shellscript/shellrc/java-temurin-init.sh for environment variables
-# - Idempotent and non-interactive; supports a dry-run mode
-# - Supports Java versions: 25, 21, 17, 11, 8
 
 set -euo pipefail
 IFS=$'\n\t'

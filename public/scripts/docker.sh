@@ -1,25 +1,5 @@
 #!/usr/bin/env bash
 # docker.sh: Install the Docker Engine on Linux in a safe, idempotent, shell-friendly way
-#
-# Usage (via loader):
-#   load.sh docker -- [--help] [--dry-run] [--no-group] [--channel CHANNEL]
-#
-# Examples:
-#   # Install Docker with sensible defaults
-#   load.sh docker
-#   # Show help
-#   load.sh docker -- --help
-#   # Simulate actions without making changes
-#   load.sh docker -- --dry-run
-#
-# Description:
-# - Installs Docker Engine using the official convenience script from get.docker.com
-# - Creates the "docker" group (if missing) and adds the current user to it (unless --no-group)
-# - Fixes $HOME/.docker permissions for the current user
-# - Idempotent: safe to re-run, it will skip already completed steps
-# - Non-interactive: suitable for CI; prints clear logs and exits on first error
-# - Supports a dry-run mode for previewing actions
-#
 
 set -euo pipefail
 IFS=$'\n\t'

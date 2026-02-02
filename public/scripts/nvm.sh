@@ -1,22 +1,5 @@
 #!/usr/bin/env bash
 # nvm.sh: Install Node Version Manager (NVM) and set up a shell init snippet
-#
-# Usage (via loader):
-#   load.sh nvm -- [--help] [--dry-run]
-#
-# Examples:
-#   # Install NVM with sensible defaults
-#   load.sh nvm
-#   # Show help
-#   load.sh nvm -- --help
-#   # Simulate actions without making changes
-#   load.sh nvm -- --dry-run
-#
-# Description:
-# - Installs NVM using the official install script from nvm-sh/nvm
-# - Removes the trailing installer-added lines from common shell rc files to avoid duplication
-# - Creates $HOME/.shellscript/shellrc/nvm-init.sh which you can source from your rc
-# - Idempotent and non-interactive; supports a dry-run mode
 
 set -euo pipefail
 IFS=$'\n\t'

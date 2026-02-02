@@ -19,24 +19,18 @@ export default function Script_nvm() {
         <Link to="/" className="text-accent hover:text-accent/80 transition-colors">← Home</Link>
         <h1 className="text-foreground" style={{fontSize: "1.5rem", margin: "1rem 0"}}>nvm.sh</h1>
         <InstallCommand command="load.sh nvm" />
-        <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem', marginTop: '1rem'}}>{`nvm.sh: Install Node Version Manager (NVM) and set up a shell init snippet
+        <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem', marginTop: '1rem'}}>{`load.sh nvm -- [options]
 
-Usage (via loader):
-  load.sh nvm -- [--help] [--dry-run]
+Installs NVM and writes a shell init snippet under $HOME/.shellscript/shellrc/nvm-init.sh.
+
+Options:
+  -h, --help    Show this help and exit
+  --dry-run     Print actions without executing them
+  --manifest    Print installation manifest and exit
 
 Examples:
-  # Install NVM with sensible defaults
   load.sh nvm
-  # Show help
-  load.sh nvm -- --help
-  # Simulate actions without making changes
-  load.sh nvm -- --dry-run
-
-Description:
-- Installs NVM using the official install script from nvm-sh/nvm
-- Removes the trailing installer-added lines from common shell rc files to avoid duplication
-- Creates $HOME/.shellscript/shellrc/nvm-init.sh which you can source from your rc
-- Idempotent and non-interactive; supports a dry-run mode`}</pre>
+  load.sh nvm -- --dry-run`}</pre>
         <br/>
       </div>
     </div>

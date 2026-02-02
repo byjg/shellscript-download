@@ -19,14 +19,7 @@ export default function Script_load() {
         <Link to="/" className="text-accent hover:text-accent/80 transition-colors">← Home</Link>
         <h1 className="text-foreground" style={{fontSize: "1.5rem", margin: "1rem 0"}}>load.sh</h1>
         <InstallCommand command="load.sh load" />
-        <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem', marginTop: '1rem'}}>{`load.sh: Fetch a script from https://shellscript.download, cache it locally,
-         and optionally execute it.
-
-Cache location used by this script:
-  $HOME/.shellscript/downloads/<script>.sh
-
-Usage:
-  load.sh [--update] [--dont-run] <script> [optional args...]
+        <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem', marginTop: '1rem'}}>{`load.sh [--update] [--dont-run] <script> [optional args...]
 
 Options:
   --update      Force re-download/update of the script even if it exists locally
@@ -35,23 +28,7 @@ Options:
 
 Arguments:
   <script>      The script name (without .sh) to fetch from shellscript.download
-  [args...]     Optional arguments to pass through to the downloaded script
-
-To update the loader to a new version, reinstall it via the installer:
-  /bin/bash -c "$(curl -fsSL https://shellscript.download/install/loader)"
-
-Notes about environment setup:
-  The installer (install/loader) may create and manage additional directories such as
-  $HOME/.shellscript/shellrc (for auto-loading during shell init) and
-  $HOME/.shellscript/bin (added to PATH). This load.sh script itself only ensures
-  the cache directory $HOME/.shellscript/downloads and uses it to store scripts.
-
-Behavior:
-  - If the cached file is missing at "$HOME/.shellscript/downloads/<script>.sh" OR
-    if --update is passed, the script is downloaded from the remote URL.
-  - After ensuring the cached script exists, it is executed with remaining arguments
-    unless --dont-run is provided.
-  - Exits with the same code as the executed script when run.`}</pre>
+  [args...]     Optional arguments to pass through to the downloaded script`}</pre>
         <br/>
       </div>
     </div>
