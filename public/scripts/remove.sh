@@ -23,7 +23,6 @@
 # - Supports dry-run mode to preview actions
 
 set -euo pipefail
-IFS=$'\n\t'
 
 log()  { printf "[remove.sh] %s\n" "$*"; }
 err()  { printf "[remove.sh][ERROR] %s\n" "$*" >&2; }

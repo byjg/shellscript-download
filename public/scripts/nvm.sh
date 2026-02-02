@@ -75,7 +75,7 @@ remove_nvm_lines() {
       # Only remove the last up-to-3 lines if they contain NVM_DIR marker
       if tail -n 3 "$file" 2>/dev/null | grep -q "NVM_DIR"; then
         log "Cleaning trailing NVM lines from $file"
-        run "sed -i -e :a -e '$d;N;2,3ba' -e 'P;D' \"$file\""
+        run "sed -i -e :a -e '\$d;N;2,3ba' -e 'P;D' \"$file\""
       fi
     fi
   done
@@ -102,4 +102,4 @@ export NVM_DIR="$HOME/.nvm"
 WRAP
 fi
 
-log "Done. Source ${DEST_FOLDER}/nvm-init.sh from your shell rc (e.g., echo 'source \"$DEST_FOLDER/nvm-init.sh\"' >> ~/.bashrc)"
+log "Done. Source ${DEST_FOLDER}/nvm-init.sh from your shell rc. Close the terminal and open it again)"
