@@ -3,6 +3,8 @@
 // ------------------------------------------------------------------------------------
 
 import Script_docker from "../pages/scripts/docker";
+import Script_java_corretto from "../pages/scripts/java-corretto";
+import Script_java_oracle from "../pages/scripts/java-oracle";
 import Script_java_temurin from "../pages/scripts/java-temurin";
 import Script_load from "../pages/scripts/load";
 import Script_maven from "../pages/scripts/maven";
@@ -14,6 +16,8 @@ import Script_remove from "../pages/scripts/remove";
 
 export const scriptRoutes = [
   { path: "/scripts/docker", element: <Script_docker /> },
+  { path: "/scripts/java-corretto", element: <Script_java_corretto /> },
+  { path: "/scripts/java-oracle", element: <Script_java_oracle /> },
   { path: "/scripts/java-temurin", element: <Script_java_temurin /> },
   { path: "/scripts/load", element: <Script_load /> },
   { path: "/scripts/maven", element: <Script_maven /> },

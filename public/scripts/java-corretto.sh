@@ -1,0 +1,170 @@
+#!/usr/bin/env bash
+# java-corretto.sh: Download and install Amazon Corretto OpenJDK
+
+set -euo pipefail
+IFS=$'\n\t'
+
+log()  { printf "[java-corretto.sh] %s\n" "$*"; }
+err()  { printf "[java-corretto.sh][ERROR] %s\n" "$*" >&2; }
+run()  { if [[ "$DRY_RUN" == "1" ]]; then printf "[dry-run] %s\n" "$*"; else eval "$@"; fi }
+require_cmd() { command -v "$1" >/dev/null 2>&1 || { err "Required command '$1' not found"; exit 1; }; }
+
+print_usage() {
+  cat <<'USAGE'
+load.sh java-corretto -- [options]
+
+Downloads and installs Amazon Corretto OpenJDK binary distribution for x86_64 Linux.
+
+Options:
+  -h, --help           Show this help and exit
+  --version <version>  Java major version to install: 25, 21, 17, 11, or 8 (default: 21)
+  --dry-run            Print actions without executing them
+  --manifest [--version <version>]
+                       Print installation manifest and exit
+                       Without --version: removes all versions (default)
+                       With --version: removes only specific version
+
+Examples:
+  load.sh java-corretto
+  load.sh java-corretto -- --version 17
+  load.sh java-corretto -- --dry-run
+  load.sh java-corretto -- --manifest --version 21
+USAGE
+}
+
+print_manifest() {
+  local version="/$1"
+
+  if [[ "$version" == "/all" ]]; then
+    # Remove all versions
+    version=""
+  fi
+
+    cat <<MANIFEST
+FOLDERS=\$HOME/.shellscript/java-corretto${version}
+SHELLRC_FILE=\$HOME/.shellscript/shellrc/java-corretto-init.sh
+MANIFEST
+}
+
+# Parse flags
+DRY_RUN=0
+JAVA_VERSION="21"
+MANIFEST_MODE=0
+MANIFEST_VERSION="all"
+
+while [[ ${1-} ]]; do
+  case "$1" in
+    -h|--help) print_usage; exit 0 ;;
+    --manifest)
+      MANIFEST_MODE=1
+      ;;
+    --dry-run) DRY_RUN=1 ;;
+    --version)
+      shift || { err "--version requires a value"; exit 2; }
+      JAVA_VERSION="$1"
+      if [[ "$MANIFEST_MODE" == "1" ]]; then
+        MANIFEST_VERSION="$1"
+      fi
+      ;;
+    *) err "Unknown option: $1"; print_usage; exit 2 ;;
+  esac
+  shift || true
+done
+
+# Handle manifest mode
+if [[ "$MANIFEST_MODE" == "1" ]]; then
+  print_manifest "$MANIFEST_VERSION"
+  exit 0
+fi
+
+log ">_ java-corretto.sh"
+
+# Preconditions
+require_cmd curl
+require_cmd tar
+
+# Configuration
+JAVA_HOME_BASE="$HOME/.shellscript/java-corretto"
+SHELLRC_DIR="$HOME/.shellscript/shellrc"
+
+# Build download URL based on version
+case "$JAVA_VERSION" in
+  25|21|17|11|8)
+    DOWNLOAD_URL="https://corretto.aws/downloads/latest/amazon-corretto-${JAVA_VERSION}-x64-linux-jdk.tar.gz"
+    ;;
+  *)
+    err "Unsupported Java version: ${JAVA_VERSION}. Supported versions: 25, 21, 17, 11, 8"
+    exit 1
+    ;;
+esac
+
+TEMP_ARCHIVE="/tmp/corretto.tar.gz"
+
+cleanup() {
+  if [[ -f "$TEMP_ARCHIVE" ]]; then
+    rm -f "$TEMP_ARCHIVE"
+  fi
+}
+trap cleanup EXIT
+
+log "Installing Amazon Corretto Java ${JAVA_VERSION}"
+
+# Download Java
+log "Downloading Java from ${DOWNLOAD_URL}"
+run "curl -fsSL -o \"${TEMP_ARCHIVE}\" \"${DOWNLOAD_URL}\""
+
+# Extract Java
+INSTALL_DIR="${JAVA_HOME_BASE}/${JAVA_VERSION}"
+log "Extracting Java to ${INSTALL_DIR}"
+run "mkdir -p \"${JAVA_HOME_BASE}\""
+
+if [[ "$DRY_RUN" != "1" ]]; then
+  # Extract to a temp location
+  TEMP_EXTRACT_DIR=$(mktemp -d)
+  tar -xzf "${TEMP_ARCHIVE}" -C "${TEMP_EXTRACT_DIR}"
+
+  # Find the Corretto JDK directory inside usr/lib/jvm/
+  # The structure is: usr/lib/jvm/java-{version}-amazon-corretto/
+  JVM_DIR="${TEMP_EXTRACT_DIR}/usr/lib/jvm"
+
+  if [[ ! -d "$JVM_DIR" ]]; then
+    err "Expected directory structure not found: usr/lib/jvm/"
+    rm -rf "${TEMP_EXTRACT_DIR}"
+    exit 1
+  fi
+
+  # Find the java-*-amazon-corretto directory
+  CORRETTO_DIR=$(find "$JVM_DIR" -maxdepth 1 -type d -name "java-*-amazon-corretto" | head -1)
+
+  if [[ -z "$CORRETTO_DIR" ]]; then
+    err "Could not find java-*-amazon-corretto directory in extracted archive"
+    rm -rf "${TEMP_EXTRACT_DIR}"
+    exit 1
+  fi
+
+  # Move the contents of the Corretto directory to the install location
+  rm -rf "${INSTALL_DIR}"
+  mkdir -p "${INSTALL_DIR}"
+  mv "${CORRETTO_DIR}"/* "${INSTALL_DIR}/"
+  rm -rf "${TEMP_EXTRACT_DIR}"
+
+  log "Extracted to ${INSTALL_DIR}"
+else
+  log "[dry-run] Would extract usr/lib/jvm/java-${JAVA_VERSION}-amazon-corretto/ to ${INSTALL_DIR}"
+fi
+
+# Write shell init snippet
+log "Writing environment variables to ${SHELLRC_DIR}/java-corretto-init.sh"
+run "mkdir -p \"${SHELLRC_DIR}\""
+if [[ "$DRY_RUN" != "1" ]]; then
+  cat >"${SHELLRC_DIR}/java-corretto-init.sh" <<WRAP
+export JAVA_HOME="\$HOME/.shellscript/java-corretto/${JAVA_VERSION}"
+export JDK_HOME="\$HOME/.shellscript/java-corretto/${JAVA_VERSION}"
+export PATH="\$HOME/.shellscript/java-corretto/${JAVA_VERSION}/bin:\$PATH"
+WRAP
+else
+  log "[dry-run] Would write to ${SHELLRC_DIR}/java-corretto-init.sh"
+fi
+
+log "Done. Amazon Corretto Java ${JAVA_VERSION} installed to ${INSTALL_DIR}"
+log "Source ${SHELLRC_DIR}/java-corretto-init.sh from your shell rc for JAVA_HOME environment variable"

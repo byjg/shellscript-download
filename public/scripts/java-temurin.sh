@@ -49,21 +49,22 @@ MANIFEST
 # Parse flags
 DRY_RUN=0
 JAVA_VERSION="21"
-MANIFEST_VERSION=""
+MANIFEST_MODE=0
+MANIFEST_VERSION="all"
 
 while [[ ${1-} ]]; do
   case "$1" in
     -h|--help) print_usage; exit 0 ;;
     --manifest)
-      if [[ -z "$MANIFEST_VERSION" ]]; then
-        MANIFEST_VERSION="all"
-      fi
+      MANIFEST_MODE=1
       ;;
     --dry-run) DRY_RUN=1 ;;
     --version)
       shift || { err "--version requires a value"; exit 2; }
       JAVA_VERSION="$1"
-      MANIFEST_VERSION="$1"
+      if [[ "$MANIFEST_MODE" == "1" ]]; then
+        MANIFEST_VERSION="$1"
+      fi
       ;;
     *) err "Unknown option: $1"; print_usage; exit 2 ;;
   esac
@@ -71,7 +72,7 @@ while [[ ${1-} ]]; do
 done
 
 # Handle manifest mode
-if [[ -n "$MANIFEST_VERSION" ]]; then
+if [[ "$MANIFEST_MODE" == "1" ]]; then
   print_manifest "$MANIFEST_VERSION"
   exit 0
 fi
