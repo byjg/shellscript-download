@@ -25,7 +25,7 @@ Downloads and installs Apache Maven binary distribution.
 
 Options:
   -h, --help           Show this help and exit
-  --version <version>  Maven version to install (default: 3.9.12)
+  --version <version>  Maven version to install (default: latest)
   --dry-run            Print actions without executing them
   --manifest           Print installation manifest and exit
 

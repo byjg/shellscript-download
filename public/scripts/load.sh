@@ -48,12 +48,13 @@ echo
 
 print_usage() {
   cat <<'USAGE'
-load.sh [--update] [--dont-run] [--list] <script> [optional args...]
+load.sh [--update] [--dont-run] [--list] [--completion] <script> [optional args...]
 
 Options:
   --update      Force re-download/update of the script even if it exists locally
   --dont-run    Do not execute the script after ensuring it is downloaded
   --list        List all available scripts from shellscript.download
+  --completion  Install/update bash completion for load.sh into ~/.shellscript/shellrc/
   -h, --help    Show this help message
 
 Arguments:
@@ -65,6 +66,7 @@ USAGE
 UPDATE=false
 DONT_RUN=false
 LIST=false
+COMPLETION=false
 SCRIPT_NAME=""
 ARGS=()
 
@@ -81,6 +83,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --list)
       LIST=true
+      shift
+      ;;
+    --completion)
+      COMPLETION=true
       shift
       ;;
     -h|--help)
@@ -143,8 +149,29 @@ for item in data:
   fi
 }
 
+install_completion() {
+  local dest="$HOME/.shellscript/shellrc/01-load-completion.sh"
+  local url="https://shellscript.download/load-completion.sh"
+  mkdir -p "$(dirname "$dest")"
+  echo "Downloading bash completion from ${url}" >&2
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "${url}" -o "${dest}"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO "${dest}" "${url}"
+  else
+    echo "Error: Neither curl nor wget is installed." >&2
+    exit 3
+  fi
+  echo "Installed: ${dest}"
+}
+
 if [[ "${LIST}" == true ]]; then
   list_scripts
+  exit 0
+fi
+
+if [[ "${COMPLETION}" == true ]]; then
+  install_completion
   exit 0
 fi
 
