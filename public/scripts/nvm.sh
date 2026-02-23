@@ -65,7 +65,9 @@ remove_nvm_lines() {
 
 # Install NVM
 # Using the official installer; see https://github.com/nvm-sh/nvm
-run "curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash"
+NVM_VERSION=$(curl -fsSL https://api.github.com/repos/nvm-sh/nvm/releases/latest | grep '"tag_name"' | sed 's/.*"tag_name": *"\(.*\)".*/\1/')
+log "Installing NVM ${NVM_VERSION}"
+run "curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/install.sh | bash"
 
 # Remove noisy trailing additions from rc files (idempotent)
 remove_nvm_lines
@@ -79,6 +81,7 @@ if [[ "$DRY_RUN" == "1" ]]; then
 else
   cat >"${DEST_FOLDER}/nvm-init.sh" <<'WRAP'
 export NVM_DIR="$HOME/.nvm"
+export NVM_SYMLINK_CURRENT=true
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 WRAP

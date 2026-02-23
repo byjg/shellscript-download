@@ -16,7 +16,7 @@ Downloads and installs Apache Maven binary distribution.
 
 Options:
   -h, --help           Show this help and exit
-  --version <version>  Maven version to install (default: 3.9.12)
+  --version <version>  Maven version to install (default: latest)
   --dry-run            Print actions without executing them
   --manifest           Print installation manifest and exit
 
@@ -37,7 +37,7 @@ MANIFEST
 
 # Parse flags
 DRY_RUN=0
-MAVEN_VERSION="3.9.12"
+MAVEN_VERSION=""
 
 while [[ ${1-} ]]; do
   case "$1" in
@@ -58,6 +58,12 @@ log ">_ maven.sh"
 # Preconditions
 require_cmd curl
 require_cmd tar
+
+# Resolve latest version if not specified
+if [[ -z "$MAVEN_VERSION" ]]; then
+  MAVEN_VERSION=$(curl -fsSL https://api.github.com/repos/apache/maven/releases/latest | grep '"tag_name"' | sed 's/.*"tag_name": *"maven-\(.*\)".*/\1/')
+  log "Latest Maven version: ${MAVEN_VERSION}"
+fi
 
 # Configuration
 MAVEN_HOME="$HOME/.shellscript/maven"
