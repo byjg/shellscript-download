@@ -24,12 +24,7 @@
 
 set -euo pipefail
 
-echo ">_ php-rest-api.sh"
-echo
 
-log()  { printf "[php-rest-api.sh] %s\n" "$*"; }
-err()  { printf "[php-rest-api.sh][ERROR] %s\n" "$*" >&2; }
-require_cmd() { command -v "$1" >/dev/null 2>&1 || { err "Required command '$1' not found"; exit 1; }; }
 
 print_usage() {
   cat <<'USAGE'

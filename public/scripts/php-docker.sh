@@ -5,8 +5,6 @@
 
 set -euo pipefail
 
-echo ">_ php-docker.sh"
-echo
 
 print_usage() {
   cat <<'USAGE'
@@ -106,7 +104,7 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 
 echo "[Debug] Create Folders"
-BASE_FOLDER="$HOME/.shellscript"
+BASE_FOLDER="${SHELLSCRIPT_HOME}"
 SHELLRC_FOLDER="$BASE_FOLDER/shellrc"
 DEST_FOLDER="$BASE_FOLDER/bin"
 PHP_HOME="$BASE_FOLDER/php/${PHP_VERSION}"

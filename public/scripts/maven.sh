@@ -3,10 +3,6 @@
 
 set -euo pipefail
 
-log()  { printf "[maven.sh] %s\n" "$*"; }
-err()  { printf "[maven.sh][ERROR] %s\n" "$*" >&2; }
-run()  { if [[ "$DRY_RUN" == "1" ]]; then printf "[dry-run] %s\n" "$*"; else bash -c "$@"; fi }
-require_cmd() { command -v "$1" >/dev/null 2>&1 || { err "Required command '$1' not found"; exit 1; }; }
 
 print_usage() {
   cat <<'USAGE'
@@ -53,8 +49,6 @@ while [[ ${1-} ]]; do
   shift || true
 done
 
-log ">_ maven.sh"
-
 # Preconditions
 require_cmd curl
 require_cmd tar
@@ -66,9 +60,9 @@ if [[ -z "$MAVEN_VERSION" ]]; then
 fi
 
 # Configuration
-MAVEN_HOME="$HOME/.shellscript/maven"
-BIN_DIR="$HOME/.shellscript/bin"
-SHELLRC_DIR="$HOME/.shellscript/shellrc"
+MAVEN_HOME="${SHELLSCRIPT_HOME}/maven"
+BIN_DIR="${SHELLSCRIPT_BIN}"
+SHELLRC_DIR="${SHELLSCRIPT_SHELLRC}"
 MAVEN_ARCHIVE="apache-maven-${MAVEN_VERSION}-bin.tar.gz"
 DOWNLOAD_URL="https://archive.apache.org/dist/maven/maven-3/${MAVEN_VERSION}/binaries/${MAVEN_ARCHIVE}"
 TEMP_DIR=$(mktemp -d)

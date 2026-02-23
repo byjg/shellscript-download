@@ -3,10 +3,6 @@
 
 set -euo pipefail
 
-log()  { printf "[docker.sh] %s\n" "$*"; }
-err()  { printf "[docker.sh][ERROR] %s\n" "$*" >&2; }
-run()  { if [[ "$DRY_RUN" == "1" ]]; then printf "[dry-run] %s\n" "$*"; else bash -c "$@"; fi }
-require_cmd() { command -v "$1" >/dev/null 2>&1 || { err "Required command '$1' not found"; exit 1; }; }
 
 print_usage() {
   cat <<'USAGE'
@@ -51,8 +47,6 @@ while [[ ${1-} ]]; do
   shift || true
 done
 
-log ">_ docker.sh"
-
 # Preconditions
 require_cmd curl
 if [[ $EUID -ne 0 ]]; then
@@ -66,7 +60,7 @@ if [[ "${OSTYPE:-}" != linux* ]]; then
 fi
 
 # Prepare destination folder for downloaded installer
-DEST_FOLDER="$HOME/.shellscript/downloads"
+DEST_FOLDER="${SHELLSCRIPT_DOWNLOADS}"
 run "mkdir -p \"$DEST_FOLDER\""
 
 # Download installer script

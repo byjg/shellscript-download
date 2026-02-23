@@ -19,14 +19,15 @@ export default function Script_load() {
         <Link to="/" className="text-accent hover:text-accent/80 transition-colors">← Home</Link>
         <h1 className="text-foreground" style={{fontSize: "1.5rem", margin: "1rem 0"}}>load.sh</h1>
         <InstallCommand command="load.sh load" />
-        <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem', marginTop: '1rem'}}>{`load.sh [--update] [--dont-run] [--list] [--completion] <script> [optional args...]
+        <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem', marginTop: '1rem'}}>{`load.sh [--update] [--dont-run] [--list] [--completion] [--developer <path>] <script> [optional args...]
 
 Options:
-  --update      Force re-download/update of the script even if it exists locally
-  --dont-run    Do not execute the script after ensuring it is downloaded
-  --list        List all available scripts from shellscript.download
-  --completion  Install/update bash completion for load.sh into ~/.shellscript/shellrc/
-  -h, --help    Show this help message
+  --update           Force re-download/update of the script even if it exists locally
+  --dont-run         Do not execute the script after ensuring it is downloaded
+  --list             List all available scripts from shellscript.download
+  --completion       Install/update bash completion for load.sh into ~/.shellscript/shellrc/
+  --developer <path> Use a local directory instead of downloading (for development)
+  -h, --help         Show this help message
 
 Arguments:
   <script>      The script name (without .sh) to fetch from shellscript.download

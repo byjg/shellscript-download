@@ -9,9 +9,10 @@
 #   load.sh [--update] [--dont-run] <script> [optional args...]
 #
 # Options:
-#   --update      Force re-download/update of the script even if it exists locally
-#   --dont-run    Do not execute the script after ensuring it is downloaded
-#   -h, --help    Show this help message
+#   --update           Force re-download/update of the script even if it exists locally
+#   --dont-run         Do not execute the script after ensuring it is downloaded
+#   --developer <path> Use a local directory instead of downloading (for development)
+#   -h, --help         Show this help message
 #
 # Arguments:
 #   <script>      The script name (without .sh) to fetch from shellscript.download
@@ -48,14 +49,15 @@ echo
 
 print_usage() {
   cat <<'USAGE'
-load.sh [--update] [--dont-run] [--list] [--completion] <script> [optional args...]
+load.sh [--update] [--dont-run] [--list] [--completion] [--developer <path>] <script> [optional args...]
 
 Options:
-  --update      Force re-download/update of the script even if it exists locally
-  --dont-run    Do not execute the script after ensuring it is downloaded
-  --list        List all available scripts from shellscript.download
-  --completion  Install/update bash completion for load.sh into ~/.shellscript/shellrc/
-  -h, --help    Show this help message
+  --update           Force re-download/update of the script even if it exists locally
+  --dont-run         Do not execute the script after ensuring it is downloaded
+  --list             List all available scripts from shellscript.download
+  --completion       Install/update bash completion for load.sh into ~/.shellscript/shellrc/
+  --developer <path> Use a local directory instead of downloading (for development)
+  -h, --help         Show this help message
 
 Arguments:
   <script>      The script name (without .sh) to fetch from shellscript.download
@@ -67,6 +69,7 @@ UPDATE=false
 DONT_RUN=false
 LIST=false
 COMPLETION=false
+DEVELOPER_PATH=""
 SCRIPT_NAME=""
 ARGS=()
 
@@ -87,6 +90,15 @@ while [[ $# -gt 0 ]]; do
       ;;
     --completion)
       COMPLETION=true
+      shift
+      ;;
+    --developer)
+      shift
+      if [[ $# -eq 0 ]]; then
+        echo "Error: --developer requires a path argument" >&2
+        exit 2
+      fi
+      DEVELOPER_PATH="$1"
       shift
       ;;
     -h|--help)
@@ -151,7 +163,7 @@ for item in data:
 
 install_completion() {
   local dest="$HOME/.shellscript/shellrc/01-load-completion.sh"
-  local url="https://shellscript.download/load-completion.sh"
+  local url="https://shellscript.download/install/load-completion.sh"
   mkdir -p "$(dirname "$dest")"
   echo "Downloading bash completion from ${url}" >&2
   if command -v curl >/dev/null 2>&1; then
@@ -182,57 +194,85 @@ if [[ -z "${SCRIPT_NAME}" ]]; then
   exit 2
 fi
 
-DEST_DIR="$HOME/.shellscript/downloads"
-DEST_PATH="$DEST_DIR/${SCRIPT_NAME}.sh"
-DEST_PATH_TMP="$DEST_DIR/.tmp.${SCRIPT_NAME}.sh"
-URL="https://shellscript.download/scripts/${SCRIPT_NAME}.sh"
-
-ensure_downloaded() {
-  mkdir -p "${DEST_DIR}"
-
-  # Download if missing or update requested
-  if [[ "${UPDATE}" == true || ! -f "${DEST_PATH}" ]]; then
-    echo "Fetching: ${URL}" >&2
-    if command -v curl >/dev/null 2>&1; then
-      # Check final HTTP status code with curl
-      http_code=$(curl -sS -o /dev/null -w "%{http_code}" -L "${URL}")
-      if [[ "${http_code}" != "200" ]]; then
-        echo "Error: Remote URL responded with HTTP ${http_code} for ${URL}" >&2
-        exit 3
-      fi
-      # Proceed to download only after confirming HTTP 200
-      if ! curl -fsSL "${URL}" -o "${DEST_PATH_TMP}"; then
-        echo "Error: Failed to download ${URL} using curl" >&2
-        exit 3
-      fi
-    elif command -v wget >/dev/null 2>&1; then
-      # Check final HTTP status code with wget (spider request)
-      http_code=$(wget -q --server-response --spider "${URL}" 2>&1 | awk '/HTTP\//{code=$2} END{print code}')
-      if [[ -z "${http_code}" || "${http_code}" != "200" ]]; then
-        [[ -z "${http_code}" ]] && http_code="unknown"
-        echo "Error: Remote URL responded with HTTP ${http_code} for ${URL}" >&2
-        exit 3
-      fi
-      # Proceed to download only after confirming HTTP 200
-      if ! wget -q -O "${DEST_PATH_TMP}" "${URL}"; then
-        echo "Error: Failed to download ${URL} using wget" >&2
-        exit 3
-      fi
-    else
-      echo "Error: Neither curl nor wget is installed; cannot download scripts." >&2
-      exit 3
-    fi
-    mv "${DEST_PATH_TMP}" "${DEST_PATH}"
-    chmod +x "${DEST_PATH}" || true
+if [[ -n "${DEVELOPER_PATH}" ]]; then
+  DEST_PATH="${DEVELOPER_PATH}/${SCRIPT_NAME}.sh"
+  if [[ ! -f "${DEST_PATH}" ]]; then
+    echo "Error: Developer script not found: ${DEST_PATH}" >&2
+    exit 3
   fi
-}
+else
+  DEST_DIR="$HOME/.shellscript/downloads"
+  DEST_PATH="$DEST_DIR/${SCRIPT_NAME}.sh"
+  DEST_PATH_TMP="$DEST_DIR/.tmp.${SCRIPT_NAME}.sh"
+  URL="https://shellscript.download/scripts/${SCRIPT_NAME}.sh"
 
-ensure_downloaded
+  ensure_downloaded() {
+    mkdir -p "${DEST_DIR}"
+
+    # Download if missing or update requested
+    if [[ "${UPDATE}" == true || ! -f "${DEST_PATH}" ]]; then
+      echo "Fetching: ${URL}" >&2
+      if command -v curl >/dev/null 2>&1; then
+        # Check final HTTP status code with curl
+        http_code=$(curl -sS -o /dev/null -w "%{http_code}" -L "${URL}")
+        if [[ "${http_code}" != "200" ]]; then
+          echo "Error: Remote URL responded with HTTP ${http_code} for ${URL}" >&2
+          exit 3
+        fi
+        # Proceed to download only after confirming HTTP 200
+        if ! curl -fsSL "${URL}" -o "${DEST_PATH_TMP}"; then
+          echo "Error: Failed to download ${URL} using curl" >&2
+          exit 3
+        fi
+      elif command -v wget >/dev/null 2>&1; then
+        # Check final HTTP status code with wget (spider request)
+        http_code=$(wget -q --server-response --spider "${URL}" 2>&1 | awk '/HTTP\//{code=$2} END{print code}')
+        if [[ -z "${http_code}" || "${http_code}" != "200" ]]; then
+          [[ -z "${http_code}" ]] && http_code="unknown"
+          echo "Error: Remote URL responded with HTTP ${http_code} for ${URL}" >&2
+          exit 3
+        fi
+        # Proceed to download only after confirming HTTP 200
+        if ! wget -q -O "${DEST_PATH_TMP}" "${URL}"; then
+          echo "Error: Failed to download ${URL} using wget" >&2
+          exit 3
+        fi
+      else
+        echo "Error: Neither curl nor wget is installed; cannot download scripts." >&2
+        exit 3
+      fi
+      mv "${DEST_PATH_TMP}" "${DEST_PATH}"
+      chmod +x "${DEST_PATH}" || true
+    fi
+  }
+
+  ensure_downloaded
+fi
 
 if [[ "${DONT_RUN}" == true ]]; then
   echo "Script ensured at: ${DEST_PATH}" >&2
   exit 0
 fi
+
+echo ">_ ${SCRIPT_NAME}.sh"
+echo
+
+# Inject standard paths and helpers into child script environment
+SHELLSCRIPT_HOME="${HOME}/.shellscript"
+SHELLSCRIPT_BIN="${SHELLSCRIPT_HOME}/bin"
+SHELLSCRIPT_SHELLRC="${SHELLSCRIPT_HOME}/shellrc"
+SHELLSCRIPT_DOWNLOADS="${SHELLSCRIPT_HOME}/downloads"
+export SHELLSCRIPT_HOME SHELLSCRIPT_BIN SHELLSCRIPT_SHELLRC SHELLSCRIPT_DOWNLOADS
+
+# Ensure standard directories exist
+mkdir -p "${SHELLSCRIPT_BIN}" "${SHELLSCRIPT_SHELLRC}" "${SHELLSCRIPT_DOWNLOADS}"
+
+# Inject helpers — exported functions resolve $0 to the child script's name
+log()         { printf "[%s] %s\n"        "$(basename "$0")" "$*"; }
+err()         { printf "[%s][ERROR] %s\n" "$(basename "$0")" "$*" >&2; }
+run()         { if [[ "${DRY_RUN:-0}" == "1" ]]; then printf "[dry-run] %s\n" "$*"; else bash -c "$@"; fi; }
+require_cmd() { command -v "$1" >/dev/null 2>&1 || { err "Required command '$1' not found"; exit 1; }; }
+export -f log err run require_cmd
 
 # Execute the script with passed arguments
 exec "${DEST_PATH}" "${ARGS[@]}"

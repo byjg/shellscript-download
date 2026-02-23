@@ -3,10 +3,6 @@
 
 set -euo pipefail
 
-log()  { printf "[nvm.sh] %s\n" "$*"; }
-err()  { printf "[nvm.sh][ERROR] %s\n" "$*" >&2; }
-run()  { if [[ "$DRY_RUN" == "1" ]]; then printf "[dry-run] %s\n" "$*"; else bash -c "$@"; fi }
-require_cmd() { command -v "$1" >/dev/null 2>&1 || { err "Required command '$1' not found"; exit 1; }; }
 
 print_usage() {
   cat <<'USAGE'
@@ -45,8 +41,6 @@ while [[ ${1-} ]]; do
   shift || true
 done
 
-log ">_ nvm.sh"
-
 # Preconditions
 require_cmd curl
 
@@ -73,7 +67,7 @@ run "curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/inst
 remove_nvm_lines
 
 # Write our shell init snippet
-DEST_FOLDER="$HOME/.shellscript/shellrc"
+DEST_FOLDER="${SHELLSCRIPT_SHELLRC}"
 run "mkdir -p \"$DEST_FOLDER\""
 
 if [[ "$DRY_RUN" == "1" ]]; then

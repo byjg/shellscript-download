@@ -3,10 +3,6 @@
 
 set -euo pipefail
 
-log()  { printf "[java-oracle.sh] %s\n" "$*"; }
-err()  { printf "[java-oracle.sh][ERROR] %s\n" "$*" >&2; }
-run()  { if [[ "$DRY_RUN" == "1" ]]; then printf "[dry-run] %s\n" "$*"; else bash -c "$@"; fi }
-require_cmd() { command -v "$1" >/dev/null 2>&1 || { err "Required command '$1' not found"; exit 1; }; }
 
 print_usage() {
   cat <<'USAGE'
@@ -80,15 +76,13 @@ if [[ "$MANIFEST_MODE" == "1" ]]; then
   exit 0
 fi
 
-log ">_ java-oracle.sh"
-
 # Preconditions
 require_cmd curl
 require_cmd tar
 
 # Configuration
-JAVA_HOME_BASE="$HOME/.shellscript/java-oracle"
-SHELLRC_DIR="$HOME/.shellscript/shellrc"
+JAVA_HOME_BASE="${SHELLSCRIPT_HOME}/java-oracle"
+SHELLRC_DIR="${SHELLSCRIPT_SHELLRC}"
 
 # Build download URL based on version
 case "$JAVA_VERSION" in

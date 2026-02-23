@@ -51,9 +51,12 @@ async function generate() {
 
   scripts.sort((a, b) => a.base.localeCompare(b.base))
 
-  const scriptNames = scripts.map(s => s.base).join(' ')
+  const loadContent = await fs.readFile(path.join(publicScriptsDir, 'load.sh'), 'utf8')
+  const loadFlags = extractFlags(extractPrintUsage(loadContent))
+
+  const topLevelWords = [...loadFlags, ...scripts.map(s => s.base)].join(' ')
   const cases = scripts
-    .map(({ base, flags }) => `    ${base}) COMPREPLY=($(compgen -W "${flags.join(' ')}" -- "$cur")) ;;`)
+    .map(({ base, flags }) => `    ${base}) mapfile -t COMPREPLY < <(compgen -W "${flags.join(' ')}" -- "$cur") ;;`)
     .join('\n')
 
   const completion = `#!/usr/bin/env bash
@@ -66,7 +69,7 @@ _load_sh_completion() {
   cur="\${COMP_WORDS[COMP_CWORD]}"
 
   if [[ \$COMP_CWORD -eq 1 ]]; then
-    COMPREPLY=(\$(compgen -W "${scriptNames}" -- "$cur"))
+    mapfile -t COMPREPLY < <(compgen -W "${topLevelWords}" -- "$cur")
     return
   fi
 
@@ -79,12 +82,12 @@ ${cases}
 complete -F _load_sh_completion load.sh
 `
 
-  await fs.writeFile(path.join(repoRoot, 'public', 'load-completion.sh'), completion, 'utf8')
+  await fs.writeFile(path.join(repoRoot, 'public', 'install', 'load-completion.sh'), completion, 'utf8')
   return scripts.length
 }
 
 if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {
   generate()
-    .then(n => console.log(`[generate-completion] Generated bash completion for ${n} script(s) → public/load-completion.sh`))
+    .then(n => console.log(`[generate-completion] Generated bash completion for ${n} script(s) → public/install/load-completion.sh`))
     .catch(err => { console.error('[generate-completion] Failed:', err); process.exit(1) })
 }

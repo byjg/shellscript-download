@@ -3,7 +3,20 @@
 # This script is idempotent: it replaces any previous managed block.
 # It finds the first appropriate rc file for the current shell and ensures it sources ~/.shellscript/shellrc/*.
 
-set -euo pipefail
+set -eu
+
+DEVELOPER=0
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --developer) DEVELOPER=1 ;;
+    *) echo "Error: Unknown option: $1" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+# Resolve the directory this script lives in (for --developer relative paths)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Determine shell and candidate rc files
 SHELL_NAME=${SHELL##*/}
@@ -93,15 +106,23 @@ rm -f "$TMP_FILE"
 
 # Display success message with visual separation
 mkdir -p "$HOME/.shellscript/bin"
-if ! curl -fsSL "https://shellscript.download/scripts/load.sh" -o "$HOME/.shellscript/bin/load.sh"; then
-  echo "Error: Failed to download 'load.sh' using curl" >&2
-  exit 3
+if [ "$DEVELOPER" = "1" ]; then
+  cp "${SCRIPT_DIR}/../scripts/load.sh" "$HOME/.shellscript/bin/load.sh"
+else
+  if ! curl -fsSL "https://shellscript.download/scripts/load.sh" -o "$HOME/.shellscript/bin/load.sh"; then
+    echo "Error: Failed to download 'load.sh' using curl" >&2
+    exit 3
+  fi
 fi
 chmod a+x "$HOME/.shellscript/bin/load.sh"
 echo "✓ Shell script download loader successfully installed!"
 
 COMPLETION_DEST="$HOME/.shellscript/shellrc/01-load-completion.sh"
-curl -fsSL "https://shellscript.download/load-completion.sh" -o "$COMPLETION_DEST"
+if [ "$DEVELOPER" = "1" ]; then
+  cp "${SCRIPT_DIR}/load-completion.sh" "$COMPLETION_DEST"
+else
+  curl -fsSL "https://shellscript.download/install/load-completion.sh" -o "$COMPLETION_DEST"
+fi
 echo "✓ Bash completion installed!"
 
 # Show action items with clear formatting

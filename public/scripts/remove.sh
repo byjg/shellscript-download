@@ -3,9 +3,6 @@
 
 set -euo pipefail
 
-log()  { printf "[remove.sh] %s\n" "$*"; }
-err()  { printf "[remove.sh][ERROR] %s\n" "$*" >&2; }
-run()  { if [[ "$DRY_RUN" == "1" ]]; then printf "[dry-run] %s\n" "$*"; else bash -c "$@"; fi }
 
 print_usage() {
   cat <<'USAGE'
@@ -61,10 +58,8 @@ if [[ -z "$SCRIPT_NAME" ]]; then
   exit 2
 fi
 
-log ">_ remove.sh $([ "$PURGE" == "1" ] && echo "--purge ")${SCRIPT_NAME}"
-
 # Standard directories
-BASE_DIR="$HOME/.shellscript"
+BASE_DIR="${SHELLSCRIPT_HOME}"
 BIN_DIR="$BASE_DIR/bin"
 DOWNLOADS_DIR="$BASE_DIR/downloads"
 SCRIPT_PATH="$DOWNLOADS_DIR/${SCRIPT_NAME}.sh"

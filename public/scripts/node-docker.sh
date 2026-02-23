@@ -3,8 +3,6 @@
 
 set -euo pipefail
 
-echo ">_ node-docker.sh"
-echo
 
 print_usage() {
   cat <<'USAGE'
@@ -148,7 +146,7 @@ trap - EXIT
 # Use the custom image for the wrappers
 NODE_IMAGE="$CUSTOM_IMAGE"
 
-BASE_FOLDER="$HOME/.shellscript"
+BASE_FOLDER="${SHELLSCRIPT_HOME}"
 DEST_FOLDER="$BASE_FOLDER/bin"
 SHELLRC_FOLDER="$BASE_FOLDER/shellrc"
 NODE_NPM="$BASE_FOLDER/node/${NODE_VERSION}"
