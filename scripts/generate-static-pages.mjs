@@ -164,6 +164,7 @@ async function generate() {
   const entries = await fs.readdir(publicScriptsDir, { withFileTypes: true })
   let count = 0
   const redirects = []
+  const listItems = []
 
   for (const entry of entries) {
     if (!entry.isFile()) continue
@@ -181,6 +182,8 @@ async function generate() {
       .map((s) => s.trim())
       .find((s) => s.length > 0) || `${base}.sh script`
 
+    listItems.push({ name: base, description: firstLine })
+
     const title = `${entry.name}`
     const html = buildStaticHtml({
       title,
@@ -195,6 +198,10 @@ async function generate() {
 
     count++
   }
+
+  // Generate list.json
+  listItems.sort((a, b) => a.name.localeCompare(b.name))
+  await fs.writeFile(path.join(distDir, 'list.json'), JSON.stringify(listItems, null, 2) + '\n', 'utf8')
 
   // Generate sitemap.xml for SEO
   const sitemapUrls = []

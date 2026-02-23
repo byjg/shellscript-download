@@ -48,11 +48,12 @@ echo
 
 print_usage() {
   cat <<'USAGE'
-load.sh [--update] [--dont-run] <script> [optional args...]
+load.sh [--update] [--dont-run] [--list] <script> [optional args...]
 
 Options:
   --update      Force re-download/update of the script even if it exists locally
   --dont-run    Do not execute the script after ensuring it is downloaded
+  --list        List all available scripts from shellscript.download
   -h, --help    Show this help message
 
 Arguments:
@@ -63,6 +64,7 @@ USAGE
 
 UPDATE=false
 DONT_RUN=false
+LIST=false
 SCRIPT_NAME=""
 ARGS=()
 
@@ -75,6 +77,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --dont-run)
       DONT_RUN=true
+      shift
+      ;;
+    --list)
+      LIST=true
       shift
       ;;
     -h|--help)
@@ -104,6 +110,43 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+list_scripts() {
+  local url="https://shellscript.download/list.json"
+  local json
+  if command -v curl >/dev/null 2>&1; then
+    json=$(curl -fsSL "${url}") || { echo "Error: Failed to download list.json" >&2; exit 3; }
+  elif command -v wget >/dev/null 2>&1; then
+    json=$(wget -qO- "${url}") || { echo "Error: Failed to download list.json" >&2; exit 3; }
+  else
+    echo "Error: Neither curl nor wget is installed." >&2
+    exit 3
+  fi
+
+  if command -v jq >/dev/null 2>&1; then
+    printf "%-25s %s\n" "SCRIPT" "DESCRIPTION"
+    printf "%-25s %s\n" "-------------------------" "-----------"
+    echo "${json}" | jq -r '.[] | [.name, .description] | @tsv' | while IFS=$'\t' read -r name desc; do
+      printf "%-25s %s\n" "${name}" "${desc}"
+    done
+  elif command -v python3 >/dev/null 2>&1; then
+    echo "${json}" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+print('%-25s %s' % ('SCRIPT', 'DESCRIPTION'))
+print('%-25s %s' % ('-' * 25, '-----------'))
+for item in data:
+    print('%-25s %s' % (item['name'], item['description']))
+"
+  else
+    echo "${json}"
+  fi
+}
+
+if [[ "${LIST}" == true ]]; then
+  list_scripts
+  exit 0
+fi
 
 if [[ -z "${SCRIPT_NAME}" ]]; then
   echo "Error: <script> is required." >&2
