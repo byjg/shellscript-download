@@ -13,6 +13,7 @@ import Script_nvm from "../pages/scripts/nvm";
 import Script_php_docker from "../pages/scripts/php-docker";
 import Script_php_rest_api from "../pages/scripts/php-rest-api";
 import Script_remove from "../pages/scripts/remove";
+import Script_ssh_agent from "../pages/scripts/ssh-agent";
 
 export const scriptRoutes = [
   { path: "/scripts/docker", element: <Script_docker /> },
@@ -26,5 +27,6 @@ export const scriptRoutes = [
   { path: "/scripts/php-docker", element: <Script_php_docker /> },
   { path: "/scripts/php-rest-api", element: <Script_php_rest_api /> },
   { path: "/scripts/remove", element: <Script_remove /> },
+  { path: "/scripts/ssh-agent", element: <Script_ssh_agent /> },
 ];
 
