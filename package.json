@@ -48,7 +48,7 @@
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.6.0",
     "flatted": "^3.4.2",
-    "glob": "^10.5.0",
+    "glob": "^13.0.6",
     "input-otp": "^1.4.2",
     "js-yaml": "^4.1.1",
     "lucide-react": "^0.563.0",
@@ -77,17 +77,16 @@
     "@types/node": "^25.0.10",
     "@types/react": "^18.3.27",
     "@types/react-dom": "^18.3.7",
-    "@vitejs/plugin-react-swc": "^4.2.2",
+    "@vitejs/plugin-react-swc": "^4.3.0",
     "autoprefixer": "^10.4.23",
     "eslint": "^9.39.2",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.26",
     "globals": "^17.1.0",
-    "lovable-tagger": "^1.1.13",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.19",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.53.1",
-    "vite": "^5.4.21"
+    "vite": "^8.0.8"
   }
 }
