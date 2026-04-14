@@ -30,6 +30,7 @@ Options:
                        Non-LTS versions require confirmation (or --yes)
                        Note: Oracle only provides public downloads for recent LTS versions
   --yes, -y            Skip confirmation for non-LTS versions
+  --force              Re-download even if already installed
   --dry-run            Print actions without executing them
   --manifest [--version <version>]
                        Print installation manifest and exit
