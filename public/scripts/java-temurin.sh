@@ -126,9 +126,16 @@ else
   log "Resolving latest Java ${JAVA_VERSION} release from Adoptium API..."
   DOWNLOAD_URL=$(curl -fsSL "$API_URL" | jq -r '.[0].binary.package.link // empty')
 
+  # Hardcoded fallback for EOL versions not available via Adoptium (hosted under AdoptOpenJDK)
   if [[ -z "$DOWNLOAD_URL" ]]; then
-    err "Could not resolve download URL for Java ${JAVA_VERSION} from Adoptium API."
-    err "This version may not be available. Check https://adoptium.net"
+    case "$JAVA_VERSION" in
+      14) DOWNLOAD_URL="https://github.com/AdoptOpenJDK/openjdk14-binaries/releases/download/jdk-14.0.2%2B12/OpenJDK14U-jdk_x64_linux_hotspot_14.0.2_12.tar.gz" ;;
+    esac
+  fi
+
+  if [[ -z "$DOWNLOAD_URL" ]]; then
+    err "Could not resolve download URL for Java ${JAVA_VERSION}."
+    err "This version may not be available on Adoptium. Check https://adoptium.net"
     exit 1
   fi
 
