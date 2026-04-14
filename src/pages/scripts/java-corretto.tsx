@@ -25,7 +25,10 @@ Downloads and installs Amazon Corretto OpenJDK binary distribution for x86_64 Li
 
 Options:
   -h, --help           Show this help and exit
-  --version <version>  Java major version to install: 25, 21, 17, 11, or 8 (default: 21)
+  --version <version>  Java major version to install (default: 21)
+                       LTS versions: 8, 11, 17, 21, 25
+                       Non-LTS versions require confirmation (or --yes)
+  --yes, -y            Skip confirmation for non-LTS versions
   --dry-run            Print actions without executing them
   --manifest [--version <version>]
                        Print installation manifest and exit
@@ -35,6 +38,7 @@ Options:
 Examples:
   load.sh java-corretto
   load.sh java-corretto -- --version 17
+  load.sh java-corretto -- --version 14 --yes
   load.sh java-corretto -- --dry-run
   load.sh java-corretto -- --manifest --version 21`}</pre>
         <br/>

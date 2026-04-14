@@ -14,9 +14,9 @@ _load_sh_completion() {
 
   case "${COMP_WORDS[1]}" in
     docker) mapfile -t COMPREPLY < <(compgen -W "--channel --dry-run --help --manifest --no-group -h" -- "$cur") ;;
-    java-corretto) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --manifest --version -h" -- "$cur") ;;
-    java-oracle) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --manifest --version -h" -- "$cur") ;;
-    java-temurin) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --manifest --version -h" -- "$cur") ;;
+    java-corretto) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --manifest --version --yes -h -y" -- "$cur") ;;
+    java-oracle) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --manifest --version --yes -h -y" -- "$cur") ;;
+    java-temurin) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --manifest --version --yes -h -y" -- "$cur") ;;
     maven) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --manifest --version -h" -- "$cur") ;;
     node-docker) mapfile -t COMPREPLY < <(compgen -W "--manifest" -- "$cur") ;;
     nvm) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --manifest -h" -- "$cur") ;;

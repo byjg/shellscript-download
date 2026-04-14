@@ -12,7 +12,10 @@ Downloads and installs Amazon Corretto OpenJDK binary distribution for x86_64 Li
 
 Options:
   -h, --help           Show this help and exit
-  --version <version>  Java major version to install: 25, 21, 17, 11, or 8 (default: 21)
+  --version <version>  Java major version to install (default: 21)
+                       LTS versions: 8, 11, 17, 21, 25
+                       Non-LTS versions require confirmation (or --yes)
+  --yes, -y            Skip confirmation for non-LTS versions
   --dry-run            Print actions without executing them
   --manifest [--version <version>]
                        Print installation manifest and exit
@@ -22,6 +25,7 @@ Options:
 Examples:
   load.sh java-corretto
   load.sh java-corretto -- --version 17
+  load.sh java-corretto -- --version 14 --yes
   load.sh java-corretto -- --dry-run
   load.sh java-corretto -- --manifest --version 21
 USAGE
@@ -46,6 +50,7 @@ DRY_RUN=0
 JAVA_VERSION="21"
 MANIFEST_MODE=0
 MANIFEST_VERSION="all"
+YES=0
 
 while [[ ${1-} ]]; do
   case "$1" in
@@ -54,6 +59,7 @@ while [[ ${1-} ]]; do
       MANIFEST_MODE=1
       ;;
     --dry-run) DRY_RUN=1 ;;
+    -y|--yes) YES=1 ;;
     --version)
       shift || { err "--version requires a value"; exit 2; }
       JAVA_VERSION="$1"
@@ -72,6 +78,22 @@ if [[ "$MANIFEST_MODE" == "1" ]]; then
   exit 0
 fi
 
+# Warn for non-LTS versions
+LTS_VERSIONS="8 11 17 21 25"
+if ! echo " $LTS_VERSIONS " | grep -q " $JAVA_VERSION "; then
+  if [[ "$YES" == "1" ]]; then
+    log "WARNING: Java ${JAVA_VERSION} is not an LTS version (--yes passed, skipping confirmation)."
+  else
+    log "WARNING: Java ${JAVA_VERSION} is not an LTS version and may be EOL or unsupported."
+    printf "[java-corretto.sh] Are you sure you want to install it? [y/N] "
+    read -r CONFIRM
+    if [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]]; then
+      log "Aborted."
+      exit 0
+    fi
+  fi
+fi
+
 # Preconditions
 require_cmd curl
 require_cmd tar
@@ -80,16 +102,8 @@ require_cmd tar
 JAVA_HOME_BASE="${SHELLSCRIPT_HOME}/java-corretto"
 SHELLRC_DIR="${SHELLSCRIPT_SHELLRC}"
 
-# Build download URL based on version
-case "$JAVA_VERSION" in
-  25|21|17|11|8)
-    DOWNLOAD_URL="https://corretto.aws/downloads/latest/amazon-corretto-${JAVA_VERSION}-x64-linux-jdk.tar.gz"
-    ;;
-  *)
-    err "Unsupported Java version: ${JAVA_VERSION}. Supported versions: 25, 21, 17, 11, 8"
-    exit 1
-    ;;
-esac
+# Build download URL
+DOWNLOAD_URL="https://corretto.aws/downloads/latest/amazon-corretto-${JAVA_VERSION}-x64-linux-jdk.tar.gz"
 
 TEMP_ARCHIVE="/tmp/corretto.tar.gz"
 

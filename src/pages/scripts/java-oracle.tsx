@@ -25,7 +25,11 @@ Downloads and installs Oracle JDK binary distribution for x86_64 Linux.
 
 Options:
   -h, --help           Show this help and exit
-  --version <version>  Java major version to install: 25 or 21 (default: 21)
+  --version <version>  Java major version to install (default: 21)
+                       LTS versions: 17, 21, 25 (publicly available)
+                       Non-LTS versions require confirmation (or --yes)
+                       Note: Oracle only provides public downloads for recent LTS versions
+  --yes, -y            Skip confirmation for non-LTS versions
   --dry-run            Print actions without executing them
   --manifest [--version <version>]
                        Print installation manifest and exit
@@ -35,6 +39,7 @@ Options:
 Examples:
   load.sh java-oracle
   load.sh java-oracle -- --version 25
+  load.sh java-oracle -- --version 24 --yes
   load.sh java-oracle -- --dry-run
   load.sh java-oracle -- --manifest --version 21
 
