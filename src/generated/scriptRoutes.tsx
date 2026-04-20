@@ -2,6 +2,7 @@
 // Auto-generated — routes for /scripts/* pages derived from public/scripts/*.sh
 // ------------------------------------------------------------------------------------
 
+import Script_ant from "../pages/scripts/ant";
 import Script_docker from "../pages/scripts/docker";
 import Script_java_corretto from "../pages/scripts/java-corretto";
 import Script_java_oracle from "../pages/scripts/java-oracle";
@@ -16,6 +17,7 @@ import Script_remove from "../pages/scripts/remove";
 import Script_ssh_agent from "../pages/scripts/ssh-agent";
 
 export const scriptRoutes = [
+  { path: "/scripts/ant", element: <Script_ant /> },
   { path: "/scripts/docker", element: <Script_docker /> },
   { path: "/scripts/java-corretto", element: <Script_java_corretto /> },
   { path: "/scripts/java-oracle", element: <Script_java_oracle /> },
