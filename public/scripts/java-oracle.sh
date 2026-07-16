@@ -8,7 +8,7 @@ print_usage() {
   cat <<'USAGE'
 load.sh java-oracle -- [options]
 
-Downloads and installs Oracle JDK binary distribution for x86_64 Linux.
+Downloads and installs Oracle JDK binary distribution for x86_64 and aarch64 Linux.
 
 Options:
   -h, --help           Show this help and exit
@@ -107,12 +107,19 @@ fi
 require_downloader
 require_cmd tar
 
+# Detect CPU architecture
+case "$(uname -m)" in
+  x86_64|amd64)  JAVA_ARCH="x64" ;;
+  aarch64|arm64) JAVA_ARCH="aarch64" ;;
+  *) err "Unsupported architecture: $(uname -m) (supported: x86_64, aarch64)"; exit 1 ;;
+esac
+
 # Configuration
 JAVA_HOME_BASE="${SHELLSCRIPT_HOME}/java-oracle"
 SHELLRC_DIR="${SHELLSCRIPT_SHELLRC}"
 
 # Build download URL
-DOWNLOAD_URL="https://download.oracle.com/java/${JAVA_VERSION}/latest/jdk-${JAVA_VERSION}_linux-x64_bin.tar.gz"
+DOWNLOAD_URL="https://download.oracle.com/java/${JAVA_VERSION}/latest/jdk-${JAVA_VERSION}_linux-${JAVA_ARCH}_bin.tar.gz"
 
 TEMP_ARCHIVE="/tmp/java-oracle.tar.gz"
 
