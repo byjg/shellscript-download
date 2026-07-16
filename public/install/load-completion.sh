@@ -21,7 +21,7 @@ _load_sh_completion() {
     maven) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --manifest --version -h" -- "$cur") ;;
     node-docker) mapfile -t COMPREPLY < <(compgen -W "--manifest" -- "$cur") ;;
     nvm) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --manifest -h" -- "$cur") ;;
-    php-docker) mapfile -t COMPREPLY < <(compgen -W "--add --manifest" -- "$cur") ;;
+    php-docker) mapfile -t COMPREPLY < <(compgen -W "--add --manifest --volume" -- "$cur") ;;
     php-rest-api) mapfile -t COMPREPLY < <(compgen -W "--git-email --git-name --help --install-examples --manifest --mysql-uri --name --namespace --php-version --timezone --version -h" -- "$cur") ;;
     ssh-agent) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --key --manifest -h" -- "$cur") ;;
     *) COMPREPLY=() ;;
