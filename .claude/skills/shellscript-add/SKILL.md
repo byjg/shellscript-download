@@ -73,6 +73,16 @@ FOLDERS=$HOME/.shellscript/<name>
 SHELLRC_FILE=$HOME/.shellscript/shellrc/<name>-init.sh   # or empty if no init file
 MANIFEST
 }
+```
+
+Optional manifest key for scripts that install **system packages** (via sudo + package
+manager, like qemu.sh): add `UNINSTALL_CMD=<subcommand>`. `remove.sh` runs
+`<name>.sh <subcommand>` before its normal file cleanup. The subcommand must only remove
+what the script itself installed — record newly installed packages in a state file under
+`$SHELLSCRIPT_HOME/<name>/` at install time and uninstall exactly those (pre-existing
+packages stay). See qemu.sh for the reference implementation.
+
+```bash
 
 # Parse flags
 DRY_RUN=0
