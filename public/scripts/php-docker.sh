@@ -8,20 +8,30 @@ set -euo pipefail
 
 print_usage() {
   cat <<'USAGE'
-php-docker.sh <php_version> [--add package1,package2,...] [--manifest]
+php-docker.sh <php_version> [--add package1,package2,...] [--volume /path1,/path2,...] [--manifest]
 
 Installs Docker-backed wrappers for php and composer under $HOME/.shellscript/bin
 using the byjg/php:<version>-cli image.
 
 Options:
-  --add <packages>      Install additional Alpine packages (comma-separated list)
+  --add <packages>      Install additional Alpine packages (comma-separated list).
+                        Saved to $HOME/.shellscript/php/packages.conf and re-applied
+                        on every install/update, with phpNN- prefixes rewritten to
+                        the target version (php83-gd becomes php85-gd on 8.5).
                         Example: --add php83-gd,php83-intl,git,bash
+  --volume <paths>      Extra host directories to mount inside the container as
+                        <path>:<path> (comma-separated list). Saved to
+                        $HOME/.shellscript/php/volumes.conf so they persist across
+                        installs/updates. The wrappers read this file at runtime,
+                        so you can also edit it directly without reinstalling.
+                        Example: --volume /home/user/projects
   --manifest            Print installation manifest and exit
 
 Examples:
   load.sh php-docker -- 8.3
   load.sh php-docker -- 7.4
   load.sh php-docker -- 8.3 --add php83-gd,php83-intl,git
+  load.sh php-docker -- 8.3 --volume /home/user/projects
   load.sh php-docker -- 8.3 --manifest
 
 USAGE
@@ -51,6 +61,7 @@ if [[ $# -lt 1 ]]; then
 fi
 
 PACKAGES=""
+VOLUMES=""
 SHOW_MANIFEST=0
 PHP_VERSION=""
 while [[ $# -gt 0 ]]; do
@@ -66,6 +77,15 @@ while [[ $# -gt 0 ]]; do
         exit 1
       fi
       PACKAGES="$1"
+      shift
+      ;;
+    "--volume")
+      shift
+      if [[ $# -eq 0 ]]; then
+        echo "Error: --volume requires a path list" >&2
+        exit 1
+      fi
+      VOLUMES="${VOLUMES:+$VOLUMES,}$1"
       shift
       ;;
     "--manifest")
@@ -122,6 +142,52 @@ cat >"${SHELLRC_FOLDER}/php-init.sh" <<WRAP
 export PATH="\$PATH:$PHP_BIN"
 WRAP
 
+# Persist extra volumes so they survive future installs/updates.
+# The wrappers read this file at runtime (one absolute path per line).
+VOLUMES_CONF="$BASE_FOLDER/php/volumes.conf"
+if [[ -n "$VOLUMES" ]]; then
+  touch "$VOLUMES_CONF"
+  IFS=',' read -ra VOL_ARRAY <<< "$VOLUMES"
+  for vol_path in "${VOL_ARRAY[@]}"; do
+    vol_path="${vol_path%/}"
+    if [[ ! -d "$vol_path" ]]; then
+      echo "Warning: volume path does not exist: $vol_path" >&2
+    fi
+    if ! grep -qxF "$vol_path" "$VOLUMES_CONF"; then
+      echo "$vol_path" >> "$VOLUMES_CONF"
+      echo "Added volume to ${VOLUMES_CONF}: $vol_path"
+    fi
+  done
+fi
+
+# Persist extra packages so they survive future installs/updates.
+# phpNN- prefixes are rewritten to the target version at install time
+# (e.g. a saved php83-gd installs as php85-gd when installing 8.5).
+PACKAGES_CONF="$BASE_FOLDER/php/packages.conf"
+if [[ -n "$PACKAGES" ]]; then
+  touch "$PACKAGES_CONF"
+  IFS=',' read -ra PKG_ARRAY <<< "$PACKAGES"
+  for pkg in "${PKG_ARRAY[@]}"; do
+    if ! grep -qxF "$pkg" "$PACKAGES_CONF"; then
+      echo "$pkg" >> "$PACKAGES_CONF"
+      echo "Added package to ${PACKAGES_CONF}: $pkg"
+    fi
+  done
+fi
+
+# Build the effective package list from the saved config, rewriting version
+# prefixes and de-duplicating (php83-gd and php85-gd collapse into one).
+INSTALL_PACKAGES=()
+if [[ -f "$PACKAGES_CONF" ]]; then
+  while IFS= read -r pkg; do
+    [[ -z "$pkg" || "$pkg" == \#* ]] && continue
+    pkg="$(echo "$pkg" | sed -E "s/^php[0-9]+-/php${PHP_VERSION//./}-/")"
+    if [[ ! " ${INSTALL_PACKAGES[*]-} " == *" $pkg "* ]]; then
+      INSTALL_PACKAGES+=("$pkg")
+    fi
+  done < "$PACKAGES_CONF"
+fi
+
 # Pull base image and build a customized one with updated composer
 # shellcheck disable=SC2154  # PHP_VERSION is set via case above
 PHP_BASE_IMAGE="byjg/php:${PHP_VERSION}-cli"
@@ -135,11 +201,10 @@ PHP_IMAGE="${PHP_BASE_IMAGE}-load"
 docker image rm "$PHP_IMAGE" 2>/dev/null || true
 docker tag "$PHP_BASE_IMAGE" "$PHP_IMAGE"
 
-if [[ -n "$PACKAGES" ]]; then
-  echo "Installing Alpine packages: $PACKAGES"
+if [[ ${#INSTALL_PACKAGES[@]} -gt 0 ]]; then
+  echo "Installing Alpine packages: ${INSTALL_PACKAGES[*]}"
   docker rm temp 2>/dev/null || true
-  IFS=',' read -ra PKG_ARRAY <<< "$PACKAGES"
-  docker run -it --user root --name temp "$PHP_IMAGE" apk add --no-cache "${PKG_ARRAY[@]}"
+  docker run -it --user root --name temp "$PHP_IMAGE" apk add --no-cache "${INSTALL_PACKAGES[@]}"
   docker commit temp "$PHP_IMAGE"
   docker rm temp
 fi
@@ -191,6 +256,18 @@ while IFS='=' read -r -d '' name value; do
   ENV_ARGS+=(-e "\${name}=\${value}")
 done < <(env -0)
 
+# Extra volumes from volumes.conf (one absolute path per line, mounted as path:path)
+EXTRA_VOLUME_ARGS=()
+VOLUMES_CONF="$BASE_FOLDER/php/volumes.conf"
+if [[ -f "\$VOLUMES_CONF" ]]; then
+  while IFS= read -r vol_path; do
+    [[ -z "\$vol_path" || "\$vol_path" == \\#* ]] && continue
+    if [[ -d "\$vol_path" ]]; then
+      EXTRA_VOLUME_ARGS+=(-v "\$vol_path":"\$vol_path")
+    fi
+  done < "\$VOLUMES_CONF"
+fi
+
 docker run \${TTY_ARG} --rm \
   -v "\${PWD}":"\${PWD}" \
   -v "${HOME}/.cache:${HOME}/.cache" \
@@ -201,6 +278,7 @@ docker run \${TTY_ARG} --rm \
   -v "/etc/passwd:/etc/passwd:ro" \
   -v "/etc/group:/etc/group:ro" \
   "\${ENV_ARGS[@]}" \
+  "\${EXTRA_VOLUME_ARGS[@]}" \
   --network host \
   $PHP_IMAGE \
   php "\${ARGS[@]}"
@@ -246,16 +324,31 @@ while IFS='=' read -r -d '' name value; do
   ENV_ARGS+=(-e "\${name}=\${value}")
 done < <(env -0)
 
+# Extra volumes from volumes.conf (one absolute path per line, mounted as path:path)
+EXTRA_VOLUME_ARGS=()
+VOLUMES_CONF="$BASE_FOLDER/php/volumes.conf"
+if [[ -f "\$VOLUMES_CONF" ]]; then
+  while IFS= read -r vol_path; do
+    [[ -z "\$vol_path" || "\$vol_path" == \\#* ]] && continue
+    if [[ -d "\$vol_path" ]]; then
+      EXTRA_VOLUME_ARGS+=(-v "\$vol_path":"\$vol_path")
+    fi
+  done < "\$VOLUMES_CONF"
+fi
+
+# Mount the project at its real host path (not /workdir) so that relative
+# path repositories and symlinks resolve identically on host and container.
 docker run \${TTY_ARG} --rm \
-  -v "\${PWD}":/workdir \
+  -v "\${PWD}":"\${PWD}" \
   -v "${PHP_HOME}:/tmp/.composer" \
   -v "${COMPOSER_CACHE}:${HOME}/.cache/composer" \
   -v "$PHP_INI":"/etc/php${PHP_VERSION//./}/conf.d/99-php.ini" \
-  -w /workdir \
+  -w "\${PWD}" \
   -e "HOME=${HOME}" \
   -u $(id -u):$(id -g) \
   "\${ENV_ARGS[@]}" \
   "\${DOCKER_SSH_ARGS[@]}" \
+  "\${EXTRA_VOLUME_ARGS[@]}" \
   --network host \
   $PHP_IMAGE \
   composer "\$@"
