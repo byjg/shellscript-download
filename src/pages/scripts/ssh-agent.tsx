@@ -18,7 +18,7 @@ export default function Script_ssh_agent() {
         </header>
         <Link to="/" className="text-accent hover:text-accent/80 transition-colors">← Home</Link>
         <h1 className="text-foreground" style={{fontSize: "1.5rem", margin: "1rem 0"}}>ssh-agent.sh</h1>
-        <InstallCommand command="load.sh ssh-agent" />
+        <InstallCommand command="load.sh ssh-agent" spec={{"prefix":"load.sh ssh-agent","dashes":true,"items":[{"kind":"option","name":"--dry-run","value":null,"equals":false,"required":false,"description":"Print actions without executing them"},{"kind":"option","name":"--manifest","value":null,"equals":false,"required":false,"description":"Print installation manifest and exit"},{"kind":"option","name":"--key","value":"path","equals":false,"required":false,"description":"Add this key (can be repeated for multiple keys)"}]}} />
         <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem', marginTop: '1rem'}}>{`load.sh ssh-agent -- [options]
 
 Writes a shell init snippet that starts ssh-agent (if not already running)

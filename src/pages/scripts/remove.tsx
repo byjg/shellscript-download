@@ -18,7 +18,7 @@ export default function Script_remove() {
         </header>
         <Link to="/" className="text-accent hover:text-accent/80 transition-colors">← Home</Link>
         <h1 className="text-foreground" style={{fontSize: "1.5rem", margin: "1rem 0"}}>remove.sh</h1>
-        <InstallCommand command="load.sh remove" />
+        <InstallCommand command="load.sh remove" spec={{"prefix":"load.sh remove","dashes":true,"items":[{"kind":"option","name":"--purge","value":null,"equals":false,"required":false,"description":"Also remove tool folders (binaries/downloads)"},{"kind":"option","name":"--dry-run","value":null,"equals":false,"required":false,"description":"Print actions without executing them"},{"kind":"arg","name":"script-name","required":true,"description":"Name of the script/tool to remove (e.g., maven, nvm)"}]}} />
         <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem', marginTop: '1rem'}}>{`load.sh remove -- [--purge] [--dry-run] <script-name>
 
 Removes installed tools from shellscript.download.

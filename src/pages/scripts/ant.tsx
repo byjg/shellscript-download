@@ -18,7 +18,7 @@ export default function Script_ant() {
         </header>
         <Link to="/" className="text-accent hover:text-accent/80 transition-colors">← Home</Link>
         <h1 className="text-foreground" style={{fontSize: "1.5rem", margin: "1rem 0"}}>ant.sh</h1>
-        <InstallCommand command="load.sh ant" />
+        <InstallCommand command="load.sh ant" spec={{"prefix":"load.sh ant","dashes":true,"items":[{"kind":"option","name":"--version","value":"version","equals":false,"required":false,"description":"Ant version to install (default: latest)"},{"kind":"option","name":"--dry-run","value":null,"equals":false,"required":false,"description":"Print actions without executing them"},{"kind":"option","name":"--manifest","value":null,"equals":false,"required":false,"description":"Print installation manifest and exit"}]}} />
         <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem', marginTop: '1rem'}}>{`load.sh ant -- [options]
 
 Downloads and installs Apache Ant binary distribution.

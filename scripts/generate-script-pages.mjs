@@ -86,6 +86,95 @@ function extractPrintUsage(content) {
   return result.join('\n')
 }
 
+// Parses a print_usage text into a command spec for the interactive InstallCommand builder.
+// Returns { prefix, dashes, items } or null when nothing useful was found.
+// Each item: { kind: 'arg'|'option', name, value?, equals?, required?, description? }
+function parseUsageSpec(usage, base) {
+  if (!usage) return null
+  const lines = usage.split(/\r?\n/)
+  const synopsis = lines.find((l) => l.trim() !== '') || ''
+
+  // 1) Option lines anywhere in the body: "  --flag[=| ]<placeholder>  description"
+  const optionRe = /^\s+(?:-\w,\s+)?(--[a-zA-Z][\w-]*)(?:,\s*-\w)?(?:[= ](<[^>]+>|[A-Z]{2,}))?(?:\s+(.+))?$/
+  const argDescRe = /^\s+<([^>\s]+)>\s+(.+)$/
+  const options = new Map() // flag -> { value, description }
+  const argDescs = new Map()
+  for (let i = 1; i < lines.length; i++) {
+    const argMatch = lines[i].match(argDescRe)
+    if (argMatch) {
+      argDescs.set(argMatch[1], argMatch[2].trim())
+      continue
+    }
+    const m = lines[i].match(optionRe)
+    if (!m) continue
+    const [, flag, placeholder, desc] = m
+    if (flag === '--help' || options.has(flag)) continue
+    let description = (desc || '').trim()
+    // "--manifest [--version <version>]" style: not a description, ignore it
+    if (description.startsWith('[')) description = ''
+    // Description may sit on the next (continuation) line
+    if (!description && lines[i + 1] && /^\s{4,}\S/.test(lines[i + 1]) && !/^\s+-/.test(lines[i + 1])) {
+      description = lines[i + 1].trim()
+    }
+    options.set(flag, {
+      value: placeholder ? placeholder.replace(/^</, '').replace(/>$/, '') : null,
+      description,
+    })
+  }
+
+  // 2) Synopsis tokens define order and which items are required (outside [...])
+  const items = []
+  const seen = new Set()
+  let depth = 0
+  const tokenRe = /(\[)|(\])|(--[a-zA-Z][\w-]*)(?:[= ]<([^>\s]+)>)?|<([^>\s]+)>/g
+  let m
+  while ((m = tokenRe.exec(synopsis))) {
+    if (m[1]) depth++
+    else if (m[2]) depth = Math.max(0, depth - 1)
+    else if (m[3]) {
+      const flag = m[3]
+      if (flag === '--help' || seen.has(flag)) continue
+      seen.add(flag)
+      const info = options.get(flag) || { value: m[4] || null, description: '' }
+      items.push({
+        kind: 'option',
+        name: flag,
+        value: info.value || m[4] || null,
+        equals: usage.includes(`${flag}=`),
+        required: depth === 0,
+        description: info.description,
+      })
+    } else if (m[5]) {
+      const name = m[5]
+      if (seen.has(name)) continue
+      seen.add(name)
+      items.push({ kind: 'arg', name, required: depth === 0, description: argDescs.get(name) || '' })
+    }
+  }
+
+  // 3) Remaining documented options (not mentioned in the synopsis) are optional
+  for (const [flag, info] of options) {
+    if (seen.has(flag)) continue
+    items.push({
+      kind: 'option',
+      name: flag,
+      value: info.value,
+      equals: usage.includes(`${flag}=`),
+      required: false,
+      description: info.description,
+    })
+  }
+
+  if (items.length === 0) return null
+  // load.sh is the loader itself: its args attach directly, without the "-- " separator
+  const isLoader = base === 'load'
+  return {
+    prefix: isLoader ? 'load.sh' : `load.sh ${base}`,
+    dashes: !isLoader,
+    items,
+  }
+}
+
 function htmlEscape(s) {
   return s
     .replaceAll('&', '&amp;')
@@ -124,9 +213,10 @@ function makeComponentName(base) {
   return `Script_${safe}`
 }
 
-function buildComponentTsx({ title, bodyText, base }) {
+function buildComponentTsx({ title, bodyText, base, spec }) {
   const compName = makeComponentName(base)
   const escaped = bodyText || 'No header comments found.'
+  const specAttr = spec ? ` spec={${JSON.stringify(spec)}}` : ''
   return `// ------------------------------------------------------------------------------------
 // Auto-generated from public/scripts/${base}.sh — Do not edit.
 // ------------------------------------------------------------------------------------
@@ -147,7 +237,7 @@ export default function ${compName}() {
         </header>
         <Link to="/" className="text-accent hover:text-accent/80 transition-colors">← Home</Link>
         <h1 className="text-foreground" style={{fontSize: "1.5rem", margin: "1rem 0"}}>${title}</h1>
-        <InstallCommand command="load.sh ${base}" />
+        <InstallCommand command="load.sh ${base}"${specAttr} />
         <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem', marginTop: '1rem'}}>{` + "`" + escaped.replace(/`/g, '\\`') + "`" + `}</pre>
         <br/>
       </div>
@@ -194,7 +284,8 @@ async function generate() {
     // await fs.writeFile(outHtmlPath, html, 'utf8')
 
     // 2) Write a React component page
-    const componentTsx = buildComponentTsx({ title, bodyText: documentation, base })
+    const spec = parseUsageSpec(usage, base)
+    const componentTsx = buildComponentTsx({ title, bodyText: documentation, base, spec })
     const outCompPath = path.join(srcPagesScriptsDir, `${base}.tsx`)
     await fs.writeFile(outCompPath, componentTsx, 'utf8')
 

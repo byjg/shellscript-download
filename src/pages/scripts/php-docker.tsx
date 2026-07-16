@@ -18,7 +18,7 @@ export default function Script_php_docker() {
         </header>
         <Link to="/" className="text-accent hover:text-accent/80 transition-colors">← Home</Link>
         <h1 className="text-foreground" style={{fontSize: "1.5rem", margin: "1rem 0"}}>php-docker.sh</h1>
-        <InstallCommand command="load.sh php-docker" />
+        <InstallCommand command="load.sh php-docker" spec={{"prefix":"load.sh php-docker","dashes":true,"items":[{"kind":"arg","name":"php_version","required":true,"description":""},{"kind":"option","name":"--add","value":"packages","equals":false,"required":false,"description":"Install additional Alpine packages (comma-separated list)."},{"kind":"option","name":"--volume","value":"paths","equals":false,"required":false,"description":"Extra host directories to mount inside the container as"},{"kind":"option","name":"--manifest","value":null,"equals":false,"required":false,"description":"Print installation manifest and exit"}]}} />
         <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem', marginTop: '1rem'}}>{`php-docker.sh <php_version> [--add package1,package2,...] [--volume /path1,/path2,...] [--manifest]
 
 Installs Docker-backed wrappers for php and composer under $HOME/.shellscript/bin

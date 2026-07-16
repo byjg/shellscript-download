@@ -33,22 +33,22 @@ php-rest-api.sh <folder> --namespace=<name> --name=<name/name> [options]
 Installs byjg/rest-reference-architecture in unattended mode.
 
 Required Arguments:
-  <folder>          Target folder name where the project will be created
-  --namespace       Project namespace (CamelCase, e.g., MyApp, Tutorial)
-  --name            Composer package name (vendor/package, e.g., mycompany/myapp)
+  <folder>                  Target folder name where the project will be created
+  --namespace=<name>        Project namespace (CamelCase, e.g., MyApp, Tutorial)
+  --name=<vendor/package>   Composer package name (e.g., mycompany/myapp)
 
 Optional Arguments:
-  --mysql-uri       MySQL connection string
-                    (default values: schema=mysql, host=mysql-container,
-                     user=root, password=mysqlp455w0rd, dev db=localdev, test db=localtest)
-  --install-examples Install example code (Y or n, default: Y)
-  --version         Composer version constraint (default: ^6.0)
-  --php-version     PHP version for Docker (8.1-8.4, default: current)
-  --timezone        Server timezone (default: UTC)
-  --git-name        Git user name (default: from git config)
-  --git-email       Git user email (default: from git config)
-  --manifest        Print installation manifest and exit
-  -h, --help        Show this help and exit
+  --mysql-uri=<uri>         MySQL connection string
+                            (default values: schema=mysql, host=mysql-container,
+                             user=root, password=mysqlp455w0rd, dev db=localdev, test db=localtest)
+  --install-examples=<Y|n>  Install example code (default: Y)
+  --version=<constraint>    Composer version constraint (default: ^6.0)
+  --php-version=<version>   PHP version for Docker (8.1-8.4, default: current)
+  --timezone=<tz>           Server timezone (default: UTC)
+  --git-name=<name>         Git user name (default: from git config)
+  --git-email=<email>       Git user email (default: from git config)
+  --manifest                Print installation manifest and exit
+  -h, --help                Show this help and exit
 
 Examples:
   # Minimal installation
