@@ -167,9 +167,28 @@ require_vm_name() {
 
 port_free() { ! { exec 3<>"/dev/tcp/127.0.0.1/$1"; } 2>/dev/null || { exec 3>&-; return 1; }; }
 
+# Ports recorded in any VM's vm.conf (SSH, monitor, extra forwards) — reserved even
+# while that VM is stopped, so a stopped VM can always be started again later
+reserved_ports() {
+  local conf
+  for conf in "$VMS_DIR"/*/vm.conf; do
+    [[ -f "$conf" ]] || continue
+    (
+      # shellcheck disable=SC1090
+      source "$conf" 2>/dev/null || exit 0
+      printf '%s\n' "${VM_SSH_PORT:-}" "${VM_MONITOR_PORT:-}"
+      local p
+      for p in ${VM_PORTS:-}; do printf '%s\n' "${p%%:*}"; done
+    )
+  done | grep -v '^$' || true
+}
+
+port_reserved() { reserved_ports | grep -qx "$1"; }
+
+# Free means: not reserved by any VM's configuration AND not in use by the OS
 find_free_port() {
   local port="$1"
-  while ! port_free "$port"; do port=$((port + 1)); done
+  while port_reserved "$port" || ! port_free "$port"; do port=$((port + 1)); done
   printf '%s' "$port"
 }
 
@@ -482,8 +501,25 @@ boot_vm() {
     bios_args="-bios \"$fw\""
   fi
 
-  local net="user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:${VM_SSH_PORT}-:22"
+  # The VM's own forwarded ports must be free on the host before booting
   local p
+  for p in "$VM_SSH_PORT" ${VM_PORTS:-}; do
+    p="${p%%:*}"
+    if ! port_free "$p"; then
+      err "Port ${p} needed by VM '${name}' is in use on this host."
+      err "Stop whatever is using it, or edit ${conf} to pick another port."
+      exit 3
+    fi
+  done
+
+  # The monitor port is internal — if something took it, silently pick a new one
+  if ! port_free "$VM_MONITOR_PORT"; then
+    VM_MONITOR_PORT=$(find_free_port 45000)
+    sed -i "s/^VM_MONITOR_PORT=.*/VM_MONITOR_PORT=\"${VM_MONITOR_PORT}\"/" "$conf"
+    log "Monitor port was in use — moved to ${VM_MONITOR_PORT}."
+  fi
+
+  local net="user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:${VM_SSH_PORT}-:22"
   for p in ${VM_PORTS:-}; do
     net+=",hostfwd=tcp:127.0.0.1:${p%%:*}-:${p##*:}"
   done
@@ -558,6 +594,21 @@ cmd_start() {
   local dir
   dir=$(vm_dir "$name")
   [[ -d "$dir" ]] && { err "VM '${name}' already exists."; exit 3; }
+
+  # Explicitly requested ports must not collide with other VMs' configs or live listeners
+  local p host_ports=()
+  [[ -n "$SSH_PORT" ]] && host_ports+=("$SSH_PORT")
+  for p in ${EXTRA_PORTS[@]+"${EXTRA_PORTS[@]}"}; do host_ports+=("${p%%:*}"); done
+  for p in ${host_ports[@]+"${host_ports[@]}"}; do
+    if port_reserved "$p"; then
+      err "Port ${p} is already reserved by another VM (see: load.sh qemu -- list)"
+      exit 3
+    fi
+    if ! port_free "$p"; then
+      err "Port ${p} is already in use on this host."
+      exit 3
+    fi
+  done
 
   local ssh_port="${SSH_PORT:-$(find_free_port 2222)}"
   local monitor_port
