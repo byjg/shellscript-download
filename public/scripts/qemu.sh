@@ -668,7 +668,7 @@ PATTERNS
 }
 
 cmd_list() {
-  printf '%-20s %-9s %-9s %-8s %-5s %-6s %s\n' "NAME" "STATE" "ARCH" "MEMORY" "CPUS" "SSH" "IMAGE"
+  printf '%-20s %-9s %-9s %-8s %-5s %-6s %-8s %s\n' "NAME" "STATE" "ARCH" "MEMORY" "CPUS" "SSH" "MONITOR" "IMAGE"
   local dir name state
   for dir in "$VMS_DIR"/*/; do
     [[ -d "$dir" ]] || continue
@@ -678,7 +678,7 @@ cmd_list() {
     (
       # shellcheck disable=SC1091
       source "${dir}/vm.conf" 2>/dev/null || true
-      printf '%-20s %-9s %-9s %-8s %-5s %-6s %s\n' "$name" "$state" "${VM_ARCH:-$HOST_ARCH}" "${VM_MEMORY:-?}" "${VM_CPUS:-?}" "${VM_SSH_PORT:-?}" "$(basename "${VM_IMAGE:-?}")"
+      printf '%-20s %-9s %-9s %-8s %-5s %-6s %-8s %s\n' "$name" "$state" "${VM_ARCH:-$HOST_ARCH}" "${VM_MEMORY:-?}" "${VM_CPUS:-?}" "${VM_SSH_PORT:-?}" "${VM_MONITOR_PORT:-?}" "$(basename "${VM_IMAGE:-?}")"
     )
   done
 }
