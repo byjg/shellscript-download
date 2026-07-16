@@ -1,4 +1,5 @@
 import { Terminal, Container, Code, Server } from "lucide-react";
+import { CompatibilityModal } from "@/components/CompatibilityModal";
 import { InstallCommand } from "@/components/InstallCommand";
 import { InstructionStep } from "@/components/InstructionStep";
 import { ScriptCard } from "@/components/ScriptCard";
@@ -59,6 +60,9 @@ const Index = () => {
                   { label: "wget", command: '/bin/bash -c "$(wget -qO- https://shellscript.download/install/loader)"' },
                 ]}
               />
+              <div className="mt-2 text-right">
+                <CompatibilityModal />
+              </div>
             </div>
 
             <InstructionStep
