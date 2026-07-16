@@ -5,19 +5,18 @@ set -euo pipefail
 
 print_usage() {
   cat <<'USAGE'
-load.sh qemu -- [command] [options]
+load.sh qemu -- <command> [options]
 
-Installs QEMU (with its requirements, via the system package manager) and
-manages local QEMU/KVM virtual machines. Base images are cached under
+Manages local QEMU/KVM virtual machines. QEMU and its requirements are
+installed automatically whenever something is missing, via the system
+package manager (uses sudo). Base images are cached under
 $HOME/.shellscript/qemu/images and each VM lives in
 $HOME/.shellscript/qemu/vms/<name> with its own copy-on-write disk.
 Also installs a 'qemu-vm' launcher, so 'qemu-vm <command>' works directly.
+Uninstall everything with: load.sh remove -- qemu
 
 Commands:
-  install               Install QEMU and requirements if anything is missing (the default command)
-  uninstall             Remove the QEMU packages that this script installed (pre-existing ones are kept)
   start                 Create and boot a VM, or boot an existing stopped VM by name
-                        (installs QEMU first when needed)
   list                  List VMs and their state
   stop <name>           Gracefully stop a running VM (ACPI powerdown)
   remove <name>         Remove a VM and its disk
@@ -39,7 +38,6 @@ Options:
   --purge-image         remove: also delete the cached base image if unused
 
 Examples:
-  load.sh qemu
   load.sh qemu -- start --image ubuntu-24.04 --name dev1 --memory 2G --disk 10G
   load.sh qemu -- start --image https://example.com/disk.qcow2 --ssh-port 2222
   load.sh qemu -- start --name dev1
@@ -101,8 +99,6 @@ while [[ ${1-} ]]; do
   shift || true
 done
 
-# Like every other script in the catalog, running it with no command installs the tool
-[[ -n "$COMMAND" ]] || COMMAND="install"
 
 # Detect CPU architecture (VMs are host-native, no cross-arch emulation)
 case "$(uname -m)" in
@@ -182,11 +178,40 @@ missing_packages() {
   printf '%s' "${missing# }"
 }
 
+# Installs whatever is missing (packages, folders, launcher). Idempotent and
+# unconditional: every entry point that needs QEMU calls this first.
 ensure_qemu() {
-  if ! command -v "$QEMU_BIN" >/dev/null 2>&1 || ! command -v qemu-img >/dev/null 2>&1; then
-    log "QEMU is not installed yet — installing it first."
-    cmd_install
+  require_downloader
+  local pm
+  pm=$(detect_pm) || {
+    err "No supported package manager found (apt, dnf, pacman, zypper, apk)."
+    err "Install QEMU manually and re-run your command."
+    exit 3
+  }
+
+  local missing
+  missing=$(missing_packages "$pm")
+  if [[ -n "$missing" ]]; then
+    local sudo_cmd="sudo"
+    [[ "$(id -u)" == "0" ]] && sudo_cmd=""
+    log "Installing missing packages: ${missing}"
+    case "$pm" in
+      apt-get) run "${sudo_cmd} apt-get update && ${sudo_cmd} apt-get install -y ${missing}" ;;
+      dnf)     run "${sudo_cmd} dnf install -y ${missing}" ;;
+      pacman)  run "${sudo_cmd} pacman -S --noconfirm --needed ${missing}" ;;
+      zypper)  run "${sudo_cmd} zypper install -y ${missing}" ;;
+      apk)     run "${sudo_cmd} apk add ${missing}" ;;
+    esac
+    # Record what this script installed so 'load.sh remove -- qemu' only uninstalls those
+    if [[ "$DRY_RUN" != "1" ]]; then
+      mkdir -p "$QEMU_HOME"
+      printf '%s\n' ${missing} >> "${QEMU_HOME}/installed-packages.conf"
+      sort -u -o "${QEMU_HOME}/installed-packages.conf" "${QEMU_HOME}/installed-packages.conf"
+    fi
   fi
+
+  run "mkdir -p \"${IMAGES_DIR}\" \"${VMS_DIR}\""
+  ensure_wrapper
 }
 
 iso_tool() {
@@ -291,40 +316,9 @@ CFG
 
 # ---------- commands ----------
 
-cmd_install() {
-  require_downloader
-  local pm
-  pm=$(detect_pm) || {
-    err "No supported package manager found (apt, dnf, pacman, zypper, apk)."
-    err "Install QEMU manually and re-run your command."
-    exit 3
-  }
-
-  local missing
-  missing=$(missing_packages "$pm")
-  if [[ -z "$missing" ]]; then
-    log "QEMU and all requirements are already installed — nothing to install."
-  else
-    local sudo_cmd="sudo"
-    [[ "$(id -u)" == "0" ]] && sudo_cmd=""
-    log "Installing missing packages: ${missing}"
-    case "$pm" in
-      apt-get) run "${sudo_cmd} apt-get update && ${sudo_cmd} apt-get install -y ${missing}" ;;
-      dnf)     run "${sudo_cmd} dnf install -y ${missing}" ;;
-      pacman)  run "${sudo_cmd} pacman -S --noconfirm --needed ${missing}" ;;
-      zypper)  run "${sudo_cmd} zypper install -y ${missing}" ;;
-      apk)     run "${sudo_cmd} apk add ${missing}" ;;
-    esac
-    # Record what this script installed so 'load.sh remove -- qemu' only uninstalls those
-    if [[ "$DRY_RUN" != "1" ]]; then
-      mkdir -p "$QEMU_HOME"
-      printf '%s\n' ${missing} >> "${QEMU_HOME}/installed-packages.conf"
-      sort -u -o "${QEMU_HOME}/installed-packages.conf" "${QEMU_HOME}/installed-packages.conf"
-    fi
-  fi
-
-  run "mkdir -p \"${IMAGES_DIR}\" \"${VMS_DIR}\""
-  ensure_wrapper
+# Bare 'load.sh qemu' — install everything, report readiness
+cmd_setup() {
+  ensure_qemu
 
   if [[ -e /dev/kvm && ! -w /dev/kvm ]]; then
     log "Note: /dev/kvm exists but is not writable by you."
@@ -333,9 +327,11 @@ cmd_install() {
     log "Note: /dev/kvm not found — VMs will use software emulation (slow)."
   fi
 
-  log "Done. Try: qemu-vm start --image alpine-3.22"
+  log "QEMU is ready. Try: qemu-vm start --image alpine-3.22"
 }
 
+# Internal hook, not part of the user interface: executed by 'load.sh remove -- qemu'
+# through the UNINSTALL_CMD manifest key.
 cmd_uninstall() {
   # Stop any running VMs first
   local dir name
@@ -418,8 +414,6 @@ boot_vm() {
 
 cmd_start() {
   ensure_qemu
-  ensure_wrapper
-  run "mkdir -p \"$IMAGES_DIR\" \"$VMS_DIR\""
 
   local name="${NAME:-$VM_ARG}"
 
@@ -455,9 +449,13 @@ cmd_start() {
   fi
 
   if [[ -z "$name" ]]; then
-    name=$(basename "$base" | sed -E 's/\.(qcow2|img|iso|raw)$//' | tr -cd 'a-zA-Z0-9_-')
+    if [[ "$src" != "$IMAGE" ]]; then
+      name="$IMAGE"   # --image was an alias — use it as the VM name
+    else
+      name=$(basename "$base" | sed -E 's/\.(qcow2|img|iso|raw)$//' | tr -cd 'a-zA-Z0-9._-')
+    fi
   fi
-  [[ "$name" =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]*$ ]] || { err "Invalid VM name: ${name}"; exit 2; }
+  [[ "$name" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]] || { err "Invalid VM name: ${name}"; exit 2; }
 
   local dir
   dir=$(vm_dir "$name")
@@ -579,11 +577,11 @@ cmd_remove() {
 }
 
 case "$COMMAND" in
-  install)   cmd_install ;;
-  uninstall) cmd_uninstall ;;
+  "")        cmd_setup ;;
   start)     cmd_start ;;
   list)      cmd_list ;;
   stop)      cmd_stop ;;
   remove)    cmd_remove ;;
-  *) err "Unknown command: ${COMMAND} (expected: install, uninstall, start, list, stop, remove)"; exit 2 ;;
+  uninstall) cmd_uninstall ;;
+  *) err "Unknown command: ${COMMAND} (expected: start, list, stop, remove)"; exit 2 ;;
 esac
