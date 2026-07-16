@@ -250,13 +250,39 @@ resolve_alpine_url() {
 }
 
 resolve_fedora_url() {
-  # Fedora cloud image file names are versioned; resolve the newest from the mirror listing
-  local ver="$1"
-  local base="https://download.fedoraproject.org/pub/fedora/linux/releases/${ver}/Cloud/${QEMU_ARCH}/images"
-  local file
-  file=$(fetch "${base}/" | grep -oE 'Fedora-Cloud-Base-Generic[^"]*\.qcow2' | sort -uV | tail -1)
-  [[ -n "$file" ]] || return 1
-  printf '%s/%s' "$base" "$file"
+  # Fedora cloud image file names are versioned; resolve the newest from the primary
+  # server listing, falling back to the archive server for EOL releases
+  local ver="$1" base file
+  for base in \
+    "https://dl.fedoraproject.org/pub/fedora/linux/releases/${ver}/Cloud/${QEMU_ARCH}/images" \
+    "https://archives.fedoraproject.org/pub/archive/fedora/linux/releases/${ver}/Cloud/${QEMU_ARCH}/images"; do
+    file=$(fetch "${base}/" 2>/dev/null | grep -oE 'Fedora-Cloud-Base-Generic[^"]*\.qcow2' | sort -uV | tail -1)
+    if [[ -n "$file" ]]; then
+      printf '%s/%s' "$base" "$file"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Download a base image safely: write to a .part file so an interrupted or failed
+# transfer is never mistaken for a valid cached image, and retry transient failures.
+download_image() {
+  local url="$1" dest="$2" attempt
+  if [[ "$DRY_RUN" == "1" ]]; then
+    run "download \"${url}\" \"${dest}\""
+    return 0
+  fi
+  for attempt in 1 2 3; do
+    [[ "$attempt" -gt 1 ]] && log "Retrying download (attempt ${attempt}/3)..."
+    if download "$url" "${dest}.part"; then
+      mv "${dest}.part" "$dest"
+      return 0
+    fi
+  done
+  rm -f "${dest}.part"
+  err "Failed to download after 3 attempts: ${url}"
+  exit 3
 }
 
 resolve_image() {
@@ -477,7 +503,7 @@ cmd_start() {
       log "Using cached image: ${image_path}"
     else
       log "Downloading ${src}"
-      run "download \"${src}\" \"${image_path}\""
+      download_image "$src" "$image_path"
     fi
   else
     image_path=$(readlink -f "$src")
