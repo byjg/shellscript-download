@@ -96,7 +96,7 @@ if ! echo " $LTS_VERSIONS " | grep -q " $JAVA_VERSION "; then
 fi
 
 # Preconditions
-require_cmd curl
+require_downloader
 require_cmd jq
 require_cmd tar
 
@@ -124,7 +124,7 @@ if [[ -d "$INSTALL_DIR" && "$FORCE" != "1" ]]; then
 else
   # Resolve download URL via Adoptium API
   log "Resolving latest Java ${JAVA_VERSION} release from Adoptium API..."
-  DOWNLOAD_URL=$(curl -fsSL "$API_URL" | jq -r '.[0].binary.package.link // empty')
+  DOWNLOAD_URL=$(fetch "$API_URL" | jq -r '.[0].binary.package.link // empty')
 
   # Hardcoded fallback for EOL versions not available via Adoptium (hosted under AdoptOpenJDK)
   if [[ -z "$DOWNLOAD_URL" ]]; then
@@ -141,7 +141,7 @@ else
 
   # Download Java
   log "Downloading Java from ${DOWNLOAD_URL}"
-  run "curl -fsSL -o \"${TEMP_ARCHIVE}\" \"${DOWNLOAD_URL}\""
+  run "download \"${DOWNLOAD_URL}\" \"${TEMP_ARCHIVE}\""
 
   # Extract Java
   log "Extracting Java to ${INSTALL_DIR}"

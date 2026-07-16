@@ -104,7 +104,7 @@ if ! echo " $LTS_VERSIONS " | grep -q " $JAVA_VERSION "; then
 fi
 
 # Preconditions
-require_cmd curl
+require_downloader
 require_cmd tar
 
 # Configuration
@@ -132,7 +132,7 @@ if [[ -d "$INSTALL_DIR" && "$FORCE" != "1" ]]; then
 else
   # Download Java
   log "Downloading Java from ${DOWNLOAD_URL}"
-  run "curl -fsSL -o \"${TEMP_ARCHIVE}\" \"${DOWNLOAD_URL}\""
+  run "download \"${DOWNLOAD_URL}\" \"${TEMP_ARCHIVE}\""
 
   # Extract Java
   log "Extracting Java to ${INSTALL_DIR}"

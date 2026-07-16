@@ -11,14 +11,18 @@ When adding a new script to the project, follow these patterns:
 - Use strict mode: `set -euo pipefail` and `IFS=$'\n\t'`
 
 ### 2. Standard Helper Functions
-Every script should include these helper functions:
+Do NOT define these in scripts — load.sh injects them at runtime (`export -f`):
 ```bash
-log()  { printf "[<script-name>.sh] %s\n" "$*"; }
-err()  { printf "[<script-name>.sh][ERROR] %s\n" "$*" >&2; }
-run()  { if [[ "$DRY_RUN" == "1" ]]; then printf "[dry-run] %s\n" "$*"; else eval "$@"; fi }
-require_cmd() { command -v "$1" >/dev/null 2>&1 || { err "Required command '$1' not found"; exit 1; }; }
-print_usage() { cat <<'USAGE' ... USAGE }
+log "message"                  # prefixed stdout logging
+err "message"                  # prefixed stderr logging
+run "command"                  # honors --dry-run
+require_cmd <cmd>              # exit 1 if command missing
+fetch "<url>"                  # URL to stdout (curl, falls back to wget)
+download "<url>" "<dest>"      # URL to file (curl, falls back to wget)
+require_downloader             # exit 1 unless curl or wget is available
 ```
+Never call `curl` or `wget` directly in scripts — use `fetch`/`download` so both tools work.
+Each script defines only its own `print_usage() { cat <<'USAGE' ... USAGE }` (and `print_manifest`).
 
 ### 3. Standard Flags Support
 All scripts should support:

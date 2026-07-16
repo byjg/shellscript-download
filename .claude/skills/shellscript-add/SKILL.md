@@ -99,6 +99,11 @@ done
 
 **DO NOT define these — they are injected by load.sh at runtime:**
 - `log()`, `err()`, `run()`, `require_cmd()`
+- `fetch()` (URL → stdout), `download()` (URL → file), `require_downloader()`
+
+**DO NOT call `curl` or `wget` directly.** Use `fetch "<url>"` to read a URL to stdout and
+`download "<url>" "<dest>"` to save it to a file — both fall back from curl to wget
+automatically. Use `require_downloader` (not `require_cmd curl`) as the precondition check.
 
 **DO NOT hardcode `$HOME/.shellscript/...` paths.** Use the injected env vars:
 | Variable | Value |
@@ -115,12 +120,12 @@ done
 ### Binary download (the most common — see maven.sh for reference)
 
 ```bash
-require_cmd curl
+require_downloader
 require_cmd tar   # or unzip
 
 # Fetch latest version from GitHub if none given
 if [[ -z "$VERSION" ]]; then
-  VERSION=$(curl -fsSL https://api.github.com/repos/<owner>/<repo>/releases/latest \
+  VERSION=$(fetch https://api.github.com/repos/<owner>/<repo>/releases/latest \
     | grep '"tag_name"' | sed 's/.*"tag_name": *"v\?\(.*\)".*/\1/')
   log "Latest version: ${VERSION}"
 fi
@@ -132,7 +137,7 @@ TEMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
 log "Downloading ${URL}"
-run "curl -fsSL -o \"${TEMP_DIR}/${ARCHIVE}\" \"${URL}\""
+run "download \"${URL}\" \"${TEMP_DIR}/${ARCHIVE}\""
 run "mkdir -p \"${TOOL_HOME}\""
 run "tar -xzf \"${TEMP_DIR}/${ARCHIVE}\" -C \"${TEMP_DIR}\""
 run "rm -rf \"${TOOL_HOME}/current\""
@@ -174,12 +179,12 @@ log "Done. <name> ${VERSION} installed."
 ### Official installer script (see nvm.sh for reference)
 
 ```bash
-require_cmd curl
+require_downloader
 
-VERSION=$(curl -fsSL https://api.github.com/repos/<owner>/<repo>/releases/latest \
+VERSION=$(fetch https://api.github.com/repos/<owner>/<repo>/releases/latest \
   | grep '"tag_name"' | sed 's/.*"tag_name": *"\(.*\)".*/\1/')
 log "Installing <name> ${VERSION}"
-run "curl -fsSL https://...install.sh | bash"
+run "fetch https://...install.sh | bash"
 
 # Write init snippet
 if [[ "$DRY_RUN" == "1" ]]; then
@@ -344,7 +349,8 @@ If `npm run build` fails, check:
 - [ ] `--manifest` lists exactly what gets installed (for `remove.sh` compatibility)
 - [ ] `--dry-run` prints all actions without side effects
 - [ ] Paths use `$SHELLSCRIPT_*` variables, not hardcoded `$HOME/.shellscript/…`
-- [ ] No `log`, `err`, `run`, or `require_cmd` defined locally
+- [ ] No `log`, `err`, `run`, `require_cmd`, `fetch`, or `download` defined locally
+- [ ] No direct `curl`/`wget` calls — uses injected `fetch`/`download` helpers
 - [ ] File is executable in git (`git update-index --chmod=+x`)
 - [ ] `npm run build` completes without errors
 - [ ] Generated files in `src/pages/scripts/` and `src/generated/` are staged

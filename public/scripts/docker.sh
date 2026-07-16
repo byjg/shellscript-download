@@ -48,7 +48,7 @@ while [[ ${1-} ]]; do
 done
 
 # Preconditions
-require_cmd curl
+require_downloader
 if [[ $EUID -ne 0 ]]; then
   require_cmd sudo
 fi
@@ -67,7 +67,7 @@ run "mkdir -p \"$DEST_FOLDER\""
 INSTALLER="$DEST_FOLDER/get-docker.sh"
 if [[ ! -s "$INSTALLER" ]]; then
   log "Downloading Docker installer..."
-  run "curl -fsSL https://get.docker.com -o \"$INSTALLER\""
+  run "download https://get.docker.com \"$INSTALLER\""
 else
   log "Reusing existing installer: $INSTALLER"
 fi

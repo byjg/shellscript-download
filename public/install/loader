@@ -5,6 +5,18 @@
 
 set -eu
 
+# Download a URL to a file using curl or wget (whichever is available)
+download() {
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$1" -o "$2"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO "$2" "$1"
+  else
+    echo "Error: Neither curl nor wget is installed." >&2
+    return 3
+  fi
+}
+
 DEVELOPER=0
 
 while [ $# -gt 0 ]; do
@@ -109,8 +121,8 @@ mkdir -p "$HOME/.shellscript/bin"
 if [ "$DEVELOPER" = "1" ]; then
   cp "${SCRIPT_DIR}/../scripts/load.sh" "$HOME/.shellscript/bin/load.sh"
 else
-  if ! curl -fsSL "https://shellscript.download/scripts/load.sh" -o "$HOME/.shellscript/bin/load.sh"; then
-    echo "Error: Failed to download 'load.sh' using curl" >&2
+  if ! download "https://shellscript.download/scripts/load.sh" "$HOME/.shellscript/bin/load.sh"; then
+    echo "Error: Failed to download 'load.sh'" >&2
     exit 3
   fi
 fi
@@ -121,7 +133,7 @@ COMPLETION_DEST="$HOME/.shellscript/shellrc/01-load-completion.sh"
 if [ "$DEVELOPER" = "1" ]; then
   cp "${SCRIPT_DIR}/load-completion.sh" "$COMPLETION_DEST"
 else
-  curl -fsSL "https://shellscript.download/install/load-completion.sh" -o "$COMPLETION_DEST"
+  download "https://shellscript.download/install/load-completion.sh" "$COMPLETION_DEST"
 fi
 echo "✓ Bash completion installed!"
 

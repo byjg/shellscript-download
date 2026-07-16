@@ -51,12 +51,12 @@ while [[ ${1-} ]]; do
 done
 
 # Preconditions
-require_cmd curl
+require_downloader
 require_cmd tar
 
 # Resolve latest version if not specified
 if [[ -z "$MAVEN_VERSION" ]]; then
-  MAVEN_VERSION=$(curl -fsSL https://api.github.com/repos/apache/maven/releases/latest | grep '"tag_name"' | sed 's/.*"tag_name": *"maven-\(.*\)".*/\1/')
+  MAVEN_VERSION=$(fetch https://api.github.com/repos/apache/maven/releases/latest | grep '"tag_name"' | sed 's/.*"tag_name": *"maven-\(.*\)".*/\1/')
   log "Latest Maven version: ${MAVEN_VERSION}"
 fi
 
@@ -79,7 +79,7 @@ log "Installing Apache Maven ${MAVEN_VERSION}"
 
 # Download Maven
 log "Downloading Maven from ${DOWNLOAD_URL}"
-run "curl -fsSL -o \"${TEMP_DIR}/${MAVEN_ARCHIVE}\" \"${DOWNLOAD_URL}\""
+run "download \"${DOWNLOAD_URL}\" \"${TEMP_DIR}/${MAVEN_ARCHIVE}\""
 
 # Extract Maven
 log "Extracting Maven to ${MAVEN_HOME}"

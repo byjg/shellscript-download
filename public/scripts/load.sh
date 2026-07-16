@@ -272,7 +272,11 @@ log()         { printf "[%s] %s\n"        "$(basename "$0")" "$*"; }
 err()         { printf "[%s][ERROR] %s\n" "$(basename "$0")" "$*" >&2; }
 run()         { if [[ "${DRY_RUN:-0}" == "1" ]]; then printf "[dry-run] %s\n" "$*"; else bash -c "$@"; fi; }
 require_cmd() { command -v "$1" >/dev/null 2>&1 || { err "Required command '$1' not found"; exit 1; }; }
-export -f log err run require_cmd
+# Network helpers with curl -> wget fallback
+fetch()       { if command -v curl >/dev/null 2>&1; then curl -fsSL "$1"; else wget -qO- "$1"; fi; }
+download()    { if command -v curl >/dev/null 2>&1; then curl -fsSL -o "$2" "$1"; else wget -qO "$2" "$1"; fi; }
+require_downloader() { command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1 || { err "Required command 'curl' or 'wget' not found"; exit 1; }; }
+export -f log err run require_cmd fetch download require_downloader
 
 # Execute the script with passed arguments
 exec "${DEST_PATH}" "${ARGS[@]}"
