@@ -29,6 +29,8 @@ Options:
   --image <src>         start: image alias, URL, or local path (qcow2/raw/iso)
                         Alias patterns: ubuntu-<ver>, debian-<ver>, alpine-<ver>,
                         fedora-<ver>, rocky-<ver> — see the 'images' command
+  --arch <arch>         start: guest CPU architecture, x86_64 or aarch64 (default:
+                        host arch; a foreign arch uses slow software emulation)
   --name <name>         start: VM name (default: derived from the image)
   --memory <size>       start: RAM, e.g. 2048 or 2G (default: 2G)
   --disk <size>         start: disk size, e.g. 10G (default: 10G)
@@ -57,6 +59,7 @@ Files and customization:
 Examples:
   load.sh qemu -- start --image ubuntu-24.04 --name dev1 --memory 2G --disk 10G
   load.sh qemu -- start --image https://example.com/disk.qcow2 --ssh-port 2222
+  load.sh qemu -- start --image debian-12 --arch aarch64
   load.sh qemu -- start --name dev1
   load.sh qemu -- list
   load.sh qemu -- images
@@ -80,6 +83,7 @@ MANIFEST
 COMMAND=""
 VM_ARG=""
 IMAGE=""
+ARCH_OPT=""
 NAME=""
 MEMORY="2G"
 DISK="10G"
@@ -97,6 +101,7 @@ while [[ ${1-} ]]; do
     --manifest)      print_manifest; exit 0 ;;
     --dry-run)       DRY_RUN=1 ;;
     --image)         shift || { err "--image requires a value"; exit 2; }; IMAGE="$1" ;;
+    --arch)          shift || { err "--arch requires a value"; exit 2; }; ARCH_OPT="$1" ;;
     --name)          shift || { err "--name requires a value"; exit 2; }; NAME="$1" ;;
     --memory)        shift || { err "--memory requires a value"; exit 2; }; MEMORY="$1" ;;
     --disk)          shift || { err "--disk requires a value"; exit 2; }; DISK="$1" ;;
@@ -118,11 +123,19 @@ while [[ ${1-} ]]; do
 done
 
 
-# Detect CPU architecture (VMs are host-native, no cross-arch emulation)
+# Host CPU architecture
 case "$(uname -m)" in
-  x86_64|amd64)  QEMU_ARCH="x86_64" ;;
-  aarch64|arm64) QEMU_ARCH="aarch64" ;;
+  x86_64|amd64)  HOST_ARCH="x86_64" ;;
+  aarch64|arm64) HOST_ARCH="aarch64" ;;
   *) err "Unsupported architecture: $(uname -m) (supported: x86_64, aarch64)"; exit 1 ;;
+esac
+
+# Guest architecture: host-native by default; --arch enables cross-arch emulation
+case "${ARCH_OPT}" in
+  "")                   QEMU_ARCH="$HOST_ARCH" ;;
+  x86_64|x86|amd64)     QEMU_ARCH="x86_64" ;;
+  aarch64|arm64|arm)    QEMU_ARCH="aarch64" ;;
+  *) err "Unsupported --arch: ${ARCH_OPT} (supported: x86_64, aarch64)"; exit 2 ;;
 esac
 QEMU_BIN="qemu-system-${QEMU_ARCH}"
 
@@ -448,20 +461,24 @@ boot_vm() {
   conf="${dir}/vm.conf"
   # shellcheck disable=SC1090
   source "$conf"
+  local vm_arch="${VM_ARCH:-$HOST_ARCH}"
+  local qemu_bin="qemu-system-${vm_arch}"
 
   local accel_args="-cpu max"
-  if [[ -w /dev/kvm ]]; then
+  if [[ "$vm_arch" == "$HOST_ARCH" && -w /dev/kvm ]]; then
     accel_args="-enable-kvm -cpu host"
+  elif [[ "$vm_arch" != "$HOST_ARCH" ]]; then
+    log "Cross-architecture VM (${vm_arch} guest on ${HOST_ARCH} host) — software emulation, expect it to be slow."
   else
     log "Warning: /dev/kvm not accessible — using software emulation (slow)."
   fi
 
   local machine_args="-machine q35"
   local bios_args=""
-  if [[ "$QEMU_ARCH" == "aarch64" ]]; then
+  if [[ "$vm_arch" == "aarch64" ]]; then
     machine_args="-machine virt"
     local fw
-    fw=$(aarch64_firmware) || { err "No aarch64 UEFI firmware found. Run: load.sh qemu -- install"; exit 3; }
+    fw=$(aarch64_firmware) || { err "No aarch64 UEFI firmware found. Run: load.sh qemu"; exit 3; }
     bios_args="-bios \"$fw\""
   fi
 
@@ -476,7 +493,7 @@ boot_vm() {
   [[ -n "${VM_CDROM:-}" ]] && cdrom_args="-cdrom \"${VM_CDROM}\""
   [[ -f "${dir}/seed.iso" ]] && cdrom_args+=" -drive file=\"${dir}/seed.iso\",media=cdrom"
 
-  run "${QEMU_BIN} ${accel_args} ${machine_args} ${bios_args} \
+  run "${qemu_bin} ${accel_args} ${machine_args} ${bios_args} \
     -name \"${name}\" -m \"${VM_MEMORY}\" -smp \"${VM_CPUS}\" \
     ${drive_args} ${cdrom_args} \
     -nic \"${net}\" \
@@ -490,17 +507,21 @@ boot_vm() {
 }
 
 cmd_start() {
-  ensure_qemu
-
   local name="${NAME:-$VM_ARG}"
 
   # Boot an existing stopped VM by name
   if [[ -n "$name" && -d "$(vm_dir "$name")" ]]; then
     if is_running "$name"; then err "VM '${name}' is already running."; exit 3; fi
     if [[ -n "$IMAGE" ]]; then err "VM '${name}' already exists — start it without --image, or remove it first."; exit 2; fi
+    # Ensure the emulator for this VM's stored architecture, not the host's
+    QEMU_ARCH=$( (source "$(vm_dir "$name")/vm.conf" >/dev/null 2>&1 && printf '%s' "${VM_ARCH:-$HOST_ARCH}") || printf '%s' "$HOST_ARCH" )
+    QEMU_BIN="qemu-system-${QEMU_ARCH}"
+    ensure_qemu
     boot_vm "$name"
     return
   fi
+
+  ensure_qemu
 
   if [[ -z "$IMAGE" ]]; then
     err "--image is required to create a new VM (aliases: ubuntu-24.04, debian-12, alpine-3.22)"
@@ -563,6 +584,7 @@ cmd_start() {
 
   cat >"${dir}/vm.conf" <<CONF
 VM_IMAGE="${image_path}"
+VM_ARCH="${QEMU_ARCH}"
 VM_MEMORY="${MEMORY}"
 VM_CPUS="${CPUS}"
 VM_SSH_PORT="${ssh_port}"
@@ -595,7 +617,7 @@ PATTERNS
 }
 
 cmd_list() {
-  printf '%-20s %-9s %-8s %-5s %-6s %s\n' "NAME" "STATE" "MEMORY" "CPUS" "SSH" "IMAGE"
+  printf '%-20s %-9s %-9s %-8s %-5s %-6s %s\n' "NAME" "STATE" "ARCH" "MEMORY" "CPUS" "SSH" "IMAGE"
   local dir name state
   for dir in "$VMS_DIR"/*/; do
     [[ -d "$dir" ]] || continue
@@ -605,7 +627,7 @@ cmd_list() {
     (
       # shellcheck disable=SC1091
       source "${dir}/vm.conf" 2>/dev/null || true
-      printf '%-20s %-9s %-8s %-5s %-6s %s\n' "$name" "$state" "${VM_MEMORY:-?}" "${VM_CPUS:-?}" "${VM_SSH_PORT:-?}" "$(basename "${VM_IMAGE:-?}")"
+      printf '%-20s %-9s %-9s %-8s %-5s %-6s %s\n' "$name" "$state" "${VM_ARCH:-$HOST_ARCH}" "${VM_MEMORY:-?}" "${VM_CPUS:-?}" "${VM_SSH_PORT:-?}" "$(basename "${VM_IMAGE:-?}")"
     )
   done
 }
