@@ -53,6 +53,21 @@ Options:
   --force               stop: kill immediately; remove: remove even if running
   --purge-image         remove: also delete the cached base image if unused
 
+Files and customization:
+  $HOME/.shellscript/qemu/images/        Downloaded base images. Shared read-only backing
+                                         files — do not delete one while a VM still uses it
+                                         ('remove --purge-image' checks this for you).
+  $HOME/.shellscript/qemu/vms/<name>/    One folder per VM:
+    vm.conf      Memory, CPUs, SSH/extra ports, image reference. Edit while the
+                 VM is stopped; values apply on the next 'start <name>'.
+    disk.qcow2   The VM's private copy-on-write disk, backed by the base image.
+    user-data    cloud-init config (default user, password, SSH keys). Applied on
+                 the VM's FIRST boot only — to customize it, create the VM, stop
+                 it, edit user-data, regenerate seed.iso (genisoimage -output
+                 seed.iso -volid cidata -joliet -rock user-data meta-data) and
+                 change instance-id in meta-data so cloud-init runs again.
+    seed.iso     The generated cloud-init seed attached as a CD-ROM.
+
 Examples:
   load.sh qemu -- start --image ubuntu-24.04 --name dev1 --memory 2G --disk 10G
   load.sh qemu -- start --image https://example.com/disk.qcow2 --ssh-port 2222
