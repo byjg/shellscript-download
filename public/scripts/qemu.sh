@@ -18,6 +18,7 @@ Uninstall everything with: load.sh remove -- qemu
 Commands:
   start                 Create and boot a VM, or boot an existing stopped VM by name
   list                  List VMs and their state
+  images                Show image alias patterns and cached base images
   stop <name>           Gracefully stop a running VM (ACPI powerdown)
   remove <name>         Remove a VM and its disk
 
@@ -26,7 +27,8 @@ Options:
   --manifest            Print installation manifest and exit
   --dry-run             Print actions without executing them
   --image <src>         start: image alias, URL, or local path (qcow2/raw/iso)
-                        Aliases: ubuntu-24.04, debian-12, alpine-3.22
+                        Alias patterns: ubuntu-<ver>, debian-<ver>, alpine-<ver>,
+                        fedora-<ver>, rocky-<ver> — see the 'images' command
   --name <name>         start: VM name (default: derived from the image)
   --memory <size>       start: RAM, e.g. 2048 or 2G (default: 2G)
   --disk <size>         start: disk size, e.g. 10G (default: 10G)
@@ -42,6 +44,7 @@ Examples:
   load.sh qemu -- start --image https://example.com/disk.qcow2 --ssh-port 2222
   load.sh qemu -- start --name dev1
   load.sh qemu -- list
+  load.sh qemu -- images
   load.sh qemu -- stop dev1
   load.sh qemu -- remove dev1 --purge-image
   load.sh remove -- qemu
@@ -246,16 +249,49 @@ resolve_alpine_url() {
   printf '%s/%s' "$base" "$file"
 }
 
+resolve_fedora_url() {
+  # Fedora cloud image file names are versioned; resolve the newest from the mirror listing
+  local ver="$1"
+  local base="https://download.fedoraproject.org/pub/fedora/linux/releases/${ver}/Cloud/${QEMU_ARCH}/images"
+  local file
+  file=$(fetch "${base}/" | grep -oE 'Fedora-Cloud-Base-Generic[^"]*\.qcow2' | sort -uV | tail -1)
+  [[ -n "$file" ]] || return 1
+  printf '%s/%s' "$base" "$file"
+}
+
 resolve_image() {
-  # alias -> URL; URL/path passed through
-  local ubuntu_arch="amd64" debian_arch="amd64"
-  if [[ "$QEMU_ARCH" == "aarch64" ]]; then ubuntu_arch="arm64"; debian_arch="arm64"; fi
+  # '<distro>-<version>' alias pattern -> official cloud image URL; URL/path passed through
+  local ver codename deb_arch="amd64"
+  [[ "$QEMU_ARCH" == "aarch64" ]] && deb_arch="arm64"
   case "$1" in
-    ubuntu-24.04) printf 'https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-%s.img' "$ubuntu_arch" ;;
-    debian-12)    printf 'https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-%s.qcow2' "$debian_arch" ;;
-    alpine-3.22)  resolve_alpine_url "3.22" || { err "Could not resolve the latest alpine-3.22 cloud image"; exit 3; } ;;
-    http://*|https://*|/*|./*|../*) printf '%s' "$1" ;;
-    *) err "Unknown image alias or path: $1 (aliases: ubuntu-24.04, debian-12, alpine-3.22)"; exit 2 ;;
+    ubuntu-*)
+      ver="${1#ubuntu-}"
+      printf 'https://cloud-images.ubuntu.com/releases/%s/release/ubuntu-%s-server-cloudimg-%s.img' "$ver" "$ver" "$deb_arch" ;;
+    debian-*)
+      ver="${1#debian-}"
+      case "$ver" in
+        11) codename="bullseye" ;;
+        12) codename="bookworm" ;;
+        13) codename="trixie" ;;
+        *) err "Unknown Debian version: ${ver} (known: 11, 12, 13)"; exit 2 ;;
+      esac
+      printf 'https://cloud.debian.org/images/cloud/%s/latest/debian-%s-genericcloud-%s.qcow2' "$codename" "$ver" "$deb_arch" ;;
+    alpine-*)
+      ver="${1#alpine-}"
+      resolve_alpine_url "$ver" || { err "Could not resolve the latest alpine-${ver} cloud image"; exit 3; } ;;
+    fedora-*)
+      ver="${1#fedora-}"
+      resolve_fedora_url "$ver" || { err "Could not resolve the latest fedora-${ver} cloud image"; exit 3; } ;;
+    rocky-*)
+      ver="${1#rocky-}"
+      printf 'https://dl.rockylinux.org/pub/rocky/%s/images/%s/Rocky-%s-GenericCloud-Base.latest.%s.qcow2' "$ver" "$QEMU_ARCH" "$ver" "$QEMU_ARCH" ;;
+    http://*|https://*|/*|./*|../*)
+      printf '%s' "$1" ;;
+    *)
+      err "Unknown image alias or path: $1"
+      err "Alias patterns: ubuntu-<version>, debian-<version>, alpine-<version>, fedora-<version>, rocky-<version>"
+      err "Run 'load.sh qemu -- images' to see them, or pass a URL / local file."
+      exit 2 ;;
   esac
 }
 
@@ -497,6 +533,26 @@ CONF
   boot_vm "$name"
 }
 
+cmd_images() {
+  cat <<PATTERNS
+Image alias patterns (resolved to official cloud images for ${QEMU_ARCH}):
+  ubuntu-<version>   Ubuntu cloud image     e.g. ubuntu-24.04, ubuntu-22.04
+  debian-<version>   Debian generic cloud   e.g. debian-12, debian-13
+  alpine-<version>   Alpine nocloud image   e.g. alpine-3.22, alpine-3.21
+  fedora-<version>   Fedora Cloud Base      e.g. fedora-42
+  rocky-<version>    Rocky GenericCloud     e.g. rocky-9, rocky-10
+
+Any http(s) URL or local path to a qcow2/img/iso file also works.
+
+PATTERNS
+  printf 'Cached base images (%s):\n' "$IMAGES_DIR"
+  if [[ -d "$IMAGES_DIR" ]] && [[ -n "$(ls -A "$IMAGES_DIR" 2>/dev/null)" ]]; then
+    du -h "$IMAGES_DIR"/* 2>/dev/null | sed 's/^/  /'
+  else
+    printf '  (none)\n'
+  fi
+}
+
 cmd_list() {
   printf '%-20s %-9s %-8s %-5s %-6s %s\n' "NAME" "STATE" "MEMORY" "CPUS" "SSH" "IMAGE"
   local dir name state
@@ -580,8 +636,9 @@ case "$COMMAND" in
   "")        cmd_setup ;;
   start)     cmd_start ;;
   list)      cmd_list ;;
+  images)    cmd_images ;;
   stop)      cmd_stop ;;
   remove)    cmd_remove ;;
   uninstall) cmd_uninstall ;;
-  *) err "Unknown command: ${COMMAND} (expected: start, list, stop, remove)"; exit 2 ;;
+  *) err "Unknown command: ${COMMAND} (expected: start, list, images, stop, remove)"; exit 2 ;;
 esac

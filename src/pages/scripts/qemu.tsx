@@ -32,6 +32,7 @@ Uninstall everything with: load.sh remove -- qemu
 Commands:
   start                 Create and boot a VM, or boot an existing stopped VM by name
   list                  List VMs and their state
+  images                Show image alias patterns and cached base images
   stop <name>           Gracefully stop a running VM (ACPI powerdown)
   remove <name>         Remove a VM and its disk
 
@@ -40,7 +41,8 @@ Options:
   --manifest            Print installation manifest and exit
   --dry-run             Print actions without executing them
   --image <src>         start: image alias, URL, or local path (qcow2/raw/iso)
-                        Aliases: ubuntu-24.04, debian-12, alpine-3.22
+                        Alias patterns: ubuntu-<ver>, debian-<ver>, alpine-<ver>,
+                        fedora-<ver>, rocky-<ver> — see the 'images' command
   --name <name>         start: VM name (default: derived from the image)
   --memory <size>       start: RAM, e.g. 2048 or 2G (default: 2G)
   --disk <size>         start: disk size, e.g. 10G (default: 10G)
@@ -56,6 +58,7 @@ Examples:
   load.sh qemu -- start --image https://example.com/disk.qcow2 --ssh-port 2222
   load.sh qemu -- start --name dev1
   load.sh qemu -- list
+  load.sh qemu -- images
   load.sh qemu -- stop dev1
   load.sh qemu -- remove dev1 --purge-image
   load.sh remove -- qemu
