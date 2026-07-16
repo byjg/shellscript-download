@@ -30,8 +30,9 @@ done
 # Resolve the directory this script lives in (for --developer relative paths)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Determine shell and candidate rc files
-SHELL_NAME=${SHELL##*/}
+# Determine shell and candidate rc files ($SHELL may be unset, e.g. in containers)
+SHELL_NAME=${SHELL:-}
+SHELL_NAME=${SHELL_NAME##*/}
 case "$SHELL_NAME" in
   bash) RC_CANDIDATES=".bashrc .bash_profile .profile" ;;
   zsh)  RC_CANDIDATES=".zshrc .zprofile .profile" ;;

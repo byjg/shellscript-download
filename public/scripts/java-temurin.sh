@@ -8,7 +8,7 @@ print_usage() {
   cat <<'USAGE'
 load.sh java-temurin -- [options]
 
-Downloads and installs Eclipse Temurin (Adoptium) OpenJDK binary distribution for x86_64 Linux.
+Downloads and installs Eclipse Temurin (Adoptium) OpenJDK binary distribution for x86_64 and aarch64 Linux.
 Uses the Adoptium API to resolve the latest patch release for the requested major version.
 
 Options:
@@ -100,11 +100,18 @@ require_downloader
 require_cmd jq
 require_cmd tar
 
+# Detect CPU architecture
+case "$(uname -m)" in
+  x86_64|amd64)  JAVA_ARCH="x64" ;;
+  aarch64|arm64) JAVA_ARCH="aarch64" ;;
+  *) err "Unsupported architecture: $(uname -m) (supported: x86_64, aarch64)"; exit 1 ;;
+esac
+
 # Configuration
 JAVA_HOME_BASE="${SHELLSCRIPT_HOME}/java-temurin"
 SHELLRC_DIR="${SHELLSCRIPT_SHELLRC}"
 
-API_URL="https://api.adoptium.net/v3/assets/latest/${JAVA_VERSION}/hotspot?architecture=x64&image_type=jdk&os=linux&vendor=eclipse"
+API_URL="https://api.adoptium.net/v3/assets/latest/${JAVA_VERSION}/hotspot?architecture=${JAVA_ARCH}&image_type=jdk&os=linux&vendor=eclipse"
 
 TEMP_ARCHIVE="/tmp/temurin.tar.gz"
 
@@ -126,8 +133,8 @@ else
   log "Resolving latest Java ${JAVA_VERSION} release from Adoptium API..."
   DOWNLOAD_URL=$(fetch "$API_URL" | jq -r '.[0].binary.package.link // empty')
 
-  # Hardcoded fallback for EOL versions not available via Adoptium (hosted under AdoptOpenJDK)
-  if [[ -z "$DOWNLOAD_URL" ]]; then
+  # Hardcoded fallback for EOL versions not available via Adoptium (hosted under AdoptOpenJDK, x64 only)
+  if [[ -z "$DOWNLOAD_URL" && "$JAVA_ARCH" == "x64" ]]; then
     case "$JAVA_VERSION" in
       14) DOWNLOAD_URL="https://github.com/AdoptOpenJDK/openjdk14-binaries/releases/download/jdk-14.0.2%2B12/OpenJDK14U-jdk_x64_linux_hotspot_14.0.2_12.tar.gz" ;;
     esac

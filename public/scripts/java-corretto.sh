@@ -8,7 +8,7 @@ print_usage() {
   cat <<'USAGE'
 load.sh java-corretto -- [options]
 
-Downloads and installs Amazon Corretto OpenJDK binary distribution for x86_64 Linux.
+Downloads and installs Amazon Corretto OpenJDK binary distribution for x86_64 and aarch64 Linux.
 
 Options:
   -h, --help           Show this help and exit
@@ -101,12 +101,19 @@ fi
 require_downloader
 require_cmd tar
 
+# Detect CPU architecture
+case "$(uname -m)" in
+  x86_64|amd64)  JAVA_ARCH="x64" ;;
+  aarch64|arm64) JAVA_ARCH="aarch64" ;;
+  *) err "Unsupported architecture: $(uname -m) (supported: x86_64, aarch64)"; exit 1 ;;
+esac
+
 # Configuration
 JAVA_HOME_BASE="${SHELLSCRIPT_HOME}/java-corretto"
 SHELLRC_DIR="${SHELLSCRIPT_SHELLRC}"
 
 # Build download URL
-DOWNLOAD_URL="https://corretto.aws/downloads/latest/amazon-corretto-${JAVA_VERSION}-x64-linux-jdk.tar.gz"
+DOWNLOAD_URL="https://corretto.aws/downloads/latest/amazon-corretto-${JAVA_VERSION}-${JAVA_ARCH}-linux-jdk.tar.gz"
 
 TEMP_ARCHIVE="/tmp/corretto.tar.gz"
 
