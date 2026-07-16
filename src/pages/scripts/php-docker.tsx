@@ -26,9 +26,10 @@ using the byjg/php:<version>-cli image.
 
 Options:
   --add <packages>      Install additional Alpine packages (comma-separated list).
-                        Saved to $HOME/.shellscript/php/packages.conf and re-applied
-                        on every install/update, with phpNN- prefixes rewritten to
-                        the target version (php83-gd becomes php85-gd on 8.5).
+                        Saved to $HOME/.shellscript/php/packages.conf and 
+                        re-applied on every install/update, with phpNN- prefixes 
+                        rewritten to the target version (php83-gd becomes php85-gd
+                        on 8.5).
                         Example: --add php83-gd,php83-intl,git,bash
   --volume <paths>      Extra host directories to mount inside the container as
                         <path>:<path> (comma-separated list). Saved to
