@@ -8,20 +8,22 @@ _load_sh_completion() {
   cur="${COMP_WORDS[COMP_CWORD]}"
 
   if [[ $COMP_CWORD -eq 1 ]]; then
-    mapfile -t COMPREPLY < <(compgen -W "--completion --developer --dont-run --help --list --update -h docker java-corretto java-oracle java-temurin maven node-docker nvm php-docker php-rest-api" -- "$cur")
+    mapfile -t COMPREPLY < <(compgen -W "--completion --developer --dont-run --help --list --update -h ant docker java-corretto java-oracle java-temurin maven node-docker nvm php-docker php-rest-api ssh-agent" -- "$cur")
     return
   fi
 
   case "${COMP_WORDS[1]}" in
+    ant) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --manifest --version -h" -- "$cur") ;;
     docker) mapfile -t COMPREPLY < <(compgen -W "--channel --dry-run --help --manifest --no-group -h" -- "$cur") ;;
-    java-corretto) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --manifest --version -h" -- "$cur") ;;
-    java-oracle) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --manifest --version -h" -- "$cur") ;;
-    java-temurin) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --manifest --version -h" -- "$cur") ;;
+    java-corretto) mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --help --manifest --version --yes -h -y" -- "$cur") ;;
+    java-oracle) mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --help --manifest --version --yes -h -y" -- "$cur") ;;
+    java-temurin) mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --help --manifest --version --yes -h -y" -- "$cur") ;;
     maven) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --manifest --version -h" -- "$cur") ;;
     node-docker) mapfile -t COMPREPLY < <(compgen -W "--manifest" -- "$cur") ;;
     nvm) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --manifest -h" -- "$cur") ;;
-    php-docker) mapfile -t COMPREPLY < <(compgen -W "--add --manifest" -- "$cur") ;;
+    php-docker) mapfile -t COMPREPLY < <(compgen -W "--add --manifest --volume" -- "$cur") ;;
     php-rest-api) mapfile -t COMPREPLY < <(compgen -W "--git-email --git-name --help --install-examples --manifest --mysql-uri --name --namespace --php-version --timezone --version -h" -- "$cur") ;;
+    ssh-agent) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --key --manifest -h" -- "$cur") ;;
     *) COMPREPLY=() ;;
   esac
 }

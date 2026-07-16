@@ -9,10 +9,15 @@ print_usage() {
 load.sh java-temurin -- [options]
 
 Downloads and installs Eclipse Temurin (Adoptium) OpenJDK binary distribution for x86_64 Linux.
+Uses the Adoptium API to resolve the latest patch release for the requested major version.
 
 Options:
   -h, --help           Show this help and exit
-  --version <version>  Java major version to install: 25, 21, 17, 11, or 8 (default: 21)
+  --version <version>  Java major version to install (default: 21)
+                       LTS versions: 8, 11, 17, 21, 25
+                       Non-LTS versions require confirmation (or --yes)
+  --yes, -y            Skip confirmation for non-LTS versions
+  --force              Re-download even if already installed
   --dry-run            Print actions without executing them
   --manifest [--version <version>]
                        Print installation manifest and exit
@@ -22,6 +27,7 @@ Options:
 Examples:
   load.sh java-temurin
   load.sh java-temurin -- --version 17
+  load.sh java-temurin -- --version 14 --yes
   load.sh java-temurin -- --dry-run
   load.sh java-temurin -- --manifest --version 17
 USAGE
@@ -31,11 +37,10 @@ print_manifest() {
   local version="/$1"
 
   if [[ "$version" == "/all" ]]; then
-    # Remove all versions
     version=""
   fi
 
-    cat <<MANIFEST
+  cat <<MANIFEST
 FOLDERS=\$HOME/.shellscript/java-temurin${version}
 SHELLRC_FILE=\$HOME/.shellscript/shellrc/java-temurin-init.sh
 MANIFEST
@@ -46,14 +51,16 @@ DRY_RUN=0
 JAVA_VERSION="21"
 MANIFEST_MODE=0
 MANIFEST_VERSION="all"
+YES=0
+FORCE=0
 
 while [[ ${1-} ]]; do
   case "$1" in
     -h|--help) print_usage; exit 0 ;;
-    --manifest)
-      MANIFEST_MODE=1
-      ;;
+    --manifest) MANIFEST_MODE=1 ;;
     --dry-run) DRY_RUN=1 ;;
+    -y|--yes) YES=1 ;;
+    --force) FORCE=1 ;;
     --version)
       shift || { err "--version requires a value"; exit 2; }
       JAVA_VERSION="$1"
@@ -72,44 +79,33 @@ if [[ "$MANIFEST_MODE" == "1" ]]; then
   exit 0
 fi
 
+# Warn for non-LTS versions
+LTS_VERSIONS="8 11 17 21 25"
+if ! echo " $LTS_VERSIONS " | grep -q " $JAVA_VERSION "; then
+  if [[ "$YES" == "1" ]]; then
+    log "WARNING: Java ${JAVA_VERSION} is not an LTS version (--yes passed, skipping confirmation)."
+  else
+    log "WARNING: Java ${JAVA_VERSION} is not an LTS version and may be EOL or unsupported."
+    printf "[java-temurin.sh] Are you sure you want to install it? [y/N] "
+    read -r CONFIRM
+    if [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]]; then
+      log "Aborted."
+      exit 0
+    fi
+  fi
+fi
+
 # Preconditions
 require_cmd curl
+require_cmd jq
 require_cmd tar
 
 # Configuration
 JAVA_HOME_BASE="${SHELLSCRIPT_HOME}/java-temurin"
 SHELLRC_DIR="${SHELLSCRIPT_SHELLRC}"
 
-# Build download URL based on version
-# Pattern: https://github.com/adoptium/temurin${VERSION}-binaries/releases/download/${RELEASE_PATH}
-case "$JAVA_VERSION" in
-  25)
-    RELEASE_PATH="jdk-25.0.2%2B10/OpenJDK25U-jdk_x64_linux_hotspot_25.0.2_10.tar.gz"
-    EXTRACTED_DIR="jdk-25.0.2+10"
-    ;;
-  21)
-    RELEASE_PATH="jdk-21.0.10%2B7/OpenJDK21U-jdk_x64_linux_hotspot_21.0.10_7.tar.gz"
-    EXTRACTED_DIR="jdk-21.0.10+7"
-    ;;
-  17)
-    RELEASE_PATH="jdk-17.0.18%2B8/OpenJDK17U-jdk_x64_linux_hotspot_17.0.18_8.tar.gz"
-    EXTRACTED_DIR="jdk-17.0.18+8"
-    ;;
-  11)
-    RELEASE_PATH="jdk-11.0.30%2B7/OpenJDK11U-jdk_x64_linux_hotspot_11.0.30_7.tar.gz"
-    EXTRACTED_DIR="jdk-11.0.30+7"
-    ;;
-  8)
-    RELEASE_PATH="jdk8u482-b08/OpenJDK8U-jdk_x64_linux_hotspot_8u482b08.tar.gz"
-    EXTRACTED_DIR="jdk8u482-b08"
-    ;;
-  *)
-    err "Unsupported Java version: ${JAVA_VERSION}. Supported versions: 25, 21, 17, 11, 8"
-    exit 1
-    ;;
-esac
+API_URL="https://api.adoptium.net/v3/assets/latest/${JAVA_VERSION}/hotspot?architecture=x64&image_type=jdk&os=linux&vendor=eclipse"
 
-DOWNLOAD_URL="https://github.com/adoptium/temurin${JAVA_VERSION}-binaries/releases/download/${RELEASE_PATH}"
 TEMP_ARCHIVE="/tmp/temurin.tar.gz"
 
 cleanup() {
@@ -121,20 +117,54 @@ trap cleanup EXIT
 
 log "Installing Eclipse Temurin Java ${JAVA_VERSION}"
 
-# Download Java
-log "Downloading Java from ${DOWNLOAD_URL}"
-run "curl -fsSL -o \"${TEMP_ARCHIVE}\" \"${DOWNLOAD_URL}\""
-
-# Extract Java
 INSTALL_DIR="${JAVA_HOME_BASE}/${JAVA_VERSION}"
-log "Extracting Java to ${INSTALL_DIR}"
-run "mkdir -p \"${JAVA_HOME_BASE}\""
-if [[ "$DRY_RUN" != "1" ]]; then
-  tar -xzf "${TEMP_ARCHIVE}" -C "${JAVA_HOME_BASE}"
-  rm -rf "${INSTALL_DIR}"
-  mv "${JAVA_HOME_BASE}/${EXTRACTED_DIR}" "${INSTALL_DIR}"
+
+if [[ -d "$INSTALL_DIR" && "$FORCE" != "1" ]]; then
+  log "Java ${JAVA_VERSION} is already installed at ${INSTALL_DIR}. Skipping download (use --force to re-download)."
 else
-  log "[dry-run] Would extract to ${INSTALL_DIR}"
+  # Resolve download URL via Adoptium API
+  log "Resolving latest Java ${JAVA_VERSION} release from Adoptium API..."
+  DOWNLOAD_URL=$(curl -fsSL "$API_URL" | jq -r '.[0].binary.package.link // empty')
+
+  # Hardcoded fallback for EOL versions not available via Adoptium (hosted under AdoptOpenJDK)
+  if [[ -z "$DOWNLOAD_URL" ]]; then
+    case "$JAVA_VERSION" in
+      14) DOWNLOAD_URL="https://github.com/AdoptOpenJDK/openjdk14-binaries/releases/download/jdk-14.0.2%2B12/OpenJDK14U-jdk_x64_linux_hotspot_14.0.2_12.tar.gz" ;;
+    esac
+  fi
+
+  if [[ -z "$DOWNLOAD_URL" ]]; then
+    err "Could not resolve download URL for Java ${JAVA_VERSION}."
+    err "This version may not be available on Adoptium. Check https://adoptium.net"
+    exit 1
+  fi
+
+  # Download Java
+  log "Downloading Java from ${DOWNLOAD_URL}"
+  run "curl -fsSL -o \"${TEMP_ARCHIVE}\" \"${DOWNLOAD_URL}\""
+
+  # Extract Java
+  log "Extracting Java to ${INSTALL_DIR}"
+  run "mkdir -p \"${JAVA_HOME_BASE}\""
+
+  if [[ "$DRY_RUN" != "1" ]]; then
+    TEMP_EXTRACT_DIR=$(mktemp -d)
+    tar -xzf "${TEMP_ARCHIVE}" -C "${TEMP_EXTRACT_DIR}"
+    EXTRACTED_DIR=$(ls -1 "${TEMP_EXTRACT_DIR}" | head -1)
+
+    if [[ -z "$EXTRACTED_DIR" ]]; then
+      err "Failed to find extracted JDK directory"
+      rm -rf "${TEMP_EXTRACT_DIR}"
+      exit 1
+    fi
+
+    rm -rf "${INSTALL_DIR}"
+    mv "${TEMP_EXTRACT_DIR}/${EXTRACTED_DIR}" "${INSTALL_DIR}"
+    rm -rf "${TEMP_EXTRACT_DIR}"
+    log "Extracted to ${INSTALL_DIR}"
+  else
+    log "[dry-run] Would extract to ${INSTALL_DIR}"
+  fi
 fi
 
 # Write shell init snippet

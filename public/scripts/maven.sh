@@ -28,6 +28,7 @@ print_manifest() {
 BIN_FILES=mvn mvnDebug
 FOLDERS=$HOME/.shellscript/maven
 SHELLRC_FILE=$HOME/.shellscript/shellrc/maven-init.sh
+NOTE=Maven local repositories are stored per Java version under $HOME/.shellscript/maven/.m2/<java-version>/repository
 MANIFEST
 }
 
@@ -94,7 +95,8 @@ run "mkdir -p \"${BIN_DIR}\""
 log "Creating mvn wrapper in ${BIN_DIR}"
 run "cat >\"${BIN_DIR}/mvn\" <<'WRAP'
 #!/usr/bin/env bash
-exec \"${HOME}/.shellscript/maven/current/bin/mvn\" \"\$@\"
+JAVA_MAJOR=\$(java -version 2>&1 | head -1 | sed 's/.*version \"\([0-9]*\).*/\1/')
+exec \"${HOME}/.shellscript/maven/current/bin/mvn\" -Dmaven.repo.local=\"${HOME}/.shellscript/maven/.m2/\${JAVA_MAJOR}/repository\" \"\$@\"
 WRAP"
 run "chmod +x \"${BIN_DIR}/mvn\""
 
@@ -102,7 +104,8 @@ run "chmod +x \"${BIN_DIR}/mvn\""
 log "Creating mvnDebug wrapper in ${BIN_DIR}"
 run "cat >\"${BIN_DIR}/mvnDebug\" <<'WRAP'
 #!/usr/bin/env bash
-exec \"${HOME}/.shellscript/maven/current/bin/mvnDebug\" \"\$@\"
+JAVA_MAJOR=\$(java -version 2>&1 | head -1 | sed 's/.*version \"\([0-9]*\).*/\1/')
+exec \"${HOME}/.shellscript/maven/current/bin/mvnDebug\" -Dmaven.repo.local=\"${HOME}/.shellscript/maven/.m2/\${JAVA_MAJOR}/repository\" \"\$@\"
 WRAP"
 run "chmod +x \"${BIN_DIR}/mvnDebug\""
 

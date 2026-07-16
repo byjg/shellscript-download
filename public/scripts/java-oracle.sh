@@ -12,7 +12,12 @@ Downloads and installs Oracle JDK binary distribution for x86_64 Linux.
 
 Options:
   -h, --help           Show this help and exit
-  --version <version>  Java major version to install: 25 or 21 (default: 21)
+  --version <version>  Java major version to install (default: 21)
+                       LTS versions: 17, 21, 25 (publicly available)
+                       Non-LTS versions require confirmation (or --yes)
+                       Note: Oracle only provides public downloads for recent LTS versions
+  --yes, -y            Skip confirmation for non-LTS versions
+  --force              Re-download even if already installed
   --dry-run            Print actions without executing them
   --manifest [--version <version>]
                        Print installation manifest and exit
@@ -22,6 +27,7 @@ Options:
 Examples:
   load.sh java-oracle
   load.sh java-oracle -- --version 25
+  load.sh java-oracle -- --version 24 --yes
   load.sh java-oracle -- --dry-run
   load.sh java-oracle -- --manifest --version 21
 
@@ -50,6 +56,8 @@ DRY_RUN=0
 JAVA_VERSION="21"
 MANIFEST_MODE=0
 MANIFEST_VERSION="all"
+YES=0
+FORCE=0
 
 while [[ ${1-} ]]; do
   case "$1" in
@@ -58,6 +66,8 @@ while [[ ${1-} ]]; do
       MANIFEST_MODE=1
       ;;
     --dry-run) DRY_RUN=1 ;;
+    -y|--yes) YES=1 ;;
+    --force) FORCE=1 ;;
     --version)
       shift || { err "--version requires a value"; exit 2; }
       JAVA_VERSION="$1"
@@ -76,6 +86,23 @@ if [[ "$MANIFEST_MODE" == "1" ]]; then
   exit 0
 fi
 
+# Warn for non-LTS versions
+LTS_VERSIONS="17 21 25"
+if ! echo " $LTS_VERSIONS " | grep -q " $JAVA_VERSION "; then
+  if [[ "$YES" == "1" ]]; then
+    log "WARNING: Java ${JAVA_VERSION} is not an LTS version (--yes passed, skipping confirmation)."
+  else
+    log "WARNING: Java ${JAVA_VERSION} is not an LTS version and may be EOL or unsupported."
+    log "Oracle only provides public downloads for recent LTS versions. Other versions may fail."
+    printf "[java-oracle.sh] Are you sure you want to install it? [y/N] "
+    read -r CONFIRM
+    if [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]]; then
+      log "Aborted."
+      exit 0
+    fi
+  fi
+fi
+
 # Preconditions
 require_cmd curl
 require_cmd tar
@@ -84,19 +111,8 @@ require_cmd tar
 JAVA_HOME_BASE="${SHELLSCRIPT_HOME}/java-oracle"
 SHELLRC_DIR="${SHELLSCRIPT_SHELLRC}"
 
-# Build download URL based on version
-case "$JAVA_VERSION" in
-  25)
-    DOWNLOAD_URL="https://download.oracle.com/java/25/latest/jdk-25_linux-x64_bin.tar.gz"
-    ;;
-  21)
-    DOWNLOAD_URL="https://download.oracle.com/java/21/latest/jdk-21_linux-x64_bin.tar.gz"
-    ;;
-  *)
-    err "Unsupported Java version: ${JAVA_VERSION}. Supported versions: 25, 21"
-    exit 1
-    ;;
-esac
+# Build download URL
+DOWNLOAD_URL="https://download.oracle.com/java/${JAVA_VERSION}/latest/jdk-${JAVA_VERSION}_linux-x64_bin.tar.gz"
 
 TEMP_ARCHIVE="/tmp/java-oracle.tar.gz"
 
@@ -109,37 +125,42 @@ trap cleanup EXIT
 
 log "Installing Oracle JDK ${JAVA_VERSION}"
 
-# Download Java
-log "Downloading Java from ${DOWNLOAD_URL}"
-run "curl -fsSL -o \"${TEMP_ARCHIVE}\" \"${DOWNLOAD_URL}\""
-
-# Extract Java
 INSTALL_DIR="${JAVA_HOME_BASE}/${JAVA_VERSION}"
-log "Extracting Java to ${INSTALL_DIR}"
-run "mkdir -p \"${JAVA_HOME_BASE}\""
 
-if [[ "$DRY_RUN" != "1" ]]; then
-  # Extract to a temp location to find the actual directory name
-  TEMP_EXTRACT_DIR=$(mktemp -d)
-  tar -xzf "${TEMP_ARCHIVE}" -C "${TEMP_EXTRACT_DIR}"
-
-  # Find the extracted JDK directory (should be jdk-*.*)
-  EXTRACTED_DIR=$(ls -1 "${TEMP_EXTRACT_DIR}" | head -1)
-
-  if [[ -z "$EXTRACTED_DIR" ]]; then
-    err "Failed to find extracted JDK directory"
-    rm -rf "${TEMP_EXTRACT_DIR}"
-    exit 1
-  fi
-
-  # Move to final location
-  rm -rf "${INSTALL_DIR}"
-  mv "${TEMP_EXTRACT_DIR}/${EXTRACTED_DIR}" "${INSTALL_DIR}"
-  rm -rf "${TEMP_EXTRACT_DIR}"
-
-  log "Extracted to ${INSTALL_DIR}"
+if [[ -d "$INSTALL_DIR" && "$FORCE" != "1" ]]; then
+  log "Java ${JAVA_VERSION} is already installed at ${INSTALL_DIR}. Skipping download (use --force to re-download)."
 else
-  log "[dry-run] Would extract to ${INSTALL_DIR}"
+  # Download Java
+  log "Downloading Java from ${DOWNLOAD_URL}"
+  run "curl -fsSL -o \"${TEMP_ARCHIVE}\" \"${DOWNLOAD_URL}\""
+
+  # Extract Java
+  log "Extracting Java to ${INSTALL_DIR}"
+  run "mkdir -p \"${JAVA_HOME_BASE}\""
+
+  if [[ "$DRY_RUN" != "1" ]]; then
+    # Extract to a temp location to find the actual directory name
+    TEMP_EXTRACT_DIR=$(mktemp -d)
+    tar -xzf "${TEMP_ARCHIVE}" -C "${TEMP_EXTRACT_DIR}"
+
+    # Find the extracted JDK directory (should be jdk-*.*)
+    EXTRACTED_DIR=$(ls -1 "${TEMP_EXTRACT_DIR}" | head -1)
+
+    if [[ -z "$EXTRACTED_DIR" ]]; then
+      err "Failed to find extracted JDK directory"
+      rm -rf "${TEMP_EXTRACT_DIR}"
+      exit 1
+    fi
+
+    # Move to final location
+    rm -rf "${INSTALL_DIR}"
+    mv "${TEMP_EXTRACT_DIR}/${EXTRACTED_DIR}" "${INSTALL_DIR}"
+    rm -rf "${TEMP_EXTRACT_DIR}"
+
+    log "Extracted to ${INSTALL_DIR}"
+  else
+    log "[dry-run] Would extract to ${INSTALL_DIR}"
+  fi
 fi
 
 # Write shell init snippet
