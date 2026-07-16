@@ -98,6 +98,7 @@ if [[ "$DRY_RUN" == "1" ]]; then
   BIN_FILES=""
   FOLDERS=""
   SHELLRC_FILE=""
+  UNINSTALL_CMD=""
 else
   # Execute the script with --manifest and parse the output
   MANIFEST_OUTPUT=$("$SCRIPT_PATH" --manifest 2>/dev/null || true)
@@ -112,15 +113,29 @@ else
   BIN_FILES=$(echo "$MANIFEST_OUTPUT" | grep "^BIN_FILES=" | cut -d= -f2- || true)
   FOLDERS=$(echo "$MANIFEST_OUTPUT" | grep "^FOLDERS=" | cut -d= -f2- || true)
   SHELLRC_FILE=$(echo "$MANIFEST_OUTPUT" | grep "^SHELLRC_FILE=" | cut -d= -f2- || true)
+  UNINSTALL_CMD=$(echo "$MANIFEST_OUTPUT" | grep "^UNINSTALL_CMD=" | cut -d= -f2- || true)
 
   # Expand variables in the manifest
   eval "BIN_FILES=\"$BIN_FILES\""
   eval "FOLDERS=\"$FOLDERS\""
   eval "SHELLRC_FILE=\"$SHELLRC_FILE\""
+
+  # The uninstall hook must be a single subcommand word, e.g. UNINSTALL_CMD=uninstall
+  if [[ -n "$UNINSTALL_CMD" && ! "$UNINSTALL_CMD" =~ ^[a-z][a-z-]*$ ]]; then
+    err "Ignoring invalid UNINSTALL_CMD in manifest: $UNINSTALL_CMD"
+    UNINSTALL_CMD=""
+  fi
 fi
 
 # Track if anything was removed
 REMOVED_SOMETHING=0
+
+# Run the script's own uninstall hook first (e.g. remove system packages it installed)
+if [[ -n "$UNINSTALL_CMD" ]]; then
+  log "Running uninstall hook: ${SCRIPT_NAME}.sh ${UNINSTALL_CMD}"
+  run "\"$SCRIPT_PATH\" ${UNINSTALL_CMD}"
+  REMOVED_SOMETHING=1
+fi
 
 # Remove bin files (always)
 if [[ -n "$BIN_FILES" ]]; then
