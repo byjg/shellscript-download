@@ -55,7 +55,8 @@ require_cmd tar
 
 # Resolve latest version if not specified
 if [[ -z "$ANT_VERSION" ]]; then
-  ANT_VERSION=$(fetch https://api.github.com/repos/apache/ant/releases/latest | grep '"tag_name"' | sed 's/.*"tag_name": *"rel\/\(.*\)".*/\1/')
+  # apache/ant publishes no GitHub releases, only rel/<version> tags (newest first)
+  ANT_VERSION=$(fetch https://api.github.com/repos/apache/ant/tags | grep -o '"name": *"rel/[^"]*"' | head -1 | sed 's/.*"rel\/\(.*\)"/\1/')
   log "Latest Ant version: ${ANT_VERSION}"
 fi
 
