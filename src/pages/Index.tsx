@@ -53,7 +53,12 @@ const Index = () => {
             />
             
             <div className="pl-[72px]">
-              <InstallCommand command='/bin/bash -c "$(curl -fsSL https://shellscript.download/install/loader)"' />
+              <InstallCommand
+                variants={[
+                  { label: "curl", command: '/bin/bash -c "$(curl -fsSL https://shellscript.download/install/loader)"' },
+                  { label: "wget", command: '/bin/bash -c "$(wget -qO- https://shellscript.download/install/loader)"' },
+                ]}
+              />
             </div>
 
             <InstructionStep

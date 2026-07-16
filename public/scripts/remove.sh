@@ -80,7 +80,7 @@ if [[ ! -f "$SCRIPT_PATH" ]]; then
       # Download directly
       mkdir -p "$DOWNLOADS_DIR"
       URL="https://shellscript.download/scripts/${SCRIPT_NAME}.sh"
-      if ! curl -fsSL "$URL" -o "$SCRIPT_PATH"; then
+      if ! download "$URL" "$SCRIPT_PATH"; then
         err "Failed to download $URL"
         exit 3
       fi

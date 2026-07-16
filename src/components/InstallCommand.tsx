@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Check, Copy } from "lucide-react";
 import { toast } from "sonner";
 
@@ -25,6 +26,8 @@ interface InstallCommandProps {
   command?: string;
   // Optional command builder spec (auto-generated from the script's usage)
   spec?: CommandSpec;
+  // Alternative commands shown as tabs (e.g. curl / wget)
+  variants?: { label: string; command: string }[];
 }
 
 const CopyButton = ({ text }: { text: string }) => {
@@ -140,22 +143,48 @@ const CommandBuilder = ({ spec }: { spec: CommandSpec }) => {
   );
 };
 
-export const InstallCommand = ({ command, spec }: InstallCommandProps) => {
+export const InstallCommand = ({ command, spec, variants }: InstallCommandProps) => {
   const hasBuilder = !!spec && spec.items.length > 0;
+  const hasVariants = !hasBuilder && !!variants && variants.length > 0;
 
   return (
     <div className="relative w-full">
       <div className="rounded-lg border border-border bg-card p-6 shadow-lg backdrop-blur-sm transition-all hover:shadow-[var(--shadow-glow)]">
-        <div className="mb-3 flex items-center justify-between">
-          <span className="text-sm font-medium text-muted-foreground">Installation Command</span>
-          {!hasBuilder && <CopyButton text={command || ""} />}
-        </div>
-        {hasBuilder ? (
-          <CommandBuilder spec={spec} />
+        {hasVariants ? (
+          <Tabs defaultValue={variants[0].label}>
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-sm font-medium text-muted-foreground">Installation Command</span>
+              <TabsList className="h-8">
+                {variants.map(({ label }) => (
+                  <TabsTrigger key={label} value={label} className="px-3 py-1 font-mono text-xs">
+                    {label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
+            {variants.map(({ label, command: cmd }) => (
+              <TabsContent key={label} value={label} className="mt-0 flex items-center gap-3">
+                <code className="block min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-sm text-foreground">
+                  {cmd}
+                </code>
+                <CopyButton text={cmd} />
+              </TabsContent>
+            ))}
+          </Tabs>
         ) : (
-          <code className="block overflow-x-auto whitespace-nowrap font-mono text-sm text-foreground">
-            {command}
-          </code>
+          <>
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-sm font-medium text-muted-foreground">Installation Command</span>
+              {!hasBuilder && <CopyButton text={command || ""} />}
+            </div>
+            {hasBuilder ? (
+              <CommandBuilder spec={spec} />
+            ) : (
+              <code className="block overflow-x-auto whitespace-nowrap font-mono text-sm text-foreground">
+                {command}
+              </code>
+            )}
+          </>
         )}
       </div>
     </div>

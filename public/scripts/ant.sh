@@ -50,12 +50,13 @@ while [[ ${1-} ]]; do
 done
 
 # Preconditions
-require_cmd curl
+require_downloader
 require_cmd tar
 
 # Resolve latest version if not specified
 if [[ -z "$ANT_VERSION" ]]; then
-  ANT_VERSION=$(curl -fsSL https://api.github.com/repos/apache/ant/releases/latest | grep '"tag_name"' | sed 's/.*"tag_name": *"rel\/\(.*\)".*/\1/')
+  # apache/ant publishes no GitHub releases, only rel/<version> tags (newest first)
+  ANT_VERSION=$(fetch https://api.github.com/repos/apache/ant/tags | grep -o '"name": *"rel/[^"]*"' | head -1 | sed 's/.*"rel\/\(.*\)"/\1/')
   log "Latest Ant version: ${ANT_VERSION}"
 fi
 
@@ -78,7 +79,7 @@ log "Installing Apache Ant ${ANT_VERSION}"
 
 # Download Ant
 log "Downloading Ant from ${DOWNLOAD_URL}"
-run "curl -fsSL -o \"${TEMP_DIR}/${ANT_ARCHIVE}\" \"${DOWNLOAD_URL}\""
+run "download \"${DOWNLOAD_URL}\" \"${TEMP_DIR}/${ANT_ARCHIVE}\""
 
 # Extract Ant
 log "Extracting Ant to ${ANT_HOME}"
