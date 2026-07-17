@@ -21,9 +21,9 @@ const Index = () => {
     },
     {
       icon: Server,
-      title: "PHP Rest API",
-      description: "Reference architecture for building REST APIs with PHP",
-      command: "php-rest-api",
+      title: "Gluo PHP REST API",
+      description: "Create a production-ready PHP REST API project with the Gluo starter",
+      command: "byjg-gluo",
     },
   ];
 

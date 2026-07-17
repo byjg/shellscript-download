@@ -11,12 +11,13 @@ _load_sh_completion() {
   cur="${COMP_WORDS[COMP_CWORD]}"
 
   if [[ $COMP_CWORD -eq 1 ]]; then
-    mapfile -t COMPREPLY < <(compgen -W "--completion --developer --dont-run --help --list --update -h ant docker java-corretto java-oracle java-temurin maven node-docker nvm php-docker php-rest-api qemu ssh-agent" -- "$cur")
+    mapfile -t COMPREPLY < <(compgen -W "--completion --developer --dont-run --help --list --update -h ant byjg-gluo docker java-corretto java-oracle java-temurin maven node-docker nvm php-docker qemu ssh-agent" -- "$cur")
     return
   fi
 
   case "${COMP_WORDS[1]}" in
     ant) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --manifest --version -h" -- "$cur") ;;
+    byjg-gluo) mapfile -t COMPREPLY < <(compgen -W "--git-email --git-name --help --install-examples --manifest --mysql-uri --name --namespace --php-version --timezone --version -h" -- "$cur") ;;
     docker) mapfile -t COMPREPLY < <(compgen -W "--channel --dry-run --help --manifest --no-group -h" -- "$cur") ;;
     java-corretto) mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --help --manifest --version --yes -h -y" -- "$cur") ;;
     java-oracle) mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --help --manifest --version --yes -h -y" -- "$cur") ;;
@@ -25,7 +26,6 @@ _load_sh_completion() {
     node-docker) mapfile -t COMPREPLY < <(compgen -W "--manifest" -- "$cur") ;;
     nvm) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --manifest -h" -- "$cur") ;;
     php-docker) mapfile -t COMPREPLY < <(compgen -W "--add --manifest --volume" -- "$cur") ;;
-    php-rest-api) mapfile -t COMPREPLY < <(compgen -W "--git-email --git-name --help --install-examples --manifest --mysql-uri --name --namespace --php-version --timezone --version -h" -- "$cur") ;;
     qemu) mapfile -t COMPREPLY < <(compgen -W "--arch --cpus --disk --dry-run --force --help --image --manifest --memory --name --no-cloud-init --port --purge-image --ssh-port -h" -- "$cur") ;;
     ssh-agent) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --key --manifest -h" -- "$cur") ;;
     *) COMPREPLY=() ;;

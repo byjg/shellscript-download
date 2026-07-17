@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# php-rest-api.sh: Install byjg/rest-reference-architecture in unattended mode
+# byjg-gluo.sh: Create a new Gluo project (composer create-project byjg/gluo) in unattended mode
 # Required Arguments:
 #   <folder>          Target folder name where the project will be created
 #   --namespace       Project namespace (CamelCase, e.g., MyApp, Tutorial)
@@ -9,8 +9,8 @@
 #   --mysql-uri       MySQL connection string (default values: schema=mysql, host=mysql-container,
 #                     user=root, password=mysqlp455w0rd, dev db=localdev, test db=localtest)
 #   --install-examples Install example code (Y or n, default: Y)
-#   --version         Composer version constraint (default: ^6.0)
-#   --php-version     PHP version for Docker (8.1, 8.2, 8.3, 8.4, default: current PHP version)
+#   --version         Composer version constraint (default: ^7.0)
+#   --php-version     PHP version for Docker (8.3, 8.4, 8.5, default: current PHP version)
 #   --timezone        Server timezone (default: UTC)
 #   --git-name        Git user name for the project (default: from git config or "Your Name")
 #   --git-email       Git user email for the project (default: from git config or "your.email@example.com")
@@ -28,9 +28,11 @@ set -euo pipefail
 
 print_usage() {
   cat <<'USAGE'
-php-rest-api.sh <folder> --namespace=<name> --name=<name/name> [options]
+byjg-gluo.sh <folder> --namespace=<name> --name=<name/name> [options]
 
-Installs byjg/rest-reference-architecture in unattended mode.
+Creates a new Gluo project (composer create-project byjg/gluo) in unattended mode.
+Gluo is the byjg production-ready PHP REST API starter; the framework core
+(byjg/gluo-core) stays updatable in vendor/.
 
 Required Arguments:
   <folder>                  Target folder name where the project will be created
@@ -42,8 +44,8 @@ Optional Arguments:
                             (default values: schema=mysql, host=mysql-container,
                              user=root, password=mysqlp455w0rd, dev db=localdev, test db=localtest)
   --install-examples=<Y|n>  Install example code (default: Y)
-  --version=<constraint>    Composer version constraint (default: ^6.0)
-  --php-version=<version>   PHP version for Docker (8.1-8.4, default: current)
+  --version=<constraint>    Composer version constraint (default: ^7.0)
+  --php-version=<version>   PHP version for Docker (8.3-8.5, default: current)
   --timezone=<tz>           Server timezone (default: UTC)
   --git-name=<name>         Git user name (default: from git config)
   --git-email=<email>       Git user email (default: from git config)
@@ -52,15 +54,15 @@ Optional Arguments:
 
 Examples:
   # Minimal installation
-  load.sh php-rest-api -- myproject --namespace=MyApp --name=mycompany/myapp
+  load.sh byjg-gluo -- myproject --namespace=MyApp --name=mycompany/myapp
 
   # Full configuration
-  load.sh php-rest-api -- myproject --namespace=MyApp --name=mycompany/myapp \
+  load.sh byjg-gluo -- myproject --namespace=MyApp --name=mycompany/myapp \
     --mysql-uri=mysql://root:secret@mysql-container/mydb \
-    --install-examples=n --version="^6.0" --php-version=8.4
+    --install-examples=n --version="^7.0" --php-version=8.4
 
   # Show manifest
-  load.sh php-rest-api -- myproject --namespace=MyApp --name=mycompany/myapp --manifest
+  load.sh byjg-gluo -- myproject --namespace=MyApp --name=mycompany/myapp --manifest
 
 USAGE
 }
@@ -84,7 +86,7 @@ NAMESPACE=""
 COMPOSER_NAME=""
 MYSQL_URI=""
 INSTALL_EXAMPLES="true"
-VERSION="^6.0"
+VERSION="^7.0"
 PHP_VERSION=""
 TIMEZONE="UTC"
 GIT_NAME=""
@@ -263,10 +265,10 @@ fi
 # Validate PHP version if provided
 if [[ -n "${PHP_VERSION}" ]]; then
   case "${PHP_VERSION}" in
-    "8.1"|"8.2"|"8.3"|"8.4")
+    "8.3"|"8.4"|"8.5")
       ;;
     *)
-      err "Invalid PHP version. Supported versions are: 8.1, 8.2, 8.3, 8.4"
+      err "Invalid PHP version. Supported versions are: 8.3, 8.4, 8.5"
       exit 2
       ;;
   esac
@@ -290,7 +292,7 @@ if [[ -z "${PHP_VERSION}" ]]; then
     PHP_VERSION=$(php -r 'echo PHP_MAJOR_VERSION . "." . PHP_MINOR_VERSION;')
     log "Detected PHP version: ${PHP_VERSION}"
   else
-    PHP_VERSION="8.4"
+    PHP_VERSION="8.5"
     log "PHP not found, using default version: ${PHP_VERSION}"
   fi
 fi
@@ -345,9 +347,9 @@ cd "${PARENT_DIR}"
 
 # Run composer create-project
 log "Running composer create-project in ${PARENT_DIR}..."
-log "Command: composer -sdev create-project byjg/rest-reference-architecture ${FOLDER_NAME} ${VERSION}"
+log "Command: composer -sdev create-project byjg/gluo ${FOLDER_NAME} ${VERSION}"
 
-if ! composer -sdev create-project byjg/rest-reference-architecture "${FOLDER_NAME}" "${VERSION}"; then
+if ! composer -sdev create-project byjg/gluo "${FOLDER_NAME}" "${VERSION}"; then
   err "Failed to create project"
   rm -f "${SETUP_JSON}"
   exit 4
@@ -361,7 +363,7 @@ log "Project successfully created in: ${FOLDER}"
 log ""
 log "Next steps:"
 log "  1. cd ${FOLDER}"
-log "  2. docker compose -f docker-compose-dev.yml up -d"
+log "  2. docker compose up -d"
 log "  3. APP_ENV=dev composer run migrate -- reset --yes"
 log "  4. Visit http://localhost:8080/docs for API documentation"
 log ""
