@@ -50,7 +50,7 @@
     "flatted": "^3.4.2",
     "glob": "^13.0.6",
     "input-otp": "^1.4.2",
-    "js-yaml": "^4.1.1",
+    "js-yaml": "^4.3.1",
     "lucide-react": "^0.563.0",
     "next-themes": "^0.4.6",
     "react": "^18.3.1",
