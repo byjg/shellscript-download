@@ -6,8 +6,9 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Terminal } from "lucide-react";
 
+const data = [{"base":"ant","firstLine":"ant.sh: Download and install Apache Ant"},{"base":"byjg-gluo","firstLine":"byjg-gluo.sh: Create a new Gluo project (composer create-project byjg/gluo) in unattended mode"},{"base":"docker","firstLine":"docker.sh: Install the Docker Engine on Linux in a safe, idempotent, shell-friendly way"},{"base":"java-corretto","firstLine":"java-corretto.sh: Download and install Amazon Corretto OpenJDK"},{"base":"java-oracle","firstLine":"java-oracle.sh: Download and install Oracle JDK"},{"base":"java-temurin","firstLine":"java-temurin.sh: Download and install Eclipse Temurin Java (OpenJDK)"},{"base":"load","firstLine":"load.sh: Fetch a script from https://shellscript.download, cache it locally,"},{"base":"maven","firstLine":"maven.sh: Download and install Apache Maven"},{"base":"node-docker","firstLine":"node-docker.sh: Create Docker-backed Node.js launchers (node, npm, npx, yarn)"},{"base":"nvm","firstLine":"nvm.sh: Install Node Version Manager (NVM) and set up a shell init snippet"},{"base":"php-docker","firstLine":"php-docker.sh: Create Docker-backed php and composer launchers"},{"base":"qemu","firstLine":"qemu.sh: Download QEMU and manage local virtual machines (start, list, stop, remove)"},{"base":"remove","firstLine":"remove.sh: Remove installed tools from shellscript.download"},{"base":"ssh-agent","firstLine":"ssh-agent.sh: Configure ssh-agent startup and SSH key loading in your shell"}] as { base: string; firstLine: string }[];
+
 export default function List() {
-  const data = [{"base":"ant","firstLine":"ant.sh: Download and install Apache Ant"},{"base":"byjg-gluo","firstLine":"byjg-gluo.sh: Create a new Gluo project (composer create-project byjg/gluo) in unattended mode"},{"base":"docker","firstLine":"docker.sh: Install the Docker Engine on Linux in a safe, idempotent, shell-friendly way"},{"base":"java-corretto","firstLine":"java-corretto.sh: Download and install Amazon Corretto OpenJDK"},{"base":"java-oracle","firstLine":"java-oracle.sh: Download and install Oracle JDK"},{"base":"java-temurin","firstLine":"java-temurin.sh: Download and install Eclipse Temurin Java (OpenJDK)"},{"base":"load","firstLine":"load.sh: Fetch a script from https://shellscript.download, cache it locally,"},{"base":"maven","firstLine":"maven.sh: Download and install Apache Maven"},{"base":"node-docker","firstLine":"node-docker.sh: Create Docker-backed Node.js launchers (node, npm, npx, yarn)"},{"base":"nvm","firstLine":"nvm.sh: Install Node Version Manager (NVM) and set up a shell init snippet"},{"base":"php-docker","firstLine":"php-docker.sh: Create Docker-backed php and composer launchers"},{"base":"qemu","firstLine":"qemu.sh: Download QEMU and manage local virtual machines (start, list, stop, remove)"},{"base":"remove","firstLine":"remove.sh: Remove installed tools from shellscript.download"},{"base":"ssh-agent","firstLine":"ssh-agent.sh: Configure ssh-agent startup and SSH key loading in your shell"}] as { base: string; firstLine: string }[];
   const [q, setQ] = useState("");
   const filtered = useMemo(() => {
     const query = q.toLowerCase().trim();
@@ -18,7 +19,7 @@ export default function List() {
         item.firstLine.toLowerCase().includes(query)
       );
     });
-  }, [q, data]);
+  }, [q]);
 
   return (
     <section className="mx-auto max-w-6xl">

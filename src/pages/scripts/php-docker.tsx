@@ -28,8 +28,8 @@ Options:
   --add <packages>      Install additional Alpine packages (comma-separated list).
                         Saved to $HOME/.shellscript/php/packages.conf and 
                         re-applied on every install/update, with phpNN- prefixes 
-                        rewritten to the target version (php83-gd becomes php85-gd
-                        on 8.5).
+                        rewritten to the target version (php83-gd becomes php86-gd
+                        on 8.6).
                         Example: --add php83-gd,php83-intl,git,bash
   --volume <paths>      Extra host directories to mount inside the container as
                         <path>:<path> (comma-separated list). Saved to

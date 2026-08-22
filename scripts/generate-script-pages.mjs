@@ -334,8 +334,9 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Terminal } from "lucide-react";
 
+const data = ${listRows} as { base: string; firstLine: string }[];
+
 export default function List() {
-  const data = ${listRows} as { base: string; firstLine: string }[];
   const [q, setQ] = useState("");
   const filtered = useMemo(() => {
     const query = q.toLowerCase().trim();
@@ -346,7 +347,7 @@ export default function List() {
         item.firstLine.toLowerCase().includes(query)
       );
     });
-  }, [q, data]);
+  }, [q]);
 
   return (
     <section className="mx-auto max-w-6xl">

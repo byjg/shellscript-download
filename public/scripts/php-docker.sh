@@ -17,8 +17,8 @@ Options:
   --add <packages>      Install additional Alpine packages (comma-separated list).
                         Saved to $HOME/.shellscript/php/packages.conf and 
                         re-applied on every install/update, with phpNN- prefixes 
-                        rewritten to the target version (php83-gd becomes php85-gd
-                        on 8.5).
+                        rewritten to the target version (php83-gd becomes php86-gd
+                        on 8.6).
                         Example: --add php83-gd,php83-intl,git,bash
   --volume <paths>      Extra host directories to mount inside the container as
                         <path>:<path> (comma-separated list). Saved to
@@ -67,7 +67,7 @@ SHOW_MANIFEST=0
 PHP_VERSION=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    "5.6"|"7.0"|"7.1"|"7.2"|"7.3"|"7.4"|"8.0"|"8.1"|"8.2"|"8.3"|"8.4"|"8.5")
+    "5.6"|"7.0"|"7.1"|"7.2"|"7.3"|"7.4"|"8.0"|"8.1"|"8.2"|"8.3"|"8.4"|"8.5"|"8.6")
       PHP_VERSION="$1"
       shift
       ;;
@@ -94,7 +94,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     *)
-      echo "Error: Invalid argument '$1'. Supported versions are: 5.6, 7.0, 7.1, 7.2, 7.3, 7.4, 8.0, 8.1, 8.2, 8.3, 8.4, 8.5" >&2
+      echo "Error: Invalid argument '$1'. Supported versions are: 5.6, 7.0, 7.1, 7.2, 7.3, 7.4, 8.0, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6" >&2
       exit 1
       ;;
   esac
@@ -163,7 +163,7 @@ fi
 
 # Persist extra packages so they survive future installs/updates.
 # phpNN- prefixes are rewritten to the target version at install time
-# (e.g. a saved php83-gd installs as php85-gd when installing 8.5).
+# (e.g. a saved php83-gd installs as php86-gd when installing 8.6).
 PACKAGES_CONF="$BASE_FOLDER/php/packages.conf"
 if [[ -n "$PACKAGES" ]]; then
   touch "$PACKAGES_CONF"

@@ -10,7 +10,7 @@
 #                     user=root, password=mysqlp455w0rd, dev db=localdev, test db=localtest)
 #   --install-examples Install example code (Y or n, default: Y)
 #   --version         Composer version constraint (default: ^7.0)
-#   --php-version     PHP version for Docker (8.3, 8.4, 8.5, default: current PHP version)
+#   --php-version     PHP version for Docker (8.3, 8.4, 8.5, 8.6, default: current PHP version)
 #   --timezone        Server timezone (default: UTC)
 #   --git-name        Git user name for the project (default: from git config or "Your Name")
 #   --git-email       Git user email for the project (default: from git config or "your.email@example.com")
@@ -45,7 +45,7 @@ Optional Arguments:
                              user=root, password=mysqlp455w0rd, dev db=localdev, test db=localtest)
   --install-examples=<Y|n>  Install example code (default: Y)
   --version=<constraint>    Composer version constraint (default: ^7.0)
-  --php-version=<version>   PHP version for Docker (8.3-8.5, default: current)
+  --php-version=<version>   PHP version for Docker (8.3-8.6, default: current)
   --timezone=<tz>           Server timezone (default: UTC)
   --git-name=<name>         Git user name (default: from git config)
   --git-email=<email>       Git user email (default: from git config)
@@ -265,10 +265,10 @@ fi
 # Validate PHP version if provided
 if [[ -n "${PHP_VERSION}" ]]; then
   case "${PHP_VERSION}" in
-    "8.3"|"8.4"|"8.5")
+    "8.3"|"8.4"|"8.5"|"8.6")
       ;;
     *)
-      err "Invalid PHP version. Supported versions are: 8.3, 8.4, 8.5"
+      err "Invalid PHP version. Supported versions are: 8.3, 8.4, 8.5, 8.6"
       exit 2
       ;;
   esac
