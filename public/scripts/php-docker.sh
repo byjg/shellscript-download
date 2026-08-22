@@ -205,9 +205,34 @@ docker tag "$PHP_BASE_IMAGE" "$PHP_IMAGE"
 if [[ ${#INSTALL_PACKAGES[@]} -gt 0 ]]; then
   echo "Installing Alpine packages: ${INSTALL_PACKAGES[*]}"
   docker rm temp 2>/dev/null || true
-  docker run -it --user root --name temp "$PHP_IMAGE" apk add --no-cache "${INSTALL_PACKAGES[@]}"
-  docker commit temp "$PHP_IMAGE"
-  docker rm temp
+
+  # Install one package at a time. packages.conf is shared by every PHP version
+  # and its phpNN- prefix is rewritten to the target version, so an entry saved
+  # for 8.5 may not exist for 8.6 (php85-sodium has no php86-sodium counterpart).
+  # "apk add pkg1 pkg2" resolves the whole set upfront and installs nothing if a
+  # single name is unknown, so one missing package would block all the others.
+  # The loop isolates each failure and reports the ones that could not install.
+  # It exits 0 when at least one package installed, so whatever did succeed is
+  # still committed to the image below.
+  # No -it here: apk add is non-interactive, and a TTY breaks piped/CI runs.
+  if docker run --user root --name temp "$PHP_IMAGE" sh -c '
+      installed=0
+      failed=""
+      for pkg in "$@"; do
+        if apk add --no-cache "$pkg"; then
+          installed=$((installed + 1))
+        else
+          failed="$failed $pkg"
+        fi
+      done
+      [ -n "$failed" ] && echo "Warning: no package for this PHP version:$failed" >&2
+      [ "$installed" -gt 0 ]
+    ' _ "${INSTALL_PACKAGES[@]}"; then
+    docker commit temp "$PHP_IMAGE"
+  else
+    echo "Warning: no package could be installed, continuing with the base image." >&2
+  fi
+  docker rm temp 2>/dev/null || true
 fi
 
 
