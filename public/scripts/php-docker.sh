@@ -202,12 +202,38 @@ PHP_IMAGE="${PHP_BASE_IMAGE}-load"
 docker image rm "$PHP_IMAGE" 2>/dev/null || true
 docker tag "$PHP_BASE_IMAGE" "$PHP_IMAGE"
 
+# packages.conf is shared by every PHP version, so an entry saved for one
+# version may simply not be published for another (php85-sodium has no php86-
+# sodium counterpart). Ask apk up front which packages it cannot resolve: a
+# single --simulate run reports them all at once, and packages already baked
+# into the image are not reported. Skipping them beats aborting the install.
+if [[ ${#INSTALL_PACKAGES[@]} -gt 0 ]]; then
+  SIMULATE_OUTPUT="$(docker run --rm --user root "$PHP_IMAGE" \
+    apk add --no-cache --simulate "${INSTALL_PACKAGES[@]}" 2>&1 || true)"
+  MISSING_PACKAGES="$(echo "$SIMULATE_OUTPUT" | awk '/no such package/ {gsub(/^[ \t]+/, ""); print $1}')"
+
+  if [[ -n "$MISSING_PACKAGES" ]]; then
+    echo "Warning: no package for PHP ${PHP_VERSION}, skipping: $(echo "$MISSING_PACKAGES" | tr '\n' ' ')" >&2
+    KEEP_PACKAGES=()
+    for pkg in "${INSTALL_PACKAGES[@]}"; do
+      grep -qxF "$pkg" <<<"$MISSING_PACKAGES" || KEEP_PACKAGES+=("$pkg")
+    done
+    INSTALL_PACKAGES=("${KEEP_PACKAGES[@]:+${KEEP_PACKAGES[@]}}")
+  fi
+fi
+
 if [[ ${#INSTALL_PACKAGES[@]} -gt 0 ]]; then
   echo "Installing Alpine packages: ${INSTALL_PACKAGES[*]}"
   docker rm temp 2>/dev/null || true
-  docker run -it --user root --name temp "$PHP_IMAGE" apk add --no-cache "${INSTALL_PACKAGES[@]}"
-  docker commit temp "$PHP_IMAGE"
-  docker rm temp
+  # Never abort here: the wrappers below are what the user actually asked for,
+  # and a package problem must not leave them without a working php/composer.
+  # No -it here: apk add is non-interactive, and a TTY breaks piped/CI runs.
+  if docker run --user root --name temp "$PHP_IMAGE" apk add --no-cache "${INSTALL_PACKAGES[@]}"; then
+    docker commit temp "$PHP_IMAGE"
+  else
+    echo "Warning: package installation failed, continuing with the base image." >&2
+  fi
+  docker rm temp 2>/dev/null || true
 fi
 
 
