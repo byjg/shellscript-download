@@ -26,7 +26,7 @@ _load_sh_completion() {
     node-docker) mapfile -t COMPREPLY < <(compgen -W "--add --env --manifest --no-postinstall --postinstall --skip --volume" -- "$cur") ;;
     nvm) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --manifest -h" -- "$cur") ;;
     php-docker) mapfile -t COMPREPLY < <(compgen -W "--add --env --manifest --no-postinstall --postinstall --skip --volume" -- "$cur") ;;
-    qemu) mapfile -t COMPREPLY < <(compgen -W "--arch --cpus --disk --dry-run --force --help --image --manifest --memory --name --no-cloud-init --port --purge-image --ssh-port -h" -- "$cur") ;;
+    qemu) mapfile -t COMPREPLY < <(compgen -W "--arch --bridge --cpus --disk --dry-run --force --help --image --manifest --memory --name --no-cloud-init --port --purge-image --ssh-port -h" -- "$cur") ;;
     ssh-agent) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --key --manifest -h" -- "$cur") ;;
     *) COMPREPLY=() ;;
   esac
