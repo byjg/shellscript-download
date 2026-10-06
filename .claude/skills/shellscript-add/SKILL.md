@@ -363,13 +363,13 @@ If `npm run build` fails, check:
 - [ ] No direct `curl`/`wget` calls — uses injected `fetch`/`download` helpers
 - [ ] File is executable in git (`git update-index --chmod=+x`)
 - [ ] `npm run build` completes without errors
-- [ ] Generated files in `src/pages/scripts/` and `src/generated/` are staged
+- [ ] Generated files in `src/pages/scripts/`, `src/generated/` and `docs/scripts/` are staged
 
 ## Commit
 
 Stage the script and the generated files together:
 
 ```bash
-git add public/scripts/<name>.sh src/pages/scripts/<name>.tsx src/generated/scriptRoutes.tsx src/components/List.tsx
+git add public/scripts/<name>.sh src/pages/scripts/<name>.tsx src/generated/scriptRoutes.tsx src/components/List.tsx docs/scripts
 git commit -m "Add <name>.sh: <one-line description>"
 ```

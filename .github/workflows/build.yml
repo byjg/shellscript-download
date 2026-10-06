@@ -1,6 +1,9 @@
-name: PR Build Check
+name: Build
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - '**'
@@ -12,10 +15,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: 'npm'
@@ -39,3 +42,12 @@ jobs:
           else
             echo "✅ Success: No uncommitted changes after build"
           fi
+
+  Documentation:
+    if: github.ref == 'refs/heads/main'
+    needs: check-build-artifacts
+    uses: byjg/byjg.github.io/.github/workflows/add-doc.yaml@master
+    with:
+      folder: devops
+      project: ${{ github.event.repository.name }}
+    secrets: inherit
