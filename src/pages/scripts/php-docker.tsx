@@ -18,8 +18,8 @@ export default function Script_php_docker() {
         </header>
         <Link to="/" className="text-accent hover:text-accent/80 transition-colors">← Home</Link>
         <h1 className="text-foreground" style={{fontSize: "1.5rem", margin: "1rem 0"}}>php-docker.sh</h1>
-        <InstallCommand command="load.sh php-docker" spec={{"prefix":"load.sh php-docker","dashes":true,"items":[{"kind":"arg","name":"php_version","required":true,"description":""},{"kind":"option","name":"--add","value":"packages","equals":false,"required":false,"description":"Install additional Alpine packages (comma-separated list)."},{"kind":"option","name":"--volume","value":"paths","equals":false,"required":false,"description":"Extra host directories to mount inside the container as"},{"kind":"option","name":"--manifest","value":null,"equals":false,"required":false,"description":"Print installation manifest and exit"}]}} />
-        <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem', marginTop: '1rem'}}>{`php-docker.sh <php_version> [--add package1,package2,...] [--volume /path1,/path2,...] [--manifest]
+        <InstallCommand command="load.sh php-docker" spec={{"prefix":"load.sh php-docker","dashes":true,"items":[{"kind":"arg","name":"php_version","required":true,"description":""},{"kind":"option","name":"--add","value":"packages","equals":false,"required":false,"description":"Install additional Alpine packages (comma-separated list)."},{"kind":"option","name":"--volume","value":"paths","equals":false,"required":false,"description":"Extra host directories to mount inside the container as"},{"kind":"option","name":"--postinstall","value":"script","equals":false,"required":false,"description":"Script to run as root inside the image after the packages"},{"kind":"option","name":"--no-postinstall","value":null,"equals":false,"required":false,"description":"Delete the saved post-install script of this PHP version."},{"kind":"option","name":"--skip","value":"steps","equals":false,"required":false,"description":"Leave out steps for this run only, without changing what"},{"kind":"option","name":"--manifest","value":null,"equals":false,"required":false,"description":"Print installation manifest and exit. Without a version it"}]}} />
+        <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem', marginTop: '1rem'}}>{`php-docker.sh <php_version> [--add package1,package2,...] [--volume /path1,/path2,...] [--postinstall /path/to/script] [--no-postinstall] [--skip packages,postinstall] [--manifest]
 
 Installs Docker-backed wrappers for php and composer under $HOME/.shellscript/bin
 using the byjg/php:<version>-cli image.
@@ -37,13 +37,33 @@ Options:
                         installs/updates. The wrappers read this file at runtime,
                         so you can also edit it directly without reinstalling.
                         Example: --volume /home/user/projects
-  --manifest            Print installation manifest and exit
+  --postinstall <script>
+                        Script to run as root inside the image after the packages
+                        are installed, for what apk cannot do (PECL builds, vendor
+                        clients). Copied to $HOME/.shellscript/php/<version>/postinstall.sh
+                        so it belongs to that PHP version only and runs again on
+                        every install/update of it. Delete that file to remove it.
+                        The script receives PHP_VERSION (8.5) and PHP_VARIANT (php85).
+                        A line "# ENV NAME=value" in the script sets that environment
+                        variable in the image.
+                        Example: --postinstall ./install-oracle.sh
+  --no-postinstall      Delete the saved post-install script of this PHP version.
+  --skip <steps>        Leave out steps for this run only, without changing what
+                        is saved (comma-separated list): "packages" (the Alpine
+                        packages) and/or "postinstall" (the post-install script).
+                        Example: --skip postinstall
+  --manifest            Print installation manifest and exit. Without a version it
+                        covers every installed version and the saved configuration,
+                        which is what "load.sh remove -- php-docker" uses.
 
 Examples:
   load.sh php-docker -- 8.3
   load.sh php-docker -- 7.4
   load.sh php-docker -- 8.3 --add php83-gd,php83-intl,git
   load.sh php-docker -- 8.3 --volume /home/user/projects
+  load.sh php-docker -- 8.5 --postinstall ./install-oracle.sh
+  load.sh php-docker -- 8.5 --volume /home/user/projects --skip postinstall
+  load.sh php-docker -- 8.5 --no-postinstall
   load.sh php-docker -- 8.3 --manifest
 `}</pre>
         <br/>

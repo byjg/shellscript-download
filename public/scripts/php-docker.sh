@@ -8,7 +8,7 @@ set -euo pipefail
 
 print_usage() {
   cat <<'USAGE'
-php-docker.sh <php_version> [--add package1,package2,...] [--volume /path1,/path2,...] [--manifest]
+php-docker.sh <php_version> [--add package1,package2,...] [--volume /path1,/path2,...] [--postinstall /path/to/script] [--no-postinstall] [--skip packages,postinstall] [--manifest]
 
 Installs Docker-backed wrappers for php and composer under $HOME/.shellscript/bin
 using the byjg/php:<version>-cli image.
@@ -26,16 +26,56 @@ Options:
                         installs/updates. The wrappers read this file at runtime,
                         so you can also edit it directly without reinstalling.
                         Example: --volume /home/user/projects
-  --manifest            Print installation manifest and exit
+  --postinstall <script>
+                        Script to run as root inside the image after the packages
+                        are installed, for what apk cannot do (PECL builds, vendor
+                        clients). Copied to $HOME/.shellscript/php/<version>/postinstall.sh
+                        so it belongs to that PHP version only and runs again on
+                        every install/update of it. Delete that file to remove it.
+                        The script receives PHP_VERSION (8.5) and PHP_VARIANT (php85).
+                        A line "# ENV NAME=value" in the script sets that environment
+                        variable in the image.
+                        Example: --postinstall ./install-oracle.sh
+  --no-postinstall      Delete the saved post-install script of this PHP version.
+  --skip <steps>        Leave out steps for this run only, without changing what
+                        is saved (comma-separated list): "packages" (the Alpine
+                        packages) and/or "postinstall" (the post-install script).
+                        Example: --skip postinstall
+  --manifest            Print installation manifest and exit. Without a version it
+                        covers every installed version and the saved configuration,
+                        which is what "load.sh remove -- php-docker" uses.
 
 Examples:
   load.sh php-docker -- 8.3
   load.sh php-docker -- 7.4
   load.sh php-docker -- 8.3 --add php83-gd,php83-intl,git
   load.sh php-docker -- 8.3 --volume /home/user/projects
+  load.sh php-docker -- 8.5 --postinstall ./install-oracle.sh
+  load.sh php-docker -- 8.5 --volume /home/user/projects --skip postinstall
+  load.sh php-docker -- 8.5 --no-postinstall
   load.sh php-docker -- 8.3 --manifest
 
 USAGE
+}
+
+# Without a version: everything php-docker installed, for "load.sh remove".
+# The versioned wrappers are read from the bin folder, and the whole php folder
+# is listed so packages.conf, volumes.conf and the post-install scripts go with
+# --purge.
+print_manifest_all() {
+  local base="${SHELLSCRIPT_HOME:-$HOME/.shellscript}"
+  local bin_files="php composer"
+  local file name
+  for file in "$base"/bin/php* "$base"/bin/composer*; do
+    name="$(basename "$file")"
+    [[ "$name" =~ ^(php|composer)[0-9]+\.[0-9]+$ ]] || continue
+    bin_files+=" $name"
+  done
+  cat <<MANIFEST
+BIN_FILES=${bin_files}
+FOLDERS=${base}/php
+SHELLRC_FILE=${base}/shellrc/php-init.sh
+MANIFEST
 }
 
 print_manifest() {
@@ -63,6 +103,10 @@ fi
 
 PACKAGES=""
 VOLUMES=""
+POSTINSTALL=""
+NO_POSTINSTALL=0
+SKIP_PACKAGES=0
+SKIP_POSTINSTALL=0
 SHOW_MANIFEST=0
 PHP_VERSION=""
 while [[ $# -gt 0 ]]; do
@@ -89,6 +133,38 @@ while [[ $# -gt 0 ]]; do
       VOLUMES="${VOLUMES:+$VOLUMES,}$1"
       shift
       ;;
+    "--postinstall")
+      shift
+      if [[ $# -eq 0 ]]; then
+        echo "Error: --postinstall requires a script path" >&2
+        exit 1
+      fi
+      POSTINSTALL="$1"
+      shift
+      ;;
+    "--no-postinstall")
+      NO_POSTINSTALL=1
+      shift
+      ;;
+    "--skip")
+      shift
+      if [[ $# -eq 0 ]]; then
+        echo "Error: --skip requires a step list (packages,postinstall)" >&2
+        exit 1
+      fi
+      IFS=',' read -ra SKIP_ARRAY <<< "$1"
+      for step in "${SKIP_ARRAY[@]}"; do
+        case "$step" in
+          packages) SKIP_PACKAGES=1 ;;
+          postinstall) SKIP_POSTINSTALL=1 ;;
+          *)
+            echo "Error: Invalid --skip step '$step'. Supported steps are: packages, postinstall" >&2
+            exit 1
+            ;;
+        esac
+      done
+      shift
+      ;;
     "--manifest")
       SHOW_MANIFEST=1
       shift
@@ -103,10 +179,10 @@ done
 # If manifest requested, print and exit
 if [[ $SHOW_MANIFEST -eq 1 ]]; then
   if [[ -z "$PHP_VERSION" ]]; then
-    echo "Error: <php_version> is required for manifest" >&2
-    exit 2
+    print_manifest_all
+  else
+    print_manifest "$PHP_VERSION"
   fi
-  print_manifest "$PHP_VERSION"
   exit 0
 fi
 
@@ -116,6 +192,16 @@ if [[ -z "$PHP_VERSION" ]]; then
   echo >&2
   print_usage >&2
   exit 2
+fi
+
+if [[ -n "$POSTINSTALL" && $NO_POSTINSTALL -eq 1 ]]; then
+  echo "Error: --postinstall and --no-postinstall cannot be used together" >&2
+  exit 1
+fi
+
+if [[ -n "$POSTINSTALL" && ! -f "$POSTINSTALL" ]]; then
+  echo "Error: post-install script not found: $POSTINSTALL" >&2
+  exit 1
 fi
 
 # Pre-flight: docker availability
@@ -176,6 +262,18 @@ if [[ -n "$PACKAGES" ]]; then
   done
 fi
 
+# Persist the post-install script next to the other files of this PHP version,
+# so it is tied to it and runs again on every install/update.
+POSTINSTALL_SCRIPT="${PHP_HOME}/postinstall.sh"
+if [[ -n "$POSTINSTALL" ]]; then
+  cp "$POSTINSTALL" "$POSTINSTALL_SCRIPT"
+  echo "Saved post-install script to ${POSTINSTALL_SCRIPT}"
+fi
+if [[ $NO_POSTINSTALL -eq 1 && -f "$POSTINSTALL_SCRIPT" ]]; then
+  rm -f "$POSTINSTALL_SCRIPT"
+  echo "Removed post-install script ${POSTINSTALL_SCRIPT}"
+fi
+
 # Build the effective package list from the saved config, rewriting version
 # prefixes and de-duplicating (php83-gd and php85-gd collapse into one).
 INSTALL_PACKAGES=()
@@ -202,7 +300,9 @@ PHP_IMAGE="${PHP_BASE_IMAGE}-load"
 docker image rm "$PHP_IMAGE" 2>/dev/null || true
 docker tag "$PHP_BASE_IMAGE" "$PHP_IMAGE"
 
-if [[ ${#INSTALL_PACKAGES[@]} -gt 0 ]]; then
+if [[ $SKIP_PACKAGES -eq 1 ]]; then
+  echo "Skipping Alpine packages (--skip packages)"
+elif [[ ${#INSTALL_PACKAGES[@]} -gt 0 ]]; then
   echo "Installing Alpine packages: ${INSTALL_PACKAGES[*]}"
   docker rm temp 2>/dev/null || true
 
@@ -231,6 +331,35 @@ if [[ ${#INSTALL_PACKAGES[@]} -gt 0 ]]; then
     docker commit temp "$PHP_IMAGE"
   else
     echo "Warning: no package could be installed, continuing with the base image." >&2
+  fi
+  docker rm temp 2>/dev/null || true
+fi
+
+# Run the post-install script of this PHP version on top of the packages.
+# Unlike a missing package, a failing script aborts the install: the image
+# would silently lack what the script was meant to add.
+if [[ $SKIP_POSTINSTALL -eq 1 ]]; then
+  echo "Skipping post-install script (--skip postinstall)"
+elif [[ -f "$POSTINSTALL_SCRIPT" ]]; then
+  echo "Running post-install script: ${POSTINSTALL_SCRIPT}"
+  docker rm temp 2>/dev/null || true
+
+  # "# ENV NAME=value" lines become environment variables of the image.
+  COMMIT_ARGS=()
+  while IFS= read -r env_line; do
+    COMMIT_ARGS+=(--change "ENV ${env_line}")
+  done < <(sed -n -E 's/^#[[:space:]]*ENV[[:space:]]+//p' "$POSTINSTALL_SCRIPT")
+
+  chmod a+rx "$POSTINSTALL_SCRIPT"
+  if docker run --user root --name temp \
+      -e "PHP_VERSION=${PHP_VERSION}" \
+      -v "$POSTINSTALL_SCRIPT":/tmp/postinstall.sh:ro \
+      "$PHP_IMAGE" /tmp/postinstall.sh; then
+    docker commit ${COMMIT_ARGS[@]+"${COMMIT_ARGS[@]}"} temp "$PHP_IMAGE"
+  else
+    echo "Error: post-install script failed: ${POSTINSTALL_SCRIPT}" >&2
+    docker rm temp 2>/dev/null || true
+    exit 5
   fi
   docker rm temp 2>/dev/null || true
 fi

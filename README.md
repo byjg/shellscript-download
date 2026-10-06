@@ -48,6 +48,45 @@ The UI lists these and more, with descriptions:
 
 Check the “All Scripts” table on the homepage for the current catalog.
 
+### php-docker: packages, volumes and a post-install script
+
+`php-docker` builds a local `byjg/php:<version>-cli-load` image and remembers how to rebuild it:
+
+```bash
+# Alpine packages, saved to ~/.shellscript/php/packages.conf (shared by every PHP version)
+load.sh php-docker -- 8.5 --add php85-gd,php85-intl
+
+# Extra host directories to mount, saved to ~/.shellscript/php/volumes.conf
+load.sh php-docker -- 8.5 --volume /home/user/projects
+
+# A script for what apk cannot do (PECL builds, vendor clients)
+load.sh php-docker -- 8.5 --postinstall ./install-oracle.sh
+```
+
+The post-install script is copied to `~/.shellscript/php/<version>/postinstall.sh`, so it belongs
+to that PHP version only. It runs as root inside the image after the packages, on every install
+or update of that version, and a failure aborts the install. Delete the file to remove it.
+It receives `PHP_VERSION` (`8.5`) and `PHP_VARIANT` (`php85`), and a line `# ENV NAME=value` in
+it sets that environment variable in the image.
+
+Every run rebuilds the image, replaying the packages and the post-install script. To leave a step
+out for one run, or to drop the saved script:
+
+```bash
+# Change a volume without recompiling what the post-install script builds
+load.sh php-docker -- 8.5 --volume /home/user/other --skip postinstall
+
+# Skip both steps: a plain byjg/php image
+load.sh php-docker -- 8.5 --skip packages,postinstall
+
+# Delete the saved post-install script of this version
+load.sh php-docker -- 8.5 --no-postinstall
+```
+
+`load.sh remove -- php-docker` removes the wrappers of every installed PHP version. With `--purge`
+it also removes `~/.shellscript/php`, which holds `packages.conf`, `volumes.conf` and the
+post-install scripts. The `byjg/php:<version>-cli-load` Docker images are left in place.
+
 ## Local development
 Prerequisites: Node.js 18+ and npm
 
