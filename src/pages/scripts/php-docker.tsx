@@ -18,8 +18,8 @@ export default function Script_php_docker() {
         </header>
         <Link to="/" className="text-accent hover:text-accent/80 transition-colors">← Home</Link>
         <h1 className="text-foreground" style={{fontSize: "1.5rem", margin: "1rem 0"}}>php-docker.sh</h1>
-        <InstallCommand command="load.sh php-docker" spec={{"prefix":"load.sh php-docker","dashes":true,"items":[{"kind":"arg","name":"php_version","required":true,"description":""},{"kind":"option","name":"--add","value":"packages","equals":false,"required":false,"description":"Install additional Alpine packages (comma-separated list)."},{"kind":"option","name":"--volume","value":"paths","equals":false,"required":false,"description":"Extra host directories to mount inside the container as"},{"kind":"option","name":"--postinstall","value":"script","equals":false,"required":false,"description":"Script to run as root inside the image after the packages"},{"kind":"option","name":"--no-postinstall","value":null,"equals":false,"required":false,"description":"Delete the saved post-install script of this PHP version."},{"kind":"option","name":"--skip","value":"steps","equals":false,"required":false,"description":"Leave out steps for this run only, without changing what"},{"kind":"option","name":"--manifest","value":null,"equals":false,"required":false,"description":"Print installation manifest and exit. Without a version it"}]}} />
-        <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem', marginTop: '1rem'}}>{`php-docker.sh <php_version> [--add package1,package2,...] [--volume /path1,/path2,...] [--postinstall /path/to/script] [--no-postinstall] [--skip packages,postinstall] [--manifest]
+        <InstallCommand command="load.sh php-docker" spec={{"prefix":"load.sh php-docker","dashes":true,"items":[{"kind":"arg","name":"php_version","required":true,"description":""},{"kind":"option","name":"--add","value":"packages","equals":false,"required":false,"description":"Install additional Alpine packages (comma-separated list)."},{"kind":"option","name":"--volume","value":"paths","equals":false,"required":false,"description":"Extra host directories to mount inside the container as"},{"kind":"option","name":"--env","value":"names","equals":false,"required":false,"description":"The wrappers forward the host environment to the container,"},{"kind":"option","name":"--postinstall","value":"script","equals":false,"required":false,"description":"Script to run as root inside the image after the packages"},{"kind":"option","name":"--no-postinstall","value":null,"equals":false,"required":false,"description":"Delete the saved post-install script of this PHP version."},{"kind":"option","name":"--skip","value":"steps","equals":false,"required":false,"description":"Leave out steps for this run only, without changing what"},{"kind":"option","name":"--manifest","value":null,"equals":false,"required":false,"description":"Print installation manifest and exit. Without a version it"}]}} />
+        <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem', marginTop: '1rem'}}>{`php-docker.sh <php_version> [--add package1,package2,...] [--volume /path1,/path2,...] [--env NAME1,NAME2,...] [--postinstall /path/to/script] [--no-postinstall] [--skip packages,postinstall] [--manifest]
 
 Installs Docker-backed wrappers for php and composer under $HOME/.shellscript/bin
 using the byjg/php:<version>-cli image.
@@ -37,6 +37,14 @@ Options:
                         installs/updates. The wrappers read this file at runtime,
                         so you can also edit it directly without reinstalling.
                         Example: --volume /home/user/projects
+  --env <names>         The wrappers forward the host environment to the container,
+                        except the variables that describe the host itself (desktop
+                        session, systemd, terminal and IDE, host toolchains such as
+                        JAVA_HOME or NVM_*, SSH_* and agents). Use --env to forward
+                        some of those anyway (comma-separated names or patterns).
+                        Saved to $HOME/.shellscript/php/env.conf, which the wrappers
+                        read at runtime, so you can also edit it directly.
+                        Example: --env JAVA_HOME,XDG_RUNTIME_DIR
   --postinstall <script>
                         Script to run as root inside the image after the packages
                         are installed, for what apk cannot do (PECL builds, vendor

@@ -38,6 +38,15 @@ How the loader works (behavior):
 - Executes it unless `--dont-run` is given.
 - Exits with the same status code as the script.
 
+### Scripts that depend on another file
+
+A script that defines a `postLoad()` function has it called by the loader once, right after the
+script is downloaded or updated (`load.sh` runs `<script> --post-load`). It is the place to fetch
+what the script depends on, such as a file it shares with other scripts. `php-docker` and
+`node-docker` use it to download `lib/docker-wrapper.sh` next to themselves in
+`$HOME/.shellscript/downloads`. The hook is not called when the cached copy of the script is used,
+nor with `--developer`, where the shared file is read from the local folder.
+
 ## Available scripts (high level)
 The UI lists these and more, with descriptions:
 - docker — Install the Docker Engine and Docker Compose on Linux
@@ -82,6 +91,27 @@ load.sh php-docker -- 8.5 --skip packages,postinstall
 # Delete the saved post-install script of this version
 load.sh php-docker -- 8.5 --no-postinstall
 ```
+
+The `php` and `composer` wrappers forward your environment to the container, so
+`MYSQL_HOST=db php script.php` works as it would without Docker. Variables that describe the host
+are left out: the desktop session (`XDG_*`, `DISPLAY`, `GTK*`, `QT_*`, ...), systemd, the terminal
+and IDE, host toolchains (`JAVA_HOME`, `NVM_*`, ...), `SSH_*` and agent variables. To forward one
+of those anyway, list its name or a pattern in `~/.shellscript/php/env.conf`, one per line, or:
+
+```bash
+load.sh php-docker -- 8.5 --env 'JAVA_HOME,XDG_RUNTIME_DIR'
+```
+
+`node-docker` takes the same options (`--add`, `--volume`, `--env`, `--postinstall`,
+`--no-postinstall`, `--skip`) and keeps its files under `~/.shellscript/node`:
+
+```bash
+load.sh node-docker -- 22 --add python3,make,g++ --volume /home/user/projects
+```
+
+Its wrappers (`node`, `npm`, `npx`, `yarn`) forward the environment with the same rule, so
+`NODE_ENV=production node app.js` reaches Node, and `load.sh remove -- node-docker` works the same
+way. All of this lives in one file both scripts share, `public/scripts/lib/docker-wrapper.sh`.
 
 `load.sh remove -- php-docker` removes the wrappers of every installed PHP version. With `--purge`
 it also removes `~/.shellscript/php`, which holds `packages.conf`, `volumes.conf` and the

@@ -24,6 +24,14 @@ require_downloader             # exit 1 unless curl or wget is available
 Never call `curl` or `wget` directly in scripts — use `fetch`/`download` so both tools work.
 Each script defines only its own `print_usage() { cat <<'USAGE' ... USAGE }` (and `print_manifest`).
 
+### Shared code and the post-load hook
+- Code used by more than one script lives in `public/scripts/lib/` (not listed on the site, since
+  only files directly in `public/scripts/` are). Do NOT add tool-specific code to `load.sh`.
+- A script that needs such a file defines `postLoad()` at the start of a line and handles
+  `--post-load` by calling it. `load.sh` runs `<script> --post-load` once after downloading or
+  updating the script. The script must also call `postLoad` itself when the file is missing,
+  because loaders older than the hook never do. See `php-docker.sh`.
+
 ### 3. Standard Flags Support
 All scripts should support:
 - `-h, --help` - Show usage and exit

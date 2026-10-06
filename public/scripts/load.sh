@@ -194,6 +194,7 @@ if [[ -z "${SCRIPT_NAME}" ]]; then
   exit 2
 fi
 
+DOWNLOADED=false
 if [[ -n "${DEVELOPER_PATH}" ]]; then
   DEST_PATH="${DEVELOPER_PATH}/${SCRIPT_NAME}.sh"
   if [[ ! -f "${DEST_PATH}" ]]; then
@@ -243,19 +244,12 @@ else
       fi
       mv "${DEST_PATH_TMP}" "${DEST_PATH}"
       chmod +x "${DEST_PATH}" || true
+      DOWNLOADED=true
     fi
   }
 
   ensure_downloaded
 fi
-
-if [[ "${DONT_RUN}" == true ]]; then
-  echo "Script ensured at: ${DEST_PATH}" >&2
-  exit 0
-fi
-
-echo ">_ ${SCRIPT_NAME}.sh"
-echo
 
 # Inject standard paths and helpers into child script environment
 SHELLSCRIPT_HOME="${HOME}/.shellscript"
@@ -277,6 +271,25 @@ fetch()       { if command -v curl >/dev/null 2>&1; then curl -fsSL "$1"; else w
 download()    { if command -v curl >/dev/null 2>&1; then curl -fsSL -o "$2" "$1"; else wget -qO "$2" "$1"; fi; }
 require_downloader() { command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1 || { err "Required command 'curl' or 'wget' not found"; exit 1; }; }
 export -f log err run require_cmd fetch download require_downloader
+
+# Post-load hook: a script that defines postLoad() has it called once, right
+# after it was downloaded or updated, to fetch what it depends on (for example a
+# file it shares with other scripts). It is not called when the cached copy is
+# used, nor in --developer mode, where nothing is downloaded.
+if [[ "${DOWNLOADED}" == true ]] && grep -q '^postLoad()' "${DEST_PATH}"; then
+  if ! "${DEST_PATH}" --post-load; then
+    echo "Error: post-load step of ${SCRIPT_NAME}.sh failed" >&2
+    exit 3
+  fi
+fi
+
+if [[ "${DONT_RUN}" == true ]]; then
+  echo "Script ensured at: ${DEST_PATH}" >&2
+  exit 0
+fi
+
+echo ">_ ${SCRIPT_NAME}.sh"
+echo
 
 # Execute the script with passed arguments
 exec "${DEST_PATH}" "${ARGS[@]}"

@@ -8,7 +8,7 @@ set -euo pipefail
 
 print_usage() {
   cat <<'USAGE'
-php-docker.sh <php_version> [--add package1,package2,...] [--volume /path1,/path2,...] [--postinstall /path/to/script] [--no-postinstall] [--skip packages,postinstall] [--manifest]
+php-docker.sh <php_version> [--add package1,package2,...] [--volume /path1,/path2,...] [--env NAME1,NAME2,...] [--postinstall /path/to/script] [--no-postinstall] [--skip packages,postinstall] [--manifest]
 
 Installs Docker-backed wrappers for php and composer under $HOME/.shellscript/bin
 using the byjg/php:<version>-cli image.
@@ -26,6 +26,14 @@ Options:
                         installs/updates. The wrappers read this file at runtime,
                         so you can also edit it directly without reinstalling.
                         Example: --volume /home/user/projects
+  --env <names>         The wrappers forward the host environment to the container,
+                        except the variables that describe the host itself (desktop
+                        session, systemd, terminal and IDE, host toolchains such as
+                        JAVA_HOME or NVM_*, SSH_* and agents). Use --env to forward
+                        some of those anyway (comma-separated names or patterns).
+                        Saved to $HOME/.shellscript/php/env.conf, which the wrappers
+                        read at runtime, so you can also edit it directly.
+                        Example: --env JAVA_HOME,XDG_RUNTIME_DIR
   --postinstall <script>
                         Script to run as root inside the image after the packages
                         are installed, for what apk cannot do (PECL builds, vendor
@@ -58,26 +66,6 @@ Examples:
 USAGE
 }
 
-# Without a version: everything php-docker installed, for "load.sh remove".
-# The versioned wrappers are read from the bin folder, and the whole php folder
-# is listed so packages.conf, volumes.conf and the post-install scripts go with
-# --purge.
-print_manifest_all() {
-  local base="${SHELLSCRIPT_HOME:-$HOME/.shellscript}"
-  local bin_files="php composer"
-  local file name
-  for file in "$base"/bin/php* "$base"/bin/composer*; do
-    name="$(basename "$file")"
-    [[ "$name" =~ ^(php|composer)[0-9]+\.[0-9]+$ ]] || continue
-    bin_files+=" $name"
-  done
-  cat <<MANIFEST
-BIN_FILES=${bin_files}
-FOLDERS=${base}/php
-SHELLRC_FILE=${base}/shellrc/php-init.sh
-MANIFEST
-}
-
 print_manifest() {
   local version="${1:-VERSION}"
   cat <<MANIFEST
@@ -86,6 +74,24 @@ FOLDERS=\$HOME/.shellscript/php/${version}
 SHELLRC_FILE=\$HOME/.shellscript/shellrc/php-init.sh
 MANIFEST
 }
+
+# Code shared with the other Docker-backed wrappers. load.sh calls postLoad once,
+# right after it downloads or updates this script; a loader older than that hook
+# never does, so the file is also fetched here when it is missing.
+SHARED_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/docker-wrapper.sh"
+
+postLoad() {
+  mkdir -p "$(dirname "$SHARED_LIB")"
+  if ! download "https://shellscript.download/scripts/lib/docker-wrapper.sh" "$SHARED_LIB"; then
+    echo "Error: could not download lib/docker-wrapper.sh, which this script needs" >&2
+    exit 3
+  fi
+}
+
+if [[ "${1-}" == "--post-load" ]]; then
+  postLoad
+  exit 0
+fi
 
 # Help flag handling
 if [[ "${1-}" == "-h" || "${1-}" == "--help" ]]; then
@@ -101,68 +107,20 @@ if [[ $# -lt 1 ]]; then
   exit 2
 fi
 
-PACKAGES=""
-VOLUMES=""
-POSTINSTALL=""
-NO_POSTINSTALL=0
-SKIP_PACKAGES=0
-SKIP_POSTINSTALL=0
+[[ -f "$SHARED_LIB" ]] || postLoad
+# shellcheck source=lib/docker-wrapper.sh
+source "$SHARED_LIB"
+
 SHOW_MANIFEST=0
 PHP_VERSION=""
 while [[ $# -gt 0 ]]; do
+  if docker_wrapper_option "$@"; then
+    shift "$DOCKER_OPT_SHIFT"
+    continue
+  fi
   case "$1" in
     "5.6"|"7.0"|"7.1"|"7.2"|"7.3"|"7.4"|"8.0"|"8.1"|"8.2"|"8.3"|"8.4"|"8.5"|"8.6")
       PHP_VERSION="$1"
-      shift
-      ;;
-    "--add")
-      shift
-      if [[ $# -eq 0 ]]; then
-        echo "Error: --add requires a package list" >&2
-        exit 1
-      fi
-      PACKAGES="$1"
-      shift
-      ;;
-    "--volume")
-      shift
-      if [[ $# -eq 0 ]]; then
-        echo "Error: --volume requires a path list" >&2
-        exit 1
-      fi
-      VOLUMES="${VOLUMES:+$VOLUMES,}$1"
-      shift
-      ;;
-    "--postinstall")
-      shift
-      if [[ $# -eq 0 ]]; then
-        echo "Error: --postinstall requires a script path" >&2
-        exit 1
-      fi
-      POSTINSTALL="$1"
-      shift
-      ;;
-    "--no-postinstall")
-      NO_POSTINSTALL=1
-      shift
-      ;;
-    "--skip")
-      shift
-      if [[ $# -eq 0 ]]; then
-        echo "Error: --skip requires a step list (packages,postinstall)" >&2
-        exit 1
-      fi
-      IFS=',' read -ra SKIP_ARRAY <<< "$1"
-      for step in "${SKIP_ARRAY[@]}"; do
-        case "$step" in
-          packages) SKIP_PACKAGES=1 ;;
-          postinstall) SKIP_POSTINSTALL=1 ;;
-          *)
-            echo "Error: Invalid --skip step '$step'. Supported steps are: packages, postinstall" >&2
-            exit 1
-            ;;
-        esac
-      done
       shift
       ;;
     "--manifest")
@@ -179,7 +137,7 @@ done
 # If manifest requested, print and exit
 if [[ $SHOW_MANIFEST -eq 1 ]]; then
   if [[ -z "$PHP_VERSION" ]]; then
-    print_manifest_all
+    docker_manifest_all php php composer
   else
     print_manifest "$PHP_VERSION"
   fi
@@ -192,16 +150,6 @@ if [[ -z "$PHP_VERSION" ]]; then
   echo >&2
   print_usage >&2
   exit 2
-fi
-
-if [[ -n "$POSTINSTALL" && $NO_POSTINSTALL -eq 1 ]]; then
-  echo "Error: --postinstall and --no-postinstall cannot be used together" >&2
-  exit 1
-fi
-
-if [[ -n "$POSTINSTALL" && ! -f "$POSTINSTALL" ]]; then
-  echo "Error: post-install script not found: $POSTINSTALL" >&2
-  exit 1
 fi
 
 # Pre-flight: docker availability
@@ -229,66 +177,29 @@ cat >"${SHELLRC_FOLDER}/php-init.sh" <<WRAP
 export PATH="\$PATH:$PHP_BIN"
 WRAP
 
-# Persist extra volumes so they survive future installs/updates.
-# The wrappers read this file at runtime (one absolute path per line).
-VOLUMES_CONF="$BASE_FOLDER/php/volumes.conf"
-if [[ -n "$VOLUMES" ]]; then
-  touch "$VOLUMES_CONF"
-  IFS=',' read -ra VOL_ARRAY <<< "$VOLUMES"
-  for vol_path in "${VOL_ARRAY[@]}"; do
-    vol_path="${vol_path%/}"
-    if [[ ! -d "$vol_path" ]]; then
-      echo "Warning: volume path does not exist: $vol_path" >&2
-    fi
-    if ! grep -qxF "$vol_path" "$VOLUMES_CONF"; then
-      echo "$vol_path" >> "$VOLUMES_CONF"
-      echo "Added volume to ${VOLUMES_CONF}: $vol_path"
-    fi
-  done
-fi
+# Save packages.conf, volumes.conf, env.conf and the post-install script
+docker_wrapper_configure "$BASE_FOLDER/php" "$PHP_HOME"
 
-# Persist extra packages so they survive future installs/updates.
-# phpNN- prefixes are rewritten to the target version at install time
-# (e.g. a saved php83-gd installs as php86-gd when installing 8.6).
-PACKAGES_CONF="$BASE_FOLDER/php/packages.conf"
-if [[ -n "$PACKAGES" ]]; then
-  touch "$PACKAGES_CONF"
-  IFS=',' read -ra PKG_ARRAY <<< "$PACKAGES"
-  for pkg in "${PKG_ARRAY[@]}"; do
-    if ! grep -qxF "$pkg" "$PACKAGES_CONF"; then
-      echo "$pkg" >> "$PACKAGES_CONF"
-      echo "Added package to ${PACKAGES_CONF}: $pkg"
-    fi
-  done
-fi
+# Runtime code of the php and composer wrappers: mount the extra volumes at their
+# own path, and forward the environment without what only makes sense on the host.
+VOLUME_ARGS="$(docker_volume_args "$DOCKER_VOLUMES_CONF")"
+ENV_FILTER="$(docker_env_filter "$DOCKER_ENV_CONF")"
 
-# Persist the post-install script next to the other files of this PHP version,
-# so it is tied to it and runs again on every install/update.
-POSTINSTALL_SCRIPT="${PHP_HOME}/postinstall.sh"
-if [[ -n "$POSTINSTALL" ]]; then
-  cp "$POSTINSTALL" "$POSTINSTALL_SCRIPT"
-  echo "Saved post-install script to ${POSTINSTALL_SCRIPT}"
-fi
-if [[ $NO_POSTINSTALL -eq 1 && -f "$POSTINSTALL_SCRIPT" ]]; then
-  rm -f "$POSTINSTALL_SCRIPT"
-  echo "Removed post-install script ${POSTINSTALL_SCRIPT}"
-fi
-
-# Build the effective package list from the saved config, rewriting version
-# prefixes and de-duplicating (php83-gd and php85-gd collapse into one).
+# Build the package list from the saved config. packages.conf is shared by every
+# PHP version, so phpNN- prefixes are rewritten to the target version (a saved
+# php83-gd installs as php86-gd on 8.6) and de-duplicated (php83-gd and php85-gd
+# collapse into one). An entry may not exist for the target version (php85-sodium
+# has no php86-sodium counterpart); it is reported and the others still install.
 INSTALL_PACKAGES=()
-if [[ -f "$PACKAGES_CONF" ]]; then
-  while IFS= read -r pkg; do
-    [[ -z "$pkg" || "$pkg" == \#* ]] && continue
-    pkg="$(echo "$pkg" | sed -E "s/^php[0-9]+-/php${PHP_VERSION//./}-/")"
-    if [[ ! " ${INSTALL_PACKAGES[*]-} " == *" $pkg "* ]]; then
-      INSTALL_PACKAGES+=("$pkg")
-    fi
-  done < "$PACKAGES_CONF"
-fi
+while IFS= read -r pkg; do
+  [[ -n "$pkg" ]] || continue
+  pkg="$(echo "$pkg" | sed -E "s/^php[0-9]+-/php${PHP_VERSION//./}-/")"
+  if [[ ! " ${INSTALL_PACKAGES[*]-} " == *" $pkg "* ]]; then
+    INSTALL_PACKAGES+=("$pkg")
+  fi
+done < <(docker_conf_list "$DOCKER_PACKAGES_CONF")
 
 # Pull base image and build a customized one with updated composer
-# shellcheck disable=SC2154  # PHP_VERSION is set via case above
 PHP_BASE_IMAGE="byjg/php:${PHP_VERSION}-cli"
 if ! docker pull "$PHP_BASE_IMAGE"; then
   echo "Error: Failed to pull Docker image ${PHP_BASE_IMAGE}" >&2
@@ -300,71 +211,8 @@ PHP_IMAGE="${PHP_BASE_IMAGE}-load"
 docker image rm "$PHP_IMAGE" 2>/dev/null || true
 docker tag "$PHP_BASE_IMAGE" "$PHP_IMAGE"
 
-if [[ $SKIP_PACKAGES -eq 1 ]]; then
-  echo "Skipping Alpine packages (--skip packages)"
-elif [[ ${#INSTALL_PACKAGES[@]} -gt 0 ]]; then
-  echo "Installing Alpine packages: ${INSTALL_PACKAGES[*]}"
-  docker rm temp 2>/dev/null || true
-
-  # Install one package at a time. packages.conf is shared by every PHP version
-  # and its phpNN- prefix is rewritten to the target version, so an entry saved
-  # for 8.5 may not exist for 8.6 (php85-sodium has no php86-sodium counterpart).
-  # "apk add pkg1 pkg2" resolves the whole set upfront and installs nothing if a
-  # single name is unknown, so one missing package would block all the others.
-  # The loop isolates each failure and reports the ones that could not install.
-  # It exits 0 when at least one package installed, so whatever did succeed is
-  # still committed to the image below.
-  # No -it here: apk add is non-interactive, and a TTY breaks piped/CI runs.
-  if docker run --user root --name temp "$PHP_IMAGE" sh -c '
-      installed=0
-      failed=""
-      for pkg in "$@"; do
-        if apk add --no-cache "$pkg"; then
-          installed=$((installed + 1))
-        else
-          failed="$failed $pkg"
-        fi
-      done
-      [ -n "$failed" ] && echo "Warning: no package for this PHP version:$failed" >&2
-      [ "$installed" -gt 0 ]
-    ' _ "${INSTALL_PACKAGES[@]}"; then
-    docker commit temp "$PHP_IMAGE"
-  else
-    echo "Warning: no package could be installed, continuing with the base image." >&2
-  fi
-  docker rm temp 2>/dev/null || true
-fi
-
-# Run the post-install script of this PHP version on top of the packages.
-# Unlike a missing package, a failing script aborts the install: the image
-# would silently lack what the script was meant to add.
-if [[ $SKIP_POSTINSTALL -eq 1 ]]; then
-  echo "Skipping post-install script (--skip postinstall)"
-elif [[ -f "$POSTINSTALL_SCRIPT" ]]; then
-  echo "Running post-install script: ${POSTINSTALL_SCRIPT}"
-  docker rm temp 2>/dev/null || true
-
-  # "# ENV NAME=value" lines become environment variables of the image.
-  COMMIT_ARGS=()
-  while IFS= read -r env_line; do
-    COMMIT_ARGS+=(--change "ENV ${env_line}")
-  done < <(sed -n -E 's/^#[[:space:]]*ENV[[:space:]]+//p' "$POSTINSTALL_SCRIPT")
-
-  chmod a+rx "$POSTINSTALL_SCRIPT"
-  if docker run --user root --name temp \
-      -e "PHP_VERSION=${PHP_VERSION}" \
-      -v "$POSTINSTALL_SCRIPT":/tmp/postinstall.sh:ro \
-      "$PHP_IMAGE" /tmp/postinstall.sh; then
-    docker commit ${COMMIT_ARGS[@]+"${COMMIT_ARGS[@]}"} temp "$PHP_IMAGE"
-  else
-    echo "Error: post-install script failed: ${POSTINSTALL_SCRIPT}" >&2
-    docker rm temp 2>/dev/null || true
-    exit 5
-  fi
-  docker rm temp 2>/dev/null || true
-fi
-
-
+docker_image_packages "$PHP_IMAGE" ${INSTALL_PACKAGES[@]+"${INSTALL_PACKAGES[@]}"}
+docker_image_postinstall "$PHP_IMAGE" -e "PHP_VERSION=${PHP_VERSION}"
 
 # Create php wrapper
 cat >"${DEST_FOLDER}/php${PHP_VERSION}" <<WRAP
@@ -399,29 +247,9 @@ if [ -t 1 ]; then
     TTY_ARG="\${TTY_ARG} -t"
 fi
 
-# Prepare environment variables (exclude host-specific vars)
-ENV_ARGS=()
-while IFS='=' read -r -d '' name value; do
-  # Skip environment variables that should not be passed to the container
-  case "\$name" in
-    PATH|HOME|USER|LOGNAME|HOSTNAME|PWD|OLDPWD|SHELL|TERM|SHLVL|_)
-      continue
-      ;;
-  esac
-  ENV_ARGS+=(-e "\${name}=\${value}")
-done < <(env -0)
+${ENV_FILTER}
 
-# Extra volumes from volumes.conf (one absolute path per line, mounted as path:path)
-EXTRA_VOLUME_ARGS=()
-VOLUMES_CONF="$BASE_FOLDER/php/volumes.conf"
-if [[ -f "\$VOLUMES_CONF" ]]; then
-  while IFS= read -r vol_path; do
-    [[ -z "\$vol_path" || "\$vol_path" == \\#* ]] && continue
-    if [[ -d "\$vol_path" ]]; then
-      EXTRA_VOLUME_ARGS+=(-v "\$vol_path":"\$vol_path")
-    fi
-  done < "\$VOLUMES_CONF"
-fi
+${VOLUME_ARGS}
 
 docker run \${TTY_ARG} --rm \
   -v "\${PWD}":"\${PWD}" \
@@ -467,29 +295,9 @@ if [ -t 1 ]; then
     TTY_ARG="\${TTY_ARG} -t"
 fi
 
-# Prepare environment variables (exclude host-specific vars)
-ENV_ARGS=()
-while IFS='=' read -r -d '' name value; do
-  # Skip environment variables that should not be passed to the container
-  case "\$name" in
-    PATH|HOME|USER|LOGNAME|HOSTNAME|PWD|OLDPWD|SHELL|TERM|SHLVL|_)
-      continue
-      ;;
-  esac
-  ENV_ARGS+=(-e "\${name}=\${value}")
-done < <(env -0)
+${ENV_FILTER}
 
-# Extra volumes from volumes.conf (one absolute path per line, mounted as path:path)
-EXTRA_VOLUME_ARGS=()
-VOLUMES_CONF="$BASE_FOLDER/php/volumes.conf"
-if [[ -f "\$VOLUMES_CONF" ]]; then
-  while IFS= read -r vol_path; do
-    [[ -z "\$vol_path" || "\$vol_path" == \\#* ]] && continue
-    if [[ -d "\$vol_path" ]]; then
-      EXTRA_VOLUME_ARGS+=(-v "\$vol_path":"\$vol_path")
-    fi
-  done < "\$VOLUMES_CONF"
-fi
+${VOLUME_ARGS}
 
 # Mount the project at its real host path (not /workdir) so that relative
 # path repositories and symlinks resolve identically on host and container.
