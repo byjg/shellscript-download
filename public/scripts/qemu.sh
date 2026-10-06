@@ -55,7 +55,8 @@ Files and customization:
     vm.conf      Memory, CPUs, SSH/extra ports, image reference. Edit while the
                  VM is stopped; values apply on the next 'start <name>'.
     disk.qcow2   The VM's private copy-on-write disk, backed by the base image.
-    user-data    cloud-init config (default user, password, SSH keys). Applied on
+    user-data    cloud-init config (default user, password, the SSH public keys in
+                 ~/.ssh and in ssh-agent). Applied on
                  the VM's FIRST boot only — to customize it, create the VM, stop
                  it, edit user-data, regenerate seed.iso (genisoimage -output
                  seed.iso -volid cidata -joliet -rock user-data meta-data) and
@@ -66,13 +67,13 @@ Bridged VMs:
   By default each VM sits behind its own NAT (10.0.2.15) and is reached through ports
   forwarded on 127.0.0.1, so VMs cannot talk to each other. With --bridge the VM joins
   a host bridge instead, and 'list' shows the address it was given (by the bridge's
-  DHCP). This needs, once, as root:
-    - a bridge with DHCP and NAT, e.g. libvirt's default network:
-        sudo apt-get install libvirt-daemon-system    (creates and starts virbr0)
-    - QEMU allowed to use it:
-        echo "allow virbr0" | sudo tee -a /etc/qemu/bridge.conf
-        sudo chmod u+s /usr/lib/qemu/qemu-bridge-helper   (/usr/libexec/... on Fedora)
-  'start' checks these and prints what is missing.
+  DHCP). The first bridged 'start' sets the host up, with sudo, like any other
+  requirement:
+    - virbr0 is libvirt's default network (DHCP and NAT): its packages are installed
+      (apt, dnf) and the network started. A bridge with another name must exist.
+    - "allow <bridge>" is added to /etc/qemu/bridge.conf, and qemu-bridge-helper is
+      made setuid, so QEMU can attach VMs to the bridge as your user.
+  'load.sh remove -- qemu' undoes these, like the packages.
 
 Examples:
   load.sh qemu -- start --image ubuntu-24.04 --name dev1 --memory 2G --disk 10G
@@ -228,8 +229,50 @@ bridge_helper() {
   return 1
 }
 
-# The one-time host setup a bridged VM needs. Reported, not done: making a binary
-# setuid and changing /etc/qemu is the host owner's call.
+# Changes made to the host for bridged VMs, one per line ("allow <bridge>",
+# "setuid <helper>"), so 'load.sh remove -- qemu' can undo exactly those
+BRIDGE_STATE="${QEMU_HOME}/bridge-setup.conf"
+
+record_bridge_change() {
+  [[ "$DRY_RUN" == "1" ]] && return
+  mkdir -p "$QEMU_HOME"
+  printf '%s\n' "$1" >> "$BRIDGE_STATE"
+  sort -u -o "$BRIDGE_STATE" "$BRIDGE_STATE"
+}
+
+# Sets up what a bridged VM needs, like any other requirement: whatever is missing,
+# with sudo. libvirt's default network provides virbr0 (DHCP and NAT); a bridge with
+# another name is the host owner's to create.
+ensure_bridge() {
+  local br="$1" pm helper
+  if ! ip link show "$br" >/dev/null 2>&1 && [[ "$br" == "virbr0" ]]; then
+    pm=$(detect_pm) || true
+    case "$pm" in
+      apt-get) install_packages "$pm" "libvirt-daemon-system" ;;
+      dnf)     install_packages "$pm" "libvirt-daemon-config-network libvirt-daemon-driver-network libvirt-client" ;;
+    esac
+    if [[ "$pm" == "apt-get" || "$pm" == "dnf" ]]; then
+      log "Starting libvirt's default network (virbr0)"
+      run "${SUDO} systemctl enable --now libvirtd.service 2>/dev/null || ${SUDO} systemctl enable --now virtnetworkd.socket"
+      run "${SUDO} virsh -c qemu:///system net-autostart default >/dev/null"
+      run "${SUDO} virsh -c qemu:///system net-start default >/dev/null 2>&1 || true"
+    fi
+  fi
+  if ! grep -qsE "^allow[[:space:]]+(${br}|all)\b" /etc/qemu/bridge.conf; then
+    log "Allowing QEMU to use bridge ${br} (/etc/qemu/bridge.conf)"
+    run "${SUDO} mkdir -p /etc/qemu && echo 'allow ${br}' | ${SUDO} tee -a /etc/qemu/bridge.conf >/dev/null"
+    record_bridge_change "allow ${br}"
+  fi
+  if helper=$(bridge_helper) && [[ ! -u "$helper" ]]; then
+    log "Letting QEMU attach VMs to bridges as your user (setuid ${helper})"
+    run "${SUDO} chmod u+s ${helper}"
+    record_bridge_change "setuid ${helper}"
+  fi
+  [[ "$DRY_RUN" == "1" ]] || check_bridge "$br"
+}
+
+# Verifies the setup, after ensure_bridge: what is still missing could not be done
+# here (another package manager, a bridge with another name).
 check_bridge() {
   local br="$1" helper problems=()
   ip link show "$br" >/dev/null 2>&1 \
@@ -310,27 +353,35 @@ ensure_qemu() {
 
   local missing
   missing=$(missing_packages "$pm")
-  if [[ -n "$missing" ]]; then
-    local sudo_cmd="sudo"
-    [[ "$(id -u)" == "0" ]] && sudo_cmd=""
-    log "Installing missing packages: ${missing}"
-    case "$pm" in
-      apt-get) run "${sudo_cmd} apt-get update && ${sudo_cmd} apt-get install -y ${missing}" ;;
-      dnf)     run "${sudo_cmd} dnf install -y ${missing}" ;;
-      pacman)  run "${sudo_cmd} pacman -S --noconfirm --needed ${missing}" ;;
-      zypper)  run "${sudo_cmd} zypper install -y ${missing}" ;;
-      apk)     run "${sudo_cmd} apk add ${missing}" ;;
-    esac
-    # Record what this script installed so 'load.sh remove -- qemu' only uninstalls those
-    if [[ "$DRY_RUN" != "1" ]]; then
-      mkdir -p "$QEMU_HOME"
-      printf '%s\n' ${missing} >> "${QEMU_HOME}/installed-packages.conf"
-      sort -u -o "${QEMU_HOME}/installed-packages.conf" "${QEMU_HOME}/installed-packages.conf"
-    fi
-  fi
+  [[ -n "$missing" ]] && install_packages "$pm" "$missing"
 
   run "mkdir -p \"${IMAGES_DIR}\" \"${VMS_DIR}\""
   ensure_wrapper
+}
+
+SUDO="sudo"
+[[ "$(id -u)" == "0" ]] && SUDO=""
+
+# Installs packages and records them, so 'load.sh remove -- qemu' uninstalls only
+# what this script installed
+install_packages() {
+  local pm="$1" pkgs="$2"
+  log "Installing missing packages: ${pkgs}"
+  case "$pm" in
+    # An index that fails to update (a third-party source mid-sync) makes apt-get
+    # update fail, while apt keeps the old one and can still install: the install
+    # runs regardless, and reports the error itself if it truly cannot.
+    apt-get) run "${SUDO} apt-get update; ${SUDO} apt-get install -y ${pkgs}" ;;
+    dnf)     run "${SUDO} dnf install -y ${pkgs}" ;;
+    pacman)  run "${SUDO} pacman -S --noconfirm --needed ${pkgs}" ;;
+    zypper)  run "${SUDO} zypper install -y ${pkgs}" ;;
+    apk)     run "${SUDO} apk add ${pkgs}" ;;
+  esac
+  if [[ "$DRY_RUN" != "1" ]]; then
+    mkdir -p "$QEMU_HOME"
+    printf '%s\n' ${pkgs} >> "${QEMU_HOME}/installed-packages.conf"
+    sort -u -o "${QEMU_HOME}/installed-packages.conf" "${QEMU_HOME}/installed-packages.conf"
+  fi
 }
 
 iso_tool() {
@@ -455,11 +506,14 @@ make_seed() {
   local dir="$1" name="$2" tool
   tool=$(iso_tool) || { err "No ISO tool found (genisoimage, mkisofs or xorriso) — required for cloud-init. Use --no-cloud-init to skip."; exit 3; }
 
-  local keys=""
-  local pub
-  for pub in "$HOME"/.ssh/id_*.pub; do
-    [[ -f "$pub" ]] && keys+="      - $(cat "$pub")"$'\n'
-  done
+  # Every public key in ~/.ssh and every key loaded in ssh-agent: keys are often
+  # named after what they are for rather than id_*, and the agent holds the ones
+  # actually in use
+  local keys="" key
+  while IFS= read -r key; do
+    keys+="      - ${key}"$'\n'
+  done < <( { cat "$HOME"/.ssh/*.pub 2>/dev/null; ssh-add -L 2>/dev/null; } \
+              | grep -E '^(ssh-|ecdsa-|sk-)' | sort -u )
 
   local keys_block=""
   if [[ -n "$keys" ]]; then
@@ -522,23 +576,38 @@ cmd_uninstall() {
     fi
   done
 
+  # Undo the bridge setup this script made, whoever installed QEMU
+  if [[ -s "$BRIDGE_STATE" ]]; then
+    local kind what
+    while read -r kind what; do
+      case "$kind" in
+        allow)
+          log "Removing 'allow ${what}' from /etc/qemu/bridge.conf"
+          run "${SUDO} sed -i '/^allow[[:space:]]\+${what}\$/d' /etc/qemu/bridge.conf" ;;
+        setuid)
+          log "Removing the setuid bit from ${what}"
+          run "${SUDO} chmod u-s ${what} 2>/dev/null || true" ;;
+      esac
+    done < "$BRIDGE_STATE"
+    [[ "$DRY_RUN" == "1" ]] || rm -f "$BRIDGE_STATE"
+  fi
+
   local state="${QEMU_HOME}/installed-packages.conf"
   if [[ ! -s "$state" ]]; then
     log "QEMU was not installed by this script — leaving system packages untouched."
     return
   fi
 
-  local pm pkgs sudo_cmd="sudo"
+  local pm pkgs
   pm=$(detect_pm) || { err "No supported package manager found."; exit 3; }
   pkgs=$(tr '\n' ' ' < "$state")
-  [[ "$(id -u)" == "0" ]] && sudo_cmd=""
   log "Removing packages installed by this script: ${pkgs}"
   case "$pm" in
-    apt-get) run "${sudo_cmd} apt-get remove -y ${pkgs}" ;;
-    dnf)     run "${sudo_cmd} dnf remove -y ${pkgs}" ;;
-    pacman)  run "${sudo_cmd} pacman -Rns --noconfirm ${pkgs}" ;;
-    zypper)  run "${sudo_cmd} zypper remove -y ${pkgs}" ;;
-    apk)     run "${sudo_cmd} apk del ${pkgs}" ;;
+    apt-get) run "${SUDO} apt-get remove -y ${pkgs}" ;;
+    dnf)     run "${SUDO} dnf remove -y ${pkgs}" ;;
+    pacman)  run "${SUDO} pacman -Rns --noconfirm ${pkgs}" ;;
+    zypper)  run "${SUDO} zypper remove -y ${pkgs}" ;;
+    apk)     run "${SUDO} apk del ${pkgs}" ;;
   esac
   [[ "$DRY_RUN" == "1" ]] || rm -f "$state"
 }
@@ -570,7 +639,7 @@ boot_vm() {
     bios_args="-bios \"$fw\""
   fi
 
-  [[ -n "${VM_BRIDGE:-}" ]] && check_bridge "$VM_BRIDGE"
+  [[ -n "${VM_BRIDGE:-}" ]] && ensure_bridge "$VM_BRIDGE"
 
   # The VM's own forwarded ports must be free on the host before booting
   local p
@@ -632,7 +701,8 @@ cmd_start() {
       err "--ssh-port and --port forward ports from the user-mode network; a bridged VM is reached at its own address."
       exit 2
     fi
-    check_bridge "$BRIDGE"
+    ensure_qemu
+    ensure_bridge "$BRIDGE"
   fi
 
   # Boot an existing stopped VM by name
