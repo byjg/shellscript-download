@@ -64,7 +64,8 @@ Files and customization:
     vm.conf      Memory, CPUs, SSH/extra ports, image reference. Edit while the
                  VM is stopped; values apply on the next 'start <name>'.
     disk.qcow2   The VM's private copy-on-write disk, backed by the base image.
-    user-data    cloud-init config (default user, password, SSH keys). Applied on
+    user-data    cloud-init config (default user, password, the SSH public keys in
+                 ~/.ssh and in ssh-agent). Applied on
                  the VM's FIRST boot only — to customize it, create the VM, stop
                  it, edit user-data, regenerate seed.iso (genisoimage -output
                  seed.iso -volid cidata -joliet -rock user-data meta-data) and
@@ -75,13 +76,13 @@ Bridged VMs:
   By default each VM sits behind its own NAT (10.0.2.15) and is reached through ports
   forwarded on 127.0.0.1, so VMs cannot talk to each other. With --bridge the VM joins
   a host bridge instead, and 'list' shows the address it was given (by the bridge's
-  DHCP). This needs, once, as root:
-    - a bridge with DHCP and NAT, e.g. libvirt's default network:
-        sudo apt-get install libvirt-daemon-system    (creates and starts virbr0)
-    - QEMU allowed to use it:
-        echo "allow virbr0" | sudo tee -a /etc/qemu/bridge.conf
-        sudo chmod u+s /usr/lib/qemu/qemu-bridge-helper   (/usr/libexec/... on Fedora)
-  'start' checks these and prints what is missing.
+  DHCP). The first bridged 'start' sets the host up, with sudo, like any other
+  requirement:
+    - virbr0 is libvirt's default network (DHCP and NAT): its packages are installed
+      (apt, dnf) and the network started. A bridge with another name must exist.
+    - "allow <bridge>" is added to /etc/qemu/bridge.conf, and qemu-bridge-helper is
+      made setuid, so QEMU can attach VMs to the bridge as your user.
+  'load.sh remove -- qemu' undoes these, like the packages.
 
 Examples:
   load.sh qemu -- start --image ubuntu-24.04 --name dev1 --memory 2G --disk 10G
