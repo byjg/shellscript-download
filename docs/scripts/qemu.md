@@ -28,6 +28,7 @@ Commands:
   start                 Create and boot a VM, or boot an existing stopped VM by name
   list                  List VMs and their state
   images                Show image alias patterns and cached base images
+  address <name>        Print a bridged VM's address (exit 1 until it has one)
   stop <name>           Gracefully stop a running VM (ACPI powerdown)
   remove <name>         Remove a VM and its disk
 
@@ -46,6 +47,11 @@ Options:
   --cpus <n>            start: number of virtual CPUs (default: 2)
   --ssh-port <port>     start: host port forwarded to guest port 22 (default: first free port from 2222)
   --port <host:guest>   start: extra port forward, can be repeated
+  --bridge <bridge>     start: attach the VM to a host bridge (e.g. virbr0) instead of
+                        the private user-mode network. The VM gets its own address on the
+                        bridge, reachable from the host and from other VMs on it; there is
+                        no port forwarding (--ssh-port/--port do not apply). See 'Bridged
+                        VMs' below for the one-time host setup.
   --no-cloud-init       start: skip the cloud-init seed (default user/SSH key injection)
   --force               stop: kill immediately; remove: remove even if running
   --purge-image         remove: also delete the cached base image if unused
@@ -65,12 +71,26 @@ Files and customization:
                  change instance-id in meta-data so cloud-init runs again.
     seed.iso     The generated cloud-init seed attached as a CD-ROM.
 
+Bridged VMs:
+  By default each VM sits behind its own NAT (10.0.2.15) and is reached through ports
+  forwarded on 127.0.0.1, so VMs cannot talk to each other. With --bridge the VM joins
+  a host bridge instead, and 'list' shows the address it was given (by the bridge's
+  DHCP). This needs, once, as root:
+    - a bridge with DHCP and NAT, e.g. libvirt's default network:
+        sudo apt-get install libvirt-daemon-system    (creates and starts virbr0)
+    - QEMU allowed to use it:
+        echo "allow virbr0" | sudo tee -a /etc/qemu/bridge.conf
+        sudo chmod u+s /usr/lib/qemu/qemu-bridge-helper   (/usr/libexec/... on Fedora)
+  'start' checks these and prints what is missing.
+
 Examples:
   load.sh qemu -- start --image ubuntu-24.04 --name dev1 --memory 2G --disk 10G
+  load.sh qemu -- start --image ubuntu-24.04 --name node1 --bridge virbr0
   load.sh qemu -- start --image https://example.com/disk.qcow2 --ssh-port 2222
   load.sh qemu -- start --image debian-12 --arch aarch64
   load.sh qemu -- start --name dev1
   load.sh qemu -- list
+  load.sh qemu -- address node1
   load.sh qemu -- images
   load.sh qemu -- stop dev1
   load.sh qemu -- remove dev1 --purge-image

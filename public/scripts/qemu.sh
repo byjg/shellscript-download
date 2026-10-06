@@ -19,6 +19,7 @@ Commands:
   start                 Create and boot a VM, or boot an existing stopped VM by name
   list                  List VMs and their state
   images                Show image alias patterns and cached base images
+  address <name>        Print a bridged VM's address (exit 1 until it has one)
   stop <name>           Gracefully stop a running VM (ACPI powerdown)
   remove <name>         Remove a VM and its disk
 
@@ -37,6 +38,11 @@ Options:
   --cpus <n>            start: number of virtual CPUs (default: 2)
   --ssh-port <port>     start: host port forwarded to guest port 22 (default: first free port from 2222)
   --port <host:guest>   start: extra port forward, can be repeated
+  --bridge <bridge>     start: attach the VM to a host bridge (e.g. virbr0) instead of
+                        the private user-mode network. The VM gets its own address on the
+                        bridge, reachable from the host and from other VMs on it; there is
+                        no port forwarding (--ssh-port/--port do not apply). See 'Bridged
+                        VMs' below for the one-time host setup.
   --no-cloud-init       start: skip the cloud-init seed (default user/SSH key injection)
   --force               stop: kill immediately; remove: remove even if running
   --purge-image         remove: also delete the cached base image if unused
@@ -56,12 +62,26 @@ Files and customization:
                  change instance-id in meta-data so cloud-init runs again.
     seed.iso     The generated cloud-init seed attached as a CD-ROM.
 
+Bridged VMs:
+  By default each VM sits behind its own NAT (10.0.2.15) and is reached through ports
+  forwarded on 127.0.0.1, so VMs cannot talk to each other. With --bridge the VM joins
+  a host bridge instead, and 'list' shows the address it was given (by the bridge's
+  DHCP). This needs, once, as root:
+    - a bridge with DHCP and NAT, e.g. libvirt's default network:
+        sudo apt-get install libvirt-daemon-system    (creates and starts virbr0)
+    - QEMU allowed to use it:
+        echo "allow virbr0" | sudo tee -a /etc/qemu/bridge.conf
+        sudo chmod u+s /usr/lib/qemu/qemu-bridge-helper   (/usr/libexec/... on Fedora)
+  'start' checks these and prints what is missing.
+
 Examples:
   load.sh qemu -- start --image ubuntu-24.04 --name dev1 --memory 2G --disk 10G
+  load.sh qemu -- start --image ubuntu-24.04 --name node1 --bridge virbr0
   load.sh qemu -- start --image https://example.com/disk.qcow2 --ssh-port 2222
   load.sh qemu -- start --image debian-12 --arch aarch64
   load.sh qemu -- start --name dev1
   load.sh qemu -- list
+  load.sh qemu -- address node1
   load.sh qemu -- images
   load.sh qemu -- stop dev1
   load.sh qemu -- remove dev1 --purge-image
@@ -90,6 +110,7 @@ DISK="10G"
 CPUS="2"
 SSH_PORT=""
 EXTRA_PORTS=()
+BRIDGE=""
 CLOUD_INIT=1
 FORCE=0
 PURGE_IMAGE=0
@@ -108,6 +129,7 @@ while [[ ${1-} ]]; do
     --cpus)          shift || { err "--cpus requires a value"; exit 2; }; CPUS="$1" ;;
     --ssh-port)      shift || { err "--ssh-port requires a value"; exit 2; }; SSH_PORT="$1" ;;
     --port)          shift || { err "--port requires a value"; exit 2; }; EXTRA_PORTS+=("$1") ;;
+    --bridge)        shift || { err "--bridge requires a value"; exit 2; }; BRIDGE="$1" ;;
     --no-cloud-init) CLOUD_INIT=0 ;;
     --force)         FORCE=1 ;;
     --purge-image)   PURGE_IMAGE=1 ;;
@@ -190,6 +212,53 @@ find_free_port() {
   local port="$1"
   while port_reserved "$port" || ! port_free "$port"; do port=$((port + 1)); done
   printf '%s' "$port"
+}
+
+# A random locally administered MAC in QEMU's range, fixed per VM so the bridge's
+# DHCP keeps giving it the same address
+random_mac() {
+  printf '52:54:00:%02x:%02x:%02x' $((RANDOM % 256)) $((RANDOM % 256)) $((RANDOM % 256))
+}
+
+bridge_helper() {
+  local h
+  for h in /usr/lib/qemu/qemu-bridge-helper /usr/libexec/qemu-bridge-helper /usr/lib/qemu-bridge-helper; do
+    if [[ -x "$h" ]]; then printf '%s' "$h"; return 0; fi
+  done
+  return 1
+}
+
+# The one-time host setup a bridged VM needs. Reported, not done: making a binary
+# setuid and changing /etc/qemu is the host owner's call.
+check_bridge() {
+  local br="$1" helper problems=()
+  ip link show "$br" >/dev/null 2>&1 \
+    || problems+=("Bridge '${br}' does not exist. For libvirt's default network (virbr0): sudo apt-get install libvirt-daemon-system  (or: sudo dnf install libvirt-daemon-config-network)")
+  grep -qsE "^allow[[:space:]]+(${br}|all)\b" /etc/qemu/bridge.conf \
+    || problems+=("QEMU may not use '${br}': echo \"allow ${br}\" | sudo tee -a /etc/qemu/bridge.conf")
+  if helper=$(bridge_helper); then
+    [[ -u "$helper" ]] || problems+=("The bridge helper is not setuid: sudo chmod u+s ${helper}")
+  else
+    problems+=("qemu-bridge-helper not found; it ships with QEMU's system package.")
+  fi
+  if [[ ${#problems[@]} -gt 0 ]]; then
+    err "VM networking on bridge '${br}' is not set up on this host:"
+    local p
+    for p in "${problems[@]}"; do err "  - ${p}"; done
+    exit 3
+  fi
+}
+
+# Address of a bridged VM, by its MAC: from libvirt's DHCP leases when the bridge is
+# libvirt's, otherwise from the host's neighbour table. Empty until the VM has one.
+vm_address() {
+  local mac="$1" br="$2" ip=""
+  local leases="/var/lib/libvirt/dnsmasq/${br}.status"
+  if [[ -r "$leases" ]]; then
+    ip=$(grep -i -B3 "\"mac-address\": \"${mac}\"" "$leases" | grep -oE '"ip-address": "[0-9.]+"' | grep -oE '[0-9.]+' | tail -1)
+  fi
+  [[ -n "$ip" ]] || ip=$(ip -4 neigh show dev "$br" 2>/dev/null | grep -i "lladdr ${mac}" | awk '{print $1}' | head -1)
+  printf '%s' "$ip"
 }
 
 detect_pm() {
@@ -501,9 +570,11 @@ boot_vm() {
     bios_args="-bios \"$fw\""
   fi
 
+  [[ -n "${VM_BRIDGE:-}" ]] && check_bridge "$VM_BRIDGE"
+
   # The VM's own forwarded ports must be free on the host before booting
   local p
-  for p in "$VM_SSH_PORT" ${VM_PORTS:-}; do
+  for p in ${VM_SSH_PORT:-} ${VM_PORTS:-}; do
     p="${p%%:*}"
     if ! port_free "$p"; then
       err "Port ${p} needed by VM '${name}' is in use on this host."
@@ -519,10 +590,15 @@ boot_vm() {
     log "Monitor port was in use — moved to ${VM_MONITOR_PORT}."
   fi
 
-  local net="user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:${VM_SSH_PORT}-:22"
-  for p in ${VM_PORTS:-}; do
-    net+=",hostfwd=tcp:127.0.0.1:${p%%:*}-:${p##*:}"
-  done
+  local net
+  if [[ -n "${VM_BRIDGE:-}" ]]; then
+    net="bridge,br=${VM_BRIDGE},model=virtio-net-pci,mac=${VM_MAC}"
+  else
+    net="user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:${VM_SSH_PORT}-:22"
+    for p in ${VM_PORTS:-}; do
+      net+=",hostfwd=tcp:127.0.0.1:${p%%:*}-:${p##*:}"
+    done
+  fi
 
   local drive_args="-drive file=\"${dir}/disk.qcow2\",if=virtio"
   local cdrom_args=""
@@ -538,12 +614,26 @@ boot_vm() {
     -monitor telnet:127.0.0.1:${VM_MONITOR_PORT},server,nowait"
 
   log "VM '${name}' started."
-  log "  SSH:  ssh -p ${VM_SSH_PORT} ${DEFAULT_VM_USER}@localhost   (password: ${DEFAULT_VM_USER})"
+  if [[ -n "${VM_BRIDGE:-}" ]]; then
+    log "  On bridge ${VM_BRIDGE} (MAC ${VM_MAC}); its address shows in 'load.sh qemu -- list' once it has one."
+    log "  SSH:  ssh ${DEFAULT_VM_USER}@<address>   (password: ${DEFAULT_VM_USER})"
+  else
+    log "  SSH:  ssh -p ${VM_SSH_PORT} ${DEFAULT_VM_USER}@localhost   (password: ${DEFAULT_VM_USER})"
+  fi
   log "  Stop: load.sh qemu -- stop ${name}"
 }
 
 cmd_start() {
   local name="${NAME:-$VM_ARG}"
+
+  # Checked before anything is downloaded or created
+  if [[ -n "$BRIDGE" ]]; then
+    if [[ -n "$SSH_PORT" || ${#EXTRA_PORTS[@]} -gt 0 ]]; then
+      err "--ssh-port and --port forward ports from the user-mode network; a bridged VM is reached at its own address."
+      exit 2
+    fi
+    check_bridge "$BRIDGE"
+  fi
 
   # Boot an existing stopped VM by name
   if [[ -n "$name" && -d "$(vm_dir "$name")" ]]; then
@@ -610,12 +700,17 @@ cmd_start() {
     fi
   done
 
-  local ssh_port="${SSH_PORT:-$(find_free_port 2222)}"
+  local ssh_port="" mac=""
+  if [[ -n "$BRIDGE" ]]; then
+    mac=$(random_mac)
+  else
+    ssh_port="${SSH_PORT:-$(find_free_port 2222)}"
+  fi
   local monitor_port
   monitor_port=$(find_free_port 45000)
 
   if [[ "$DRY_RUN" == "1" ]]; then
-    log "[dry-run] Creating VM '${name}' (image: ${image_path}, memory: ${MEMORY}, disk: ${DISK}, cpus: ${CPUS}, ssh: ${ssh_port})"
+    log "[dry-run] Creating VM '${name}' (image: ${image_path}, memory: ${MEMORY}, disk: ${DISK}, cpus: ${CPUS}, $([[ -n "$BRIDGE" ]] && printf 'bridge: %s' "$BRIDGE" || printf 'ssh: %s' "$ssh_port"))"
     return
   fi
 
@@ -642,6 +737,8 @@ VM_SSH_PORT="${ssh_port}"
 VM_MONITOR_PORT="${monitor_port}"
 VM_PORTS="${EXTRA_PORTS[*]:-}"
 VM_CDROM="${cdrom}"
+VM_BRIDGE="${BRIDGE}"
+VM_MAC="${mac}"
 CONF
 
   boot_vm "$name"
@@ -668,7 +765,7 @@ PATTERNS
 }
 
 cmd_list() {
-  printf '%-20s %-9s %-9s %-8s %-5s %-6s %-8s %s\n' "NAME" "STATE" "ARCH" "MEMORY" "CPUS" "SSH" "MONITOR" "IMAGE"
+  printf '%-20s %-9s %-9s %-8s %-5s %-22s %-8s %s\n' "NAME" "STATE" "ARCH" "MEMORY" "CPUS" "SSH" "MONITOR" "IMAGE"
   local dir name state
   for dir in "$VMS_DIR"/*/; do
     [[ -d "$dir" ]] || continue
@@ -678,9 +775,32 @@ cmd_list() {
     (
       # shellcheck disable=SC1091
       source "${dir}/vm.conf" 2>/dev/null || true
-      printf '%-20s %-9s %-9s %-8s %-5s %-6s %-8s %s\n' "$name" "$state" "${VM_ARCH:-$HOST_ARCH}" "${VM_MEMORY:-?}" "${VM_CPUS:-?}" "${VM_SSH_PORT:-?}" "${VM_MONITOR_PORT:-?}" "$(basename "${VM_IMAGE:-?}")"
+      # A bridged VM is reached at its own address; the others through a forwarded port
+      ssh="${VM_SSH_PORT:-?}"
+      if [[ -n "${VM_BRIDGE:-}" ]]; then
+        ssh=$(vm_address "${VM_MAC:-}" "$VM_BRIDGE")
+        [[ -n "$ssh" ]] || ssh="(${VM_BRIDGE}, no address yet)"
+      fi
+      printf '%-20s %-9s %-9s %-8s %-5s %-22s %-8s %s\n' "$name" "$state" "${VM_ARCH:-$HOST_ARCH}" "${VM_MEMORY:-?}" "${VM_CPUS:-?}" "$ssh" "${VM_MONITOR_PORT:-?}" "$(basename "${VM_IMAGE:-?}")"
     )
   done
+}
+
+# The address alone, for scripts: no table to parse
+cmd_address() {
+  require_vm_name
+  local ip
+  ip=$(
+    # shellcheck disable=SC1091
+    source "$(vm_dir "$VM_ARG")/vm.conf"
+    if [[ -z "${VM_BRIDGE:-}" ]]; then
+      err "VM '${VM_ARG}' is not on a bridge; it is reached at localhost:${VM_SSH_PORT}."
+      exit 2
+    fi
+    vm_address "$VM_MAC" "$VM_BRIDGE"
+  )
+  [[ -n "$ip" ]] || exit 1
+  printf '%s\n' "$ip"
 }
 
 cmd_stop() {
@@ -751,8 +871,9 @@ case "$COMMAND" in
   start)     cmd_start ;;
   list)      cmd_list ;;
   images)    cmd_images ;;
+  address)   cmd_address ;;
   stop)      cmd_stop ;;
   remove)    cmd_remove ;;
   uninstall) cmd_uninstall ;;
-  *) err "Unknown command: ${COMMAND} (expected: start, list, images, stop, remove)"; exit 2 ;;
+  *) err "Unknown command: ${COMMAND} (expected: start, list, images, address, stop, remove)"; exit 2 ;;
 esac
