@@ -212,6 +212,7 @@ npm run build
 This runs the generator automatically (`prebuild` hook) and produces:
 - `src/pages/scripts/<name>.tsx` — detail page (do not edit manually)
 - `src/generated/scriptRoutes.tsx` — route registry (do not edit manually)
+- `docs/scripts/<name>.md` — documentation page (do not edit manually)
 - `dist/scripts/<name>.html` — static HTML
 
 ### Preview the site locally
@@ -220,6 +221,36 @@ This runs the generator automatically (`prebuild` hook) and produces:
 npm run dev      # hot-reload dev server
 npm run preview  # production build preview
 ```
+
+---
+
+## Scripts that depend on another file
+
+A script that defines a `postLoad()` function has it called by the loader once, right after the
+script is downloaded or updated (`load.sh` runs `<script> --post-load`). It is the place to fetch
+what the script depends on, such as a file it shares with other scripts. `php-docker` and
+`node-docker` use it to download `lib/docker-wrapper.sh` next to themselves in
+`$HOME/.shellscript/downloads`. The hook is not called when the cached copy of the script is used,
+nor with `--developer`, where the shared file is read from the local folder.
+
+---
+
+## Documentation
+
+The documentation is published on [opensource.byjg.com](https://opensource.byjg.com) from
+`README.md` and the `docs/` folder, on every push to `main`.
+
+- `docs/scripts/` is generated from `public/scripts/*.sh` by `npm run build`. Do not edit it: the
+  folder is erased and written again on every build.
+- Guides written by hand, such as `docs/docker-wrappers.md`, go directly in `docs/`.
+- Pages are parsed as MDX there. Outside a code block, write `&lt;` instead of `<` and avoid `{`.
+
+---
+
+## Deployment
+
+The website is a static Vite build (`npm run build` writes `dist/`), hosted on Cloudflare Pages
+(`wrangler.toml`).
 
 ---
 
@@ -267,7 +298,7 @@ load.sh --developer /scripts <name> -- --dry-run
 - [ ] No `log`, `err`, `run`, or `require_cmd` defined locally (they are injected)
 - [ ] Tested in a clean Docker container
 - [ ] `npm run build` completes without errors
-- [ ] Generated files (`src/pages/scripts/`, `src/generated/`) are included in the commit
+- [ ] Generated files (`src/pages/scripts/`, `src/generated/`, `docs/scripts/`) are included in the commit
 
 ---
 

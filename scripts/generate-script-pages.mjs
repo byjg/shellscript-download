@@ -1,4 +1,4 @@
-// Generates static HTML pages AND React component pages + routes from comment headers of scripts in public/scripts
+// Generates React component pages + routes AND Markdown docs (docs/scripts) from comment headers of scripts in public/scripts
 // Runs automatically in npm prebuild
 import { promises as fs } from 'fs'
 import path from 'path'
@@ -182,6 +182,64 @@ function htmlEscape(s) {
     .replaceAll('>', '&gt;')
 }
 
+// Short description of a script: the first header line without its "<name>.sh: " prefix,
+// plus the indented lines that continue it
+function extractDescription(header, name) {
+  const lines = header.split(/\r?\n/)
+  const first = lines.findIndex((l) => l.trim() !== '')
+  if (first === -1) return name
+  const parts = [lines[first].trim()]
+  for (let i = first + 1; i < lines.length && /^\s+\S/.test(lines[i]); i++) parts.push(lines[i].trim())
+  return parts.join(' ').replace(`${name}: `, '')
+}
+
+// The docs are published on opensource.byjg.com, where Markdown is parsed as MDX:
+// outside a code fence a raw "<" or "{" breaks the build
+function mdxEscape(s) {
+  return s.replaceAll('<', '&lt;').replaceAll('{', '&#123;')
+}
+
+function buildDocMd({ base, name, description, documentation }) {
+  // load.sh is the loader itself: there is no "load.sh load" to show
+  const command = base === 'load' ? '' : `\`\`\`bash\nload.sh ${base}\n\`\`\`\n\n`
+  return `---
+# Auto-generated from public/scripts/${name} — Do not edit.
+description: ${JSON.stringify(description)}
+---
+
+# ${base}
+
+${mdxEscape(description)}
+
+${command}## Usage
+
+\`\`\`text
+${documentation}
+\`\`\`
+
+[Script page](https://shellscript.download/scripts/${base}) · [Source](https://github.com/byjg/shellscript-download/blob/main/public/scripts/${name})
+`
+}
+
+function buildDocIndexMd(items) {
+  const rows = items
+    .map(({ base, description }) => `| [${base}](${base}.md) | ${mdxEscape(description)} |`)
+    .join('\n')
+  return `---
+# Auto-generated from public/scripts/*.sh — Do not edit.
+description: "Every script available through load.sh"
+---
+
+# Scripts
+
+Run any of them with \`load.sh <script>\`.
+
+| Script | Description |
+|---|---|
+${rows}
+`
+}
+
 // function buildHtml({ title, bodyText }) {
 //   const pre = `<pre style="white-space: pre-wrap; font-family: ui-monospace, monospace; background:#0b1020; color:#e5e7eb; padding:1rem; border-radius:.5rem;">${htmlEscape(bodyText)}</pre>`
 //   return `<!doctype html>
@@ -254,14 +312,20 @@ async function generate() {
   const srcPagesScriptsDir = path.join(srcPagesDir, 'scripts')
   const srcGeneratedDir = path.join(repoRoot, 'src', 'generated')
   const srcComponentsDir = path.join(repoRoot, 'src', 'components')
+  const docsScriptsDir = path.join(repoRoot, 'docs', 'scripts')
 
   await ensureDir(srcPagesScriptsDir)
   await ensureDir(srcGeneratedDir)
   await ensureDir(srcComponentsDir)
 
+  // docs/scripts holds generated files only: start clean so a removed script leaves no page behind
+  await fs.rm(docsScriptsDir, { recursive: true, force: true })
+  await ensureDir(docsScriptsDir)
+
   const entries = await readDirSafe(publicScriptsDir)
   const routeItems = []
   const listItems = []
+  const docItems = []
   let count = 0
   for (const entry of entries) {
     if (!entry.isFile()) continue
@@ -289,10 +353,16 @@ async function generate() {
     const outCompPath = path.join(srcPagesScriptsDir, `${base}.tsx`)
     await fs.writeFile(outCompPath, componentTsx, 'utf8')
 
-    // 3) Collect route info
+    // 3) Write the Markdown page published on opensource.byjg.com
+    const description = extractDescription(header, entry.name)
+    const docMd = buildDocMd({ base, name: entry.name, description, documentation })
+    await fs.writeFile(path.join(docsScriptsDir, `${base}.md`), docMd, 'utf8')
+    docItems.push({ base, description })
+
+    // 4) Collect route info
     routeItems.push({ base, importName: makeComponentName(base), path: `/scripts/${base}`, source: "/scripts" })
 
-    // 4) Collect list info: first non-empty line of header (for short description), or fallback
+    // 5) Collect list info: first non-empty line of header (for short description), or fallback
     const firstLine = (header || '')
       .split(/\r?\n/)
       .map((s) => s.trim())
@@ -304,6 +374,15 @@ async function generate() {
 
   // Sort list items alphabetically by base
   listItems.sort((a, b) => a.base.localeCompare(b.base))
+
+  // Docs index and sidebar category
+  docItems.sort((a, b) => a.base.localeCompare(b.base))
+  await fs.writeFile(path.join(docsScriptsDir, 'README.md'), buildDocIndexMd(docItems), 'utf8')
+  await fs.writeFile(
+    path.join(docsScriptsDir, '_category_.json'),
+    JSON.stringify({ label: 'Scripts', position: 2 }, null, 2) + '\n',
+    'utf8'
+  )
 
   // Generate routes file
   const imports = routeItems
@@ -408,7 +487,7 @@ export default function List() {
 if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {
   generate()
     .then(({ count, routes }) => {
-      console.log(`[generate-script-pages] Generated ${count} HTML page(s) and ${routes} React route(s) from public/scripts/*`)
+      console.log(`[generate-script-pages] Generated ${count} Markdown doc(s) and ${routes} React route(s) from public/scripts/*`)
     })
     .catch((err) => {
       console.error('[generate-script-pages] Failed:', err)

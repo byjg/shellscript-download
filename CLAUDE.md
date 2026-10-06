@@ -48,6 +48,7 @@ All scripts should support:
 - Run `npm run build` to auto-generate:
   - React page in `src/pages/scripts/<name>.tsx`
   - Route in `src/generated/scriptRoutes.tsx`
+  - Documentation page in `docs/scripts/<name>.md` (published on opensource.byjg.com)
   - Static HTML in `dist/scripts/<name>.html`
 - The generated files should NOT be edited manually
 
