@@ -335,6 +335,27 @@ pci_addr() {
 # Everything in the device's IOMMU group: VFIO hands a VM whole groups
 gpu_group_devices() { ls "/sys/bus/pci/devices/$1/iommu_group/devices/"; }
 
+# Processes holding the device's files on the host, once each, as "pid name":
+# its /dev/dri nodes, and for NVIDIA's driver its /dev/nvidia* files
+gpu_users() {
+  local addr="$1" files=() f pids
+  for f in /sys/bus/pci/devices/"$addr"/drm/*; do
+    [[ -e "$f" ]] && files+=("/dev/dri/$(basename "$f")")
+  done
+  if [[ "$(basename "$(readlink "/sys/bus/pci/devices/${addr}/driver" 2>/dev/null)" 2>/dev/null)" == "nvidia" ]]; then
+    for f in /dev/nvidia[0-9]* /dev/nvidiactl; do [[ -e "$f" ]] && files+=("$f"); done
+  fi
+  [[ ${#files[@]} -gt 0 && "$DRY_RUN" != "1" ]] || return 0
+  # fuser exits 1 both for "nobody" and for "could not look": sudo must work first
+  if [[ -n "$SUDO" ]] && ! ${SUDO} true; then
+    err "sudo is needed to check whether the host is using ${addr}."
+    exit 3
+  fi
+  pids=$(${SUDO} fuser "${files[@]}" 2>/dev/null | tr -s ' ' '\n' | grep -E '^[0-9]+$' | sort -un | xargs) || true
+  [[ -n "$pids" ]] || return 0
+  ps -o pid=,comm= -p "${pids// /,}" | awk '{printf "%s%s %s", (NR>1?", ":""), $1, $2}'
+}
+
 # Memory size as given to --memory (2G, 2048M, 2048) in MiB
 mem_mib() {
   case "$1" in
@@ -360,6 +381,11 @@ check_gpu() {
     [[ "${d%.*}" == "${addr%.*}" ]] \
       || problems+=("${d} shares the IOMMU group of ${addr}, and would have to go to the VM with it")
   done
+  # The host must not be using it: a driver whose device is in use can block
+  # when it is unbound. Checked with sudo, to see system services too.
+  local users
+  users=$(gpu_users "$addr") || exit 3
+  [[ -n "$users" ]] && problems+=("the host is using it: ${users}. Stop them first (nvidia-persistenced: sudo systemctl stop nvidia-persistenced; a desktop session holds it until the GPU is freed from it)")
   lim=$(ulimit -l)
   if [[ "$lim" != "unlimited" ]] && (( $(mem_mib "$mem") * 1024 > lim )); then
     problems+=("VFIO locks all of the VM's memory (${mem}), above your limit of $((lim / 1024)) MiB (ulimit -l): use a smaller --memory, or raise memlock in /etc/security/limits.conf")
@@ -375,22 +401,13 @@ check_gpu() {
 # Moves the device (and the rest of its IOMMU group) from its host driver to
 # vfio-pci, recording where each came from, and lets this user open the group
 acquire_gpu() {
-  local name="$1" addr="$2" d drv group users
+  local name="$1" addr="$2" d drv group
   check_gpu "$addr" "$VM_MEMORY"
   run "${SUDO} modprobe vfio-pci"
   for d in $(gpu_group_devices "$addr"); do
     drv=""
     [[ -e "/sys/bus/pci/devices/${d}/driver" ]] && drv=$(basename "$(readlink "/sys/bus/pci/devices/${d}/driver")")
     [[ "$drv" == "vfio-pci" ]] && continue
-    # A driver whose device is in use can block when it is unbound
-    if [[ "$drv" == "nvidia" && "$DRY_RUN" != "1" ]]; then
-      users=$(${SUDO} fuser /dev/nvidia* 2>/dev/null | tr -s ' ' | xargs) || true
-      if [[ -n "$users" ]]; then
-        err "The NVIDIA GPU is in use on this host (pids: ${users}); stop those first:"
-        err "  ps -o pid,cmd -p ${users// /,}    (nvidia-persistenced: sudo systemctl stop nvidia-persistenced)"
-        exit 3
-      fi
-    fi
     log "Giving ${d} to VFIO (from ${drv:-no driver})"
     run "echo vfio-pci | ${SUDO} tee /sys/bus/pci/devices/${d}/driver_override >/dev/null"
     [[ -n "$drv" ]] && run "echo ${d} | ${SUDO} tee /sys/bus/pci/devices/${d}/driver/unbind >/dev/null"
