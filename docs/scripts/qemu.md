@@ -47,6 +47,9 @@ Options:
   --cpus <n>            start: number of virtual CPUs (default: 2)
   --ssh-port <port>     start: host port forwarded to guest port 22 (default: first free port from 2222)
   --port <host:guest>   start: extra port forward, can be repeated
+  --gpu <pci-address>   start: give the VM a host PCI device, such as a GPU, through VFIO
+                        (e.g. 01:00.0, from lspci). The host loses it while the VM runs;
+                        see 'GPU passthrough' below.
   --bridge <bridge>     start: attach the VM to a host bridge (e.g. virbr0) instead of
                         the private user-mode network. The VM gets its own address on the
                         bridge, reachable from the host and from other VMs on it; there is
@@ -84,9 +87,21 @@ Bridged VMs:
       made setuid, so QEMU can attach VMs to the bridge as your user.
   'load.sh remove -- qemu' undoes these, like the packages.
 
+GPU passthrough:
+  --gpu gives the VM the device itself, through VFIO, so it runs the vendor's driver
+  (an NVIDIA GPU with CUDA and nvidia-smi, for example). Before anything changes,
+  'start' checks that IOMMU is on, that the device's IOMMU group holds only its own
+  functions (all of them go to the VM), and that the VM's memory fits under
+  'ulimit -l', since VFIO locks it. Then, with sudo, the devices move from their host
+  driver to vfio-pci; a device still in use on the host is refused. 'stop' and
+  'remove' give each back to the driver it came from, also when the VM shut itself
+  down; 'load.sh remove -- qemu' gives back anything left. Some laptop GPUs do not
+  reset cleanly, and giving one back may then need a reboot.
+
 Examples:
   load.sh qemu -- start --image ubuntu-24.04 --name dev1 --memory 2G --disk 10G
   load.sh qemu -- start --image ubuntu-24.04 --name node1 --bridge virbr0
+  load.sh qemu -- start --image ubuntu-24.04 --name gpu1 --memory 3G --gpu 01:00.0
   load.sh qemu -- start --image https://example.com/disk.qcow2 --ssh-port 2222
   load.sh qemu -- start --image debian-12 --arch aarch64
   load.sh qemu -- start --name dev1
