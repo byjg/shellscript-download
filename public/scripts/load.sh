@@ -44,8 +44,10 @@ if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
   exit 1
 fi
 
-echo ">_ load.sh"
-echo
+# The banner goes to stderr: stdout is the script's own output, which a caller
+# may capture, e.g. ip=$(load.sh qemu -- address vm1)
+echo ">_ load.sh" >&2
+echo >&2
 
 print_usage() {
   cat <<'USAGE'
@@ -288,8 +290,8 @@ if [[ "${DONT_RUN}" == true ]]; then
   exit 0
 fi
 
-echo ">_ ${SCRIPT_NAME}.sh"
-echo
+echo ">_ ${SCRIPT_NAME}.sh" >&2
+echo >&2
 
 # Execute the script with passed arguments
 exec "${DEST_PATH}" "${ARGS[@]}"

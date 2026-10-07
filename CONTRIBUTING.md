@@ -179,21 +179,11 @@ exec "${HOME}/.shellscript/<tool>/current/bin/<cmd>" "$@"
 
 ### Test your script without deploying
 
-Use the `--developer <path>` flag to point `load.sh` at a local directory instead of
-downloading from the internet:
-
-```bash
-# Run maven.sh from your working tree
-load.sh --developer ./public/scripts maven
-
-# Pass arguments through
-load.sh --developer ./public/scripts maven -- --dry-run --version 3.9.6
-
-# Verify injection without running
-load.sh --developer ./public/scripts --dont-run maven
-```
-
-`load.sh` resolves `<path>/<script>.sh` and errors if the file is not found.
+`load.sh --developer ./public/scripts <name>` runs your working copy instead of downloading it,
+with the same helpers a published script gets. How to use it, how to test a change to `load.sh`
+itself, and how to test in a clean container are in
+[Testing scripts before publishing](docs/development.md), which is also published with the
+documentation.
 
 ### Syntax-check your script
 
@@ -256,36 +246,8 @@ The website is a static Vite build (`npm run build` writes `dist/`), hosted on C
 
 ## Testing in a clean environment
 
-Always test scripts in a clean, non-root Linux environment before submitting. The easiest
-way is Docker:
-
-```bash
-docker run -it --rm \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v "$(pwd)/public/scripts":/scripts:ro \
-  -v "$(pwd)/public/install":/install:ro \
-  ubuntu:24.04 bash
-```
-
-Inside the container, create an unprivileged user (scripts refuse to run as root):
-
-```bash
-apt update && apt install -y curl sudo
-
-useradd -m -s /bin/bash user
-echo 'user ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
-
-su - user
-```
-
-Then install the loader and test:
-
-```bash
-# Use the locally mounted installer with --developer — no network needed
-bash /install/loader --developer
-
-load.sh --developer /scripts <name> -- --dry-run
-```
+Test scripts in a clean, non-root Linux environment before submitting: see
+[Test in a clean environment](docs/development.md#test-in-a-clean-environment).
 
 ### Checklist before opening a PR
 
