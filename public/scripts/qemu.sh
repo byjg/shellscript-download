@@ -38,6 +38,9 @@ Options:
   --cpus <n>            start: number of virtual CPUs (default: 2)
   --ssh-port <port>     start: host port forwarded to guest port 22 (default: first free port from 2222)
   --port <host:guest>   start: extra port forward, can be repeated
+  --gpu <pci-address>   start: give the VM a host PCI device, such as a GPU, through VFIO
+                        (e.g. 01:00.0, from lspci). The host loses it while the VM runs;
+                        see 'GPU passthrough' below.
   --bridge <bridge>     start: attach the VM to a host bridge (e.g. virbr0) instead of
                         the private user-mode network. The VM gets its own address on the
                         bridge, reachable from the host and from other VMs on it; there is
@@ -75,9 +78,21 @@ Bridged VMs:
       made setuid, so QEMU can attach VMs to the bridge as your user.
   'load.sh remove -- qemu' undoes these, like the packages.
 
+GPU passthrough:
+  --gpu gives the VM the device itself, through VFIO, so it runs the vendor's driver
+  (an NVIDIA GPU with CUDA and nvidia-smi, for example). Before anything changes,
+  'start' checks that IOMMU is on, that the device's IOMMU group holds only its own
+  functions (all of them go to the VM), and that the VM's memory fits under
+  'ulimit -l', since VFIO locks it. Then, with sudo, the devices move from their host
+  driver to vfio-pci; a device still in use on the host is refused. 'stop' and
+  'remove' give each back to the driver it came from, also when the VM shut itself
+  down; 'load.sh remove -- qemu' gives back anything left. Some laptop GPUs do not
+  reset cleanly, and giving one back may then need a reboot.
+
 Examples:
   load.sh qemu -- start --image ubuntu-24.04 --name dev1 --memory 2G --disk 10G
   load.sh qemu -- start --image ubuntu-24.04 --name node1 --bridge virbr0
+  load.sh qemu -- start --image ubuntu-24.04 --name gpu1 --memory 3G --gpu 01:00.0
   load.sh qemu -- start --image https://example.com/disk.qcow2 --ssh-port 2222
   load.sh qemu -- start --image debian-12 --arch aarch64
   load.sh qemu -- start --name dev1
@@ -112,6 +127,7 @@ CPUS="2"
 SSH_PORT=""
 EXTRA_PORTS=()
 BRIDGE=""
+GPU=""
 CLOUD_INIT=1
 FORCE=0
 PURGE_IMAGE=0
@@ -131,6 +147,7 @@ while [[ ${1-} ]]; do
     --ssh-port)      shift || { err "--ssh-port requires a value"; exit 2; }; SSH_PORT="$1" ;;
     --port)          shift || { err "--port requires a value"; exit 2; }; EXTRA_PORTS+=("$1") ;;
     --bridge)        shift || { err "--bridge requires a value"; exit 2; }; BRIDGE="$1" ;;
+    --gpu)           shift || { err "--gpu requires a value"; exit 2; }; GPU="$1" ;;
     --no-cloud-init) CLOUD_INIT=0 ;;
     --force)         FORCE=1 ;;
     --purge-image)   PURGE_IMAGE=1 ;;
@@ -302,6 +319,107 @@ vm_address() {
   fi
   [[ -n "$ip" ]] || ip=$(ip -4 neigh show dev "$br" 2>/dev/null | grep -i "lladdr ${mac}" | awk '{print $1}' | head -1)
   printf '%s' "$ip"
+}
+
+# ---------- GPU passthrough (VFIO) ----------
+
+# Devices given to VMs, one per line: "<vm> <pci device> <driver it was taken from>",
+# so stopping or removing the VM gives each back to its own driver
+VFIO_STATE="${QEMU_HOME}/vfio.conf"
+
+# PCI address in sysfs form: 01:00.0 -> 0000:01:00.0
+pci_addr() {
+  if [[ "$1" =~ ^[0-9a-fA-F]{4}: ]]; then printf '%s' "$1"; else printf '0000:%s' "$1"; fi
+}
+
+# Everything in the device's IOMMU group: VFIO hands a VM whole groups
+gpu_group_devices() { ls "/sys/bus/pci/devices/$1/iommu_group/devices/"; }
+
+# Memory size as given to --memory (2G, 2048M, 2048) in MiB
+mem_mib() {
+  case "$1" in
+    *[Gg]) echo $(( ${1%[Gg]} * 1024 )) ;;
+    *[Mm]) echo "${1%[Mm]}" ;;
+    *)     echo "$1" ;;
+  esac
+}
+
+# What passing a device through needs, checked before anything is changed
+check_gpu() {
+  local addr="$1" mem="$2" d lim problems=()
+  if [[ ! -e "/sys/bus/pci/devices/${addr}" ]]; then
+    err "No PCI device ${addr}. List them with: lspci -nn"
+    exit 2
+  fi
+  if [[ ! -e "/sys/bus/pci/devices/${addr}/iommu_group" ]]; then
+    err "IOMMU is off, so ${addr} cannot be given to a VM: enable VT-d (or AMD-Vi) in the firmware,"
+    err "and add intel_iommu=on (or amd_iommu=on) to the kernel command line."
+    exit 3
+  fi
+  for d in $(gpu_group_devices "$addr"); do
+    [[ "${d%.*}" == "${addr%.*}" ]] \
+      || problems+=("${d} shares the IOMMU group of ${addr}, and would have to go to the VM with it")
+  done
+  lim=$(ulimit -l)
+  if [[ "$lim" != "unlimited" ]] && (( $(mem_mib "$mem") * 1024 > lim )); then
+    problems+=("VFIO locks all of the VM's memory (${mem}), above your limit of $((lim / 1024)) MiB (ulimit -l): use a smaller --memory, or raise memlock in /etc/security/limits.conf")
+  fi
+  if [[ ${#problems[@]} -gt 0 ]]; then
+    err "${addr} cannot be given to a VM:"
+    local p
+    for p in "${problems[@]}"; do err "  - ${p}"; done
+    exit 3
+  fi
+}
+
+# Moves the device (and the rest of its IOMMU group) from its host driver to
+# vfio-pci, recording where each came from, and lets this user open the group
+acquire_gpu() {
+  local name="$1" addr="$2" d drv group users
+  check_gpu "$addr" "$VM_MEMORY"
+  run "${SUDO} modprobe vfio-pci"
+  for d in $(gpu_group_devices "$addr"); do
+    drv=""
+    [[ -e "/sys/bus/pci/devices/${d}/driver" ]] && drv=$(basename "$(readlink "/sys/bus/pci/devices/${d}/driver")")
+    [[ "$drv" == "vfio-pci" ]] && continue
+    # A driver whose device is in use can block when it is unbound
+    if [[ "$drv" == "nvidia" && "$DRY_RUN" != "1" ]]; then
+      users=$(${SUDO} fuser /dev/nvidia* 2>/dev/null | tr -s ' ' | xargs) || true
+      if [[ -n "$users" ]]; then
+        err "The NVIDIA GPU is in use on this host (pids: ${users}); stop those first:"
+        err "  ps -o pid,cmd -p ${users// /,}    (nvidia-persistenced: sudo systemctl stop nvidia-persistenced)"
+        exit 3
+      fi
+    fi
+    log "Giving ${d} to VFIO (from ${drv:-no driver})"
+    run "echo vfio-pci | ${SUDO} tee /sys/bus/pci/devices/${d}/driver_override >/dev/null"
+    [[ -n "$drv" ]] && run "echo ${d} | ${SUDO} tee /sys/bus/pci/devices/${d}/driver/unbind >/dev/null"
+    run "echo ${d} | ${SUDO} tee /sys/bus/pci/drivers_probe >/dev/null"
+    if [[ "$DRY_RUN" != "1" ]]; then
+      mkdir -p "$QEMU_HOME"
+      printf '%s %s %s\n' "$name" "$d" "${drv:-none}" >> "$VFIO_STATE"
+    fi
+  done
+  group=$(basename "$(readlink "/sys/bus/pci/devices/${addr}/iommu_group")")
+  run "${SUDO} chown $(id -u) /dev/vfio/${group}"
+}
+
+# Gives the devices a VM took back to the drivers they came from
+release_gpu() {
+  local name="$1" vm d drv
+  [[ -s "$VFIO_STATE" ]] || return 0
+  grep -q "^${name} " "$VFIO_STATE" || return 0
+  while read -r vm d drv; do
+    [[ "$vm" == "$name" ]] || continue
+    log "Giving ${d} back to ${drv}"
+    run "echo | ${SUDO} tee /sys/bus/pci/devices/${d}/driver_override >/dev/null"
+    run "echo ${d} | ${SUDO} tee /sys/bus/pci/drivers/vfio-pci/unbind >/dev/null 2>&1 || true"
+    [[ "$drv" == "none" ]] || run "echo ${d} | ${SUDO} tee /sys/bus/pci/drivers_probe >/dev/null"
+  done < "$VFIO_STATE"
+  if [[ "$DRY_RUN" != "1" ]]; then
+    grep -v "^${name} " "$VFIO_STATE" > "${VFIO_STATE}.tmp" || true
+    mv "${VFIO_STATE}.tmp" "$VFIO_STATE"
+  fi
 }
 
 detect_pm() {
@@ -576,6 +694,13 @@ cmd_uninstall() {
     fi
   done
 
+  # Devices still given to VFIO (a VM that shut itself down) go back to the host
+  if [[ -s "$VFIO_STATE" ]]; then
+    local vm
+    for vm in $(cut -d' ' -f1 "$VFIO_STATE" | sort -u); do release_gpu "$vm"; done
+    [[ "$DRY_RUN" == "1" ]] || rm -f "$VFIO_STATE"
+  fi
+
   # Undo the bridge setup this script made, whoever installed QEMU
   if [[ -s "$BRIDGE_STATE" ]]; then
     local kind what
@@ -641,6 +766,12 @@ boot_vm() {
 
   [[ -n "${VM_BRIDGE:-}" ]] && ensure_bridge "$VM_BRIDGE"
 
+  local gpu_args="" d
+  if [[ -n "${VM_GPU:-}" ]]; then
+    acquire_gpu "$name" "$VM_GPU"
+    for d in $(gpu_group_devices "$VM_GPU"); do gpu_args+=" -device vfio-pci,host=${d}"; done
+  fi
+
   # The VM's own forwarded ports must be free on the host before booting
   local p
   for p in ${VM_SSH_PORT:-} ${VM_PORTS:-}; do
@@ -674,13 +805,18 @@ boot_vm() {
   [[ -n "${VM_CDROM:-}" ]] && cdrom_args="-cdrom \"${VM_CDROM}\""
   [[ -f "${dir}/seed.iso" ]] && cdrom_args+=" -drive file=\"${dir}/seed.iso\",media=cdrom"
 
-  run "${qemu_bin} ${accel_args} ${machine_args} ${bios_args} \
+  if ! run "${qemu_bin} ${accel_args} ${machine_args} ${bios_args} \
     -name \"${name}\" -m \"${VM_MEMORY}\" -smp \"${VM_CPUS}\" \
     ${drive_args} ${cdrom_args} \
-    -nic \"${net}\" \
+    -nic \"${net}\" ${gpu_args} \
     -display none -daemonize \
     -pidfile \"${dir}/qemu.pid\" \
-    -monitor telnet:127.0.0.1:${VM_MONITOR_PORT},server,nowait"
+    -monitor telnet:127.0.0.1:${VM_MONITOR_PORT},server,nowait"; then
+    # The GPU goes back to the host when the VM never ran
+    [[ -n "${VM_GPU:-}" ]] && release_gpu "$name"
+    err "QEMU failed to start VM '${name}'."
+    exit 3
+  fi
 
   log "VM '${name}' started."
   if [[ -n "${VM_BRIDGE:-}" ]]; then
@@ -689,6 +825,7 @@ boot_vm() {
   else
     log "  SSH:  ssh -p ${VM_SSH_PORT} ${DEFAULT_VM_USER}@localhost   (password: ${DEFAULT_VM_USER})"
   fi
+  [[ -n "${VM_GPU:-}" ]] && log "  GPU:  ${VM_GPU} (given back to the host on stop/remove)"
   log "  Stop: load.sh qemu -- stop ${name}"
 }
 
@@ -696,6 +833,10 @@ cmd_start() {
   local name="${NAME:-$VM_ARG}"
 
   # Checked before anything is downloaded or created
+  if [[ -n "$GPU" ]]; then
+    GPU=$(pci_addr "$GPU")
+    check_gpu "$GPU" "$MEMORY"
+  fi
   if [[ -n "$BRIDGE" ]]; then
     if [[ -n "$SSH_PORT" || ${#EXTRA_PORTS[@]} -gt 0 ]]; then
       err "--ssh-port and --port forward ports from the user-mode network; a bridged VM is reached at its own address."
@@ -809,6 +950,7 @@ VM_PORTS="${EXTRA_PORTS[*]:-}"
 VM_CDROM="${cdrom}"
 VM_BRIDGE="${BRIDGE}"
 VM_MAC="${mac}"
+VM_GPU="${GPU}"
 CONF
 
   boot_vm "$name"
@@ -877,7 +1019,12 @@ cmd_stop() {
   require_vm_name
   local name="$VM_ARG" dir pid
   dir=$(vm_dir "$name")
-  if ! is_running "$name"; then log "VM '${name}' is not running."; return; fi
+  if ! is_running "$name"; then
+    # It may have shut itself down: what it held still goes back
+    release_gpu "$name"
+    log "VM '${name}' is not running."
+    return
+  fi
   pid=$(vm_pid "$name")
 
   if [[ "$DRY_RUN" == "1" ]]; then log "[dry-run] Stopping VM '${name}' (pid ${pid})"; return; fi
@@ -903,6 +1050,7 @@ cmd_stop() {
     fi
   fi
   rm -f "${dir}/qemu.pid"
+  release_gpu "$name"
   log "VM '${name}' stopped."
 }
 
@@ -919,6 +1067,7 @@ cmd_remove() {
       exit 3
     fi
   fi
+  release_gpu "$name"
 
   local image=""
   # shellcheck disable=SC1091
