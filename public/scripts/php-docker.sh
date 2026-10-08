@@ -163,13 +163,13 @@ BASE_FOLDER="${SHELLSCRIPT_HOME}"
 SHELLRC_FOLDER="$BASE_FOLDER/shellrc"
 DEST_FOLDER="$BASE_FOLDER/bin"
 PHP_HOME="$BASE_FOLDER/php/${PHP_VERSION}"
-PHP_BIN="${PHP_HOME}/vendor/bin"
 PHP_INI="${PHP_HOME}/php.ini"
-COMPOSER_CACHE="${PHP_HOME}/cache"
+# Composer uses the host's own directories, the ones a native Composer would use
+COMPOSER_HOME_DIR="${COMPOSER_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}/composer}"
+COMPOSER_CACHE="${COMPOSER_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/composer}"
+PHP_BIN="${COMPOSER_HOME_DIR}/vendor/bin"
 mkdir -p "${DEST_FOLDER}"
 mkdir -p "${PHP_HOME}"
-mkdir -p "${PHP_BIN}"
-mkdir -p "${COMPOSER_CACHE}"
 touch "$PHP_INI"
 
 echo "[Debug] Update Path"
@@ -301,15 +301,22 @@ ${VOLUME_ARGS}
 
 # Mount the project at its real host path (not /workdir) so that relative
 # path repositories and symlinks resolve identically on host and container.
+# Composer's home and cache are the host's, mounted at their own path and named
+# explicitly: without that Composer guesses them from XDG_* variables, which the
+# environment filter leaves out. They are created here, and the container runs as
+# the calling user, so Docker never creates them (or anything in them) as root.
+mkdir -p "${COMPOSER_HOME_DIR}" "${COMPOSER_CACHE}"
 docker run \${TTY_ARG} --rm \
   -v "\${PWD}":"\${PWD}" \
-  -v "${PHP_HOME}:/tmp/.composer" \
-  -v "${COMPOSER_CACHE}:${HOME}/.cache/composer" \
+  -v "${COMPOSER_HOME_DIR}:${COMPOSER_HOME_DIR}" \
+  -v "${COMPOSER_CACHE}:${COMPOSER_CACHE}" \
   -v "$PHP_INI":"/etc/php${PHP_VERSION//./}/conf.d/99-php.ini" \
   -w "\${PWD}" \
-  -e "HOME=${HOME}" \
-  -u $(id -u):$(id -g) \
+  -u "\$(id -u):\$(id -g)" \
   "\${ENV_ARGS[@]}" \
+  -e "HOME=${HOME}" \
+  -e "COMPOSER_HOME=${COMPOSER_HOME_DIR}" \
+  -e "COMPOSER_CACHE_DIR=${COMPOSER_CACHE}" \
   "\${DOCKER_SSH_ARGS[@]}" \
   "\${EXTRA_VOLUME_ARGS[@]}" \
   --network host \
