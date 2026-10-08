@@ -230,7 +230,7 @@ NODE_NPM="$BASE_FOLDER/node/${NODE_VERSION}"
 NODE_BIN="$NODE_NPM/.npm-global/bin"
 NODE_NPMRC="$HOME/.npmrc"
 CONTAINER_HOME="${HOME}"
-REGULAR_USER="-u \"$(id -u)\":\"$(id -g)\""
+REGULAR_USER="-u \"\$(id -u):\$(id -g)\""
 WORKDIR="/c/\${PWD}"
 
 if [[ $EUID -eq 0 ]]; then

@@ -257,7 +257,7 @@ docker run \${TTY_ARG} --rm \
   -v "/tmp:/tmp" \
   -v "$PHP_INI":"/etc/php${PHP_VERSION//./}/conf.d/99-php.ini" \
   -w "\${PWD}" \
-  -u $(id -u):$(id -g) \
+  -u "\$(id -u):\$(id -g)" \
   -v "/etc/passwd:/etc/passwd:ro" \
   -v "/etc/group:/etc/group:ro" \
   "\${ENV_ARGS[@]}" \
