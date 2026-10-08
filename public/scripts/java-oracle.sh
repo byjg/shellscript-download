@@ -37,154 +37,39 @@ Note:
 USAGE
 }
 
-print_manifest() {
-  local version="/$1"
+# Code shared with the other java-<vendor> installers. load.sh calls postLoad once,
+# right after it downloads or updates this script; a loader older than that hook
+# never does, so the file is also fetched here when it is missing.
+SHARED_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/java-install.sh"
 
-  if [[ "$version" == "/all" ]]; then
-    # Remove all versions
-    version=""
+postLoad() {
+  mkdir -p "$(dirname "$SHARED_LIB")"
+  if ! download "https://shellscript.download/scripts/lib/java-install.sh" "$SHARED_LIB"; then
+    echo "Error: could not download lib/java-install.sh, which this script needs" >&2
+    exit 3
   fi
-
-    cat <<MANIFEST
-FOLDERS=\$HOME/.shellscript/java-oracle${version}
-SHELLRC_FILE=\$HOME/.shellscript/shellrc/java-oracle-init.sh
-MANIFEST
 }
 
-# Parse flags
-DRY_RUN=0
-JAVA_VERSION="21"
-MANIFEST_MODE=0
-MANIFEST_VERSION="all"
-YES=0
-FORCE=0
-
-while [[ ${1-} ]]; do
-  case "$1" in
-    -h|--help) print_usage; exit 0 ;;
-    --manifest)
-      MANIFEST_MODE=1
-      ;;
-    --dry-run) DRY_RUN=1 ;;
-    -y|--yes) YES=1 ;;
-    --force) FORCE=1 ;;
-    --version)
-      shift || { err "--version requires a value"; exit 2; }
-      JAVA_VERSION="$1"
-      if [[ "$MANIFEST_MODE" == "1" ]]; then
-        MANIFEST_VERSION="$1"
-      fi
-      ;;
-    *) err "Unknown option: $1"; print_usage; exit 2 ;;
-  esac
-  shift || true
-done
-
-# Handle manifest mode
-if [[ "$MANIFEST_MODE" == "1" ]]; then
-  print_manifest "$MANIFEST_VERSION"
+if [[ "${1-}" == "--post-load" ]]; then
+  postLoad
   exit 0
 fi
 
-# Warn for non-LTS versions
-LTS_VERSIONS="17 21 25"
-if ! echo " $LTS_VERSIONS " | grep -q " $JAVA_VERSION "; then
-  if [[ "$YES" == "1" ]]; then
-    log "WARNING: Java ${JAVA_VERSION} is not an LTS version (--yes passed, skipping confirmation)."
-  else
-    log "WARNING: Java ${JAVA_VERSION} is not an LTS version and may be EOL or unsupported."
-    log "Oracle only provides public downloads for recent LTS versions. Other versions may fail."
-    printf "[java-oracle.sh] Are you sure you want to install it? [y/N] "
-    read -r CONFIRM
-    if [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]]; then
-      log "Aborted."
-      exit 0
-    fi
-  fi
-fi
+[[ -f "$SHARED_LIB" ]] || postLoad
+# shellcheck source=lib/java-install.sh
+source "$SHARED_LIB"
 
-# Preconditions
-require_downloader
-require_cmd tar
+JAVA_VENDOR="oracle"
+JAVA_LABEL="Oracle JDK"
+JAVA_LTS_VERSIONS="17 21 25"
+JAVA_NON_LTS_NOTE="Oracle only provides public downloads for recent LTS versions. Other versions may fail."
 
-# Detect CPU architecture
-case "$(uname -m)" in
-  x86_64|amd64)  JAVA_ARCH="x64" ;;
-  aarch64|arm64) JAVA_ARCH="aarch64" ;;
-  *) err "Unsupported architecture: $(uname -m) (supported: x86_64, aarch64)"; exit 1 ;;
-esac
-
-# Configuration
-JAVA_HOME_BASE="${SHELLSCRIPT_HOME}/java-oracle"
-SHELLRC_DIR="${SHELLSCRIPT_SHELLRC}"
-
-# Build download URL
-DOWNLOAD_URL="https://download.oracle.com/java/${JAVA_VERSION}/latest/jdk-${JAVA_VERSION}_linux-${JAVA_ARCH}_bin.tar.gz"
-
-TEMP_ARCHIVE="/tmp/java-oracle.tar.gz"
-
-cleanup() {
-  if [[ -f "$TEMP_ARCHIVE" ]]; then
-    rm -f "$TEMP_ARCHIVE"
-  fi
+java_download_url() {
+  echo "https://download.oracle.com/java/${JAVA_VERSION}/latest/jdk-${JAVA_VERSION}_linux-${JAVA_ARCH}_bin.tar.gz"
 }
-trap cleanup EXIT
 
-log "Installing Oracle JDK ${JAVA_VERSION}"
+java_install "$@"
 
-INSTALL_DIR="${JAVA_HOME_BASE}/${JAVA_VERSION}"
-
-if [[ -d "$INSTALL_DIR" && "$FORCE" != "1" ]]; then
-  log "Java ${JAVA_VERSION} is already installed at ${INSTALL_DIR}. Skipping download (use --force to re-download)."
-else
-  # Download Java
-  log "Downloading Java from ${DOWNLOAD_URL}"
-  run "download \"${DOWNLOAD_URL}\" \"${TEMP_ARCHIVE}\""
-
-  # Extract Java
-  log "Extracting Java to ${INSTALL_DIR}"
-  run "mkdir -p \"${JAVA_HOME_BASE}\""
-
-  if [[ "$DRY_RUN" != "1" ]]; then
-    # Extract to a temp location to find the actual directory name
-    TEMP_EXTRACT_DIR=$(mktemp -d)
-    tar -xzf "${TEMP_ARCHIVE}" -C "${TEMP_EXTRACT_DIR}"
-
-    # Find the extracted JDK directory (should be jdk-*.*)
-    EXTRACTED_DIR=$(ls -1 "${TEMP_EXTRACT_DIR}" | head -1)
-
-    if [[ -z "$EXTRACTED_DIR" ]]; then
-      err "Failed to find extracted JDK directory"
-      rm -rf "${TEMP_EXTRACT_DIR}"
-      exit 1
-    fi
-
-    # Move to final location
-    rm -rf "${INSTALL_DIR}"
-    mv "${TEMP_EXTRACT_DIR}/${EXTRACTED_DIR}" "${INSTALL_DIR}"
-    rm -rf "${TEMP_EXTRACT_DIR}"
-
-    log "Extracted to ${INSTALL_DIR}"
-  else
-    log "[dry-run] Would extract to ${INSTALL_DIR}"
-  fi
-fi
-
-# Write shell init snippet
-log "Writing environment variables to ${SHELLRC_DIR}/java-oracle-init.sh"
-run "mkdir -p \"${SHELLRC_DIR}\""
-if [[ "$DRY_RUN" != "1" ]]; then
-  cat >"${SHELLRC_DIR}/java-oracle-init.sh" <<WRAP
-export JAVA_HOME="\$HOME/.shellscript/java-oracle/${JAVA_VERSION}"
-export JDK_HOME="\$HOME/.shellscript/java-oracle/${JAVA_VERSION}"
-export PATH="\$HOME/.shellscript/java-oracle/${JAVA_VERSION}/bin:\$PATH"
-WRAP
-else
-  log "[dry-run] Would write to ${SHELLRC_DIR}/java-oracle-init.sh"
-fi
-
-log "Done. Oracle JDK ${JAVA_VERSION} installed to ${INSTALL_DIR}"
-log "Source ${SHELLRC_DIR}/java-oracle-init.sh from your shell rc for JAVA_HOME environment variable"
 log ""
 log "IMPORTANT: By using Oracle JDK, you agree to Oracle's licensing terms."
 log "Visit https://www.oracle.com/downloads/licenses/binary-code-license.html for details."

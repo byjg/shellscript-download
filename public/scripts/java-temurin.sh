@@ -33,159 +33,50 @@ Examples:
 USAGE
 }
 
-print_manifest() {
-  local version="/$1"
+# Code shared with the other java-<vendor> installers. load.sh calls postLoad once,
+# right after it downloads or updates this script; a loader older than that hook
+# never does, so the file is also fetched here when it is missing.
+SHARED_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/java-install.sh"
 
-  if [[ "$version" == "/all" ]]; then
-    version=""
+postLoad() {
+  mkdir -p "$(dirname "$SHARED_LIB")"
+  if ! download "https://shellscript.download/scripts/lib/java-install.sh" "$SHARED_LIB"; then
+    echo "Error: could not download lib/java-install.sh, which this script needs" >&2
+    exit 3
   fi
-
-  cat <<MANIFEST
-FOLDERS=\$HOME/.shellscript/java-temurin${version}
-SHELLRC_FILE=\$HOME/.shellscript/shellrc/java-temurin-init.sh
-MANIFEST
 }
 
-# Parse flags
-DRY_RUN=0
-JAVA_VERSION="21"
-MANIFEST_MODE=0
-MANIFEST_VERSION="all"
-YES=0
-FORCE=0
-
-while [[ ${1-} ]]; do
-  case "$1" in
-    -h|--help) print_usage; exit 0 ;;
-    --manifest) MANIFEST_MODE=1 ;;
-    --dry-run) DRY_RUN=1 ;;
-    -y|--yes) YES=1 ;;
-    --force) FORCE=1 ;;
-    --version)
-      shift || { err "--version requires a value"; exit 2; }
-      JAVA_VERSION="$1"
-      if [[ "$MANIFEST_MODE" == "1" ]]; then
-        MANIFEST_VERSION="$1"
-      fi
-      ;;
-    *) err "Unknown option: $1"; print_usage; exit 2 ;;
-  esac
-  shift || true
-done
-
-# Handle manifest mode
-if [[ "$MANIFEST_MODE" == "1" ]]; then
-  print_manifest "$MANIFEST_VERSION"
+if [[ "${1-}" == "--post-load" ]]; then
+  postLoad
   exit 0
 fi
 
-# Warn for non-LTS versions
-LTS_VERSIONS="8 11 17 21 25"
-if ! echo " $LTS_VERSIONS " | grep -q " $JAVA_VERSION "; then
-  if [[ "$YES" == "1" ]]; then
-    log "WARNING: Java ${JAVA_VERSION} is not an LTS version (--yes passed, skipping confirmation)."
-  else
-    log "WARNING: Java ${JAVA_VERSION} is not an LTS version and may be EOL or unsupported."
-    printf "[java-temurin.sh] Are you sure you want to install it? [y/N] "
-    read -r CONFIRM
-    if [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]]; then
-      log "Aborted."
-      exit 0
-    fi
-  fi
-fi
+[[ -f "$SHARED_LIB" ]] || postLoad
+# shellcheck source=lib/java-install.sh
+source "$SHARED_LIB"
 
-# Preconditions
-require_downloader
-require_cmd jq
-require_cmd tar
+JAVA_VENDOR="temurin"
+JAVA_LABEL="Eclipse Temurin Java"
+JAVA_LTS_VERSIONS="8 11 17 21 25"
 
-# Detect CPU architecture
-case "$(uname -m)" in
-  x86_64|amd64)  JAVA_ARCH="x64" ;;
-  aarch64|arm64) JAVA_ARCH="aarch64" ;;
-  *) err "Unsupported architecture: $(uname -m) (supported: x86_64, aarch64)"; exit 1 ;;
-esac
-
-# Configuration
-JAVA_HOME_BASE="${SHELLSCRIPT_HOME}/java-temurin"
-SHELLRC_DIR="${SHELLSCRIPT_SHELLRC}"
-
-API_URL="https://api.adoptium.net/v3/assets/latest/${JAVA_VERSION}/hotspot?architecture=${JAVA_ARCH}&image_type=jdk&os=linux&vendor=eclipse"
-
-TEMP_ARCHIVE="/tmp/temurin.tar.gz"
-
-cleanup() {
-  if [[ -f "$TEMP_ARCHIVE" ]]; then
-    rm -f "$TEMP_ARCHIVE"
-  fi
-}
-trap cleanup EXIT
-
-log "Installing Eclipse Temurin Java ${JAVA_VERSION}"
-
-INSTALL_DIR="${JAVA_HOME_BASE}/${JAVA_VERSION}"
-
-if [[ -d "$INSTALL_DIR" && "$FORCE" != "1" ]]; then
-  log "Java ${JAVA_VERSION} is already installed at ${INSTALL_DIR}. Skipping download (use --force to re-download)."
-else
-  # Resolve download URL via Adoptium API
-  log "Resolving latest Java ${JAVA_VERSION} release from Adoptium API..."
-  DOWNLOAD_URL=$(fetch "$API_URL" | jq -r '.[0].binary.package.link // empty')
+# Resolve the latest patch release of the major version through the Adoptium API
+java_download_url() {
+  require_cmd jq
+  local url
+  url=$(fetch "https://api.adoptium.net/v3/assets/latest/${JAVA_VERSION}/hotspot?architecture=${JAVA_ARCH}&image_type=jdk&os=linux&vendor=eclipse" \
+    | jq -r '.[0].binary.package.link // empty') || true
 
   # Hardcoded fallback for EOL versions not available via Adoptium (hosted under AdoptOpenJDK, x64 only)
-  if [[ -z "$DOWNLOAD_URL" && "$JAVA_ARCH" == "x64" ]]; then
+  if [[ -z "$url" && "$JAVA_ARCH" == "x64" ]]; then
     case "$JAVA_VERSION" in
-      14) DOWNLOAD_URL="https://github.com/AdoptOpenJDK/openjdk14-binaries/releases/download/jdk-14.0.2%2B12/OpenJDK14U-jdk_x64_linux_hotspot_14.0.2_12.tar.gz" ;;
+      14) url="https://github.com/AdoptOpenJDK/openjdk14-binaries/releases/download/jdk-14.0.2%2B12/OpenJDK14U-jdk_x64_linux_hotspot_14.0.2_12.tar.gz" ;;
     esac
   fi
 
-  if [[ -z "$DOWNLOAD_URL" ]]; then
-    err "Could not resolve download URL for Java ${JAVA_VERSION}."
+  if [[ -z "$url" ]]; then
     err "This version may not be available on Adoptium. Check https://adoptium.net"
-    exit 1
   fi
+  echo "$url"
+}
 
-  # Download Java
-  log "Downloading Java from ${DOWNLOAD_URL}"
-  run "download \"${DOWNLOAD_URL}\" \"${TEMP_ARCHIVE}\""
-
-  # Extract Java
-  log "Extracting Java to ${INSTALL_DIR}"
-  run "mkdir -p \"${JAVA_HOME_BASE}\""
-
-  if [[ "$DRY_RUN" != "1" ]]; then
-    TEMP_EXTRACT_DIR=$(mktemp -d)
-    tar -xzf "${TEMP_ARCHIVE}" -C "${TEMP_EXTRACT_DIR}"
-    EXTRACTED_DIR=$(ls -1 "${TEMP_EXTRACT_DIR}" | head -1)
-
-    if [[ -z "$EXTRACTED_DIR" ]]; then
-      err "Failed to find extracted JDK directory"
-      rm -rf "${TEMP_EXTRACT_DIR}"
-      exit 1
-    fi
-
-    rm -rf "${INSTALL_DIR}"
-    mv "${TEMP_EXTRACT_DIR}/${EXTRACTED_DIR}" "${INSTALL_DIR}"
-    rm -rf "${TEMP_EXTRACT_DIR}"
-    log "Extracted to ${INSTALL_DIR}"
-  else
-    log "[dry-run] Would extract to ${INSTALL_DIR}"
-  fi
-fi
-
-# Write shell init snippet
-log "Writing environment variables to ${SHELLRC_DIR}/java-temurin-init.sh"
-run "mkdir -p \"${SHELLRC_DIR}\""
-if [[ "$DRY_RUN" != "1" ]]; then
-  cat >"${SHELLRC_DIR}/java-temurin-init.sh" <<WRAP
-export JAVA_HOME="\$HOME/.shellscript/java-temurin/${JAVA_VERSION}"
-export JDK_HOME="\$HOME/.shellscript/java-temurin/${JAVA_VERSION}"
-export PATH="\$HOME/.shellscript/java-temurin/${JAVA_VERSION}/bin:\$PATH"
-WRAP
-else
-  log "[dry-run] Would write to ${SHELLRC_DIR}/java-temurin-init.sh"
-fi
-
-log "Done. Java Temurin ${JAVA_VERSION} installed to ${INSTALL_DIR}"
-log "Source ${SHELLRC_DIR}/java-temurin-init.sh from your shell rc for JAVA_HOME environment variable"
+java_install "$@"
