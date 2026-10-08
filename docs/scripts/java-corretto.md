@@ -18,6 +18,10 @@ load.sh java-corretto -- [options]
 
 Downloads and installs Amazon Corretto OpenJDK binary distribution for x86_64 and aarch64 Linux.
 
+The installed version becomes the active Java, whatever its vendor:
+$HOME/.shellscript/java/current points at it and JAVA_HOME follows. Run the installer
+again with another --version to switch.
+
 Options:
   -h, --help           Show this help and exit
   --version <version>  Java major version to install (default: 21)
