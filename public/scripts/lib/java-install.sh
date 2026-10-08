@@ -3,6 +3,7 @@
 #
 # The installer defines print_usage, sets
 #   JAVA_VENDOR        "temurin" installs to $HOME/.shellscript/java-temurin/<version>
+#                      and points $HOME/.shellscript/java/current at it
 #   JAVA_LABEL         name used in the messages ("Eclipse Temurin Java")
 #   JAVA_LTS_VERSIONS  versions installed without asking ("8 11 17 21 25")
 #   JAVA_NON_LTS_NOTE  optional extra line of the non-LTS warning
@@ -18,9 +19,21 @@ java_print_manifest() {
     version=""
   fi
 
+  local folders="\$HOME/.shellscript/java-${JAVA_VENDOR}${version}"
+  local shellrc=""
+
+  # The active Java (java/current and java-init.sh) is shared by every vendor, so it
+  # is listed only when it points into what this manifest covers.
+  local current
+  current="$(readlink "${SHELLSCRIPT_HOME}/java/current" 2>/dev/null || true)"
+  if [[ "${current}/" == "../java-${JAVA_VENDOR}${version}/"* ]]; then
+    folders+=" \$HOME/.shellscript/java"
+    shellrc="\$HOME/.shellscript/shellrc/java-init.sh"
+  fi
+
   cat <<MANIFEST
-FOLDERS=\$HOME/.shellscript/java-${JAVA_VENDOR}${version}
-SHELLRC_FILE=\$HOME/.shellscript/shellrc/java-${JAVA_VENDOR}-init.sh
+FOLDERS=${folders}
+SHELLRC_FILE=${shellrc}
 MANIFEST
 }
 
@@ -90,7 +103,8 @@ java_install() {
   # Configuration
   local home_base="${SHELLSCRIPT_HOME}/${name}"
   local install_dir="${home_base}/${JAVA_VERSION}"
-  local shellrc_file="${SHELLSCRIPT_SHELLRC}/${name}-init.sh"
+  local current_link="${SHELLSCRIPT_HOME}/java/current"
+  local shellrc_file="${SHELLSCRIPT_SHELLRC}/java-init.sh"
   local temp_archive="/tmp/${name}.tar.gz"
 
   # shellcheck disable=SC2064  # expanded now on purpose: temp_archive is local
@@ -138,19 +152,33 @@ java_install() {
     fi
   fi
 
-  # Write shell init snippet
+  # Make it the active Java. java/current is one link shared by every vendor, and
+  # relative, so it holds whatever the home directory is called.
+  log "Pointing ${current_link} at ${JAVA_LABEL} ${JAVA_VERSION}"
+  run "mkdir -p \"$(dirname "${current_link}")\""
+  run "ln -sfn \"../${name}/${JAVA_VERSION}\" \"${current_link}\""
+
+  # Write shell init snippet. It names the link, never a version, so switching
+  # reaches the shells that are already open.
   log "Writing environment variables to ${shellrc_file}"
   run "mkdir -p \"${SHELLSCRIPT_SHELLRC}\""
   if [[ "$DRY_RUN" != "1" ]]; then
-    cat >"${shellrc_file}" <<WRAP
-export JAVA_HOME="\$HOME/.shellscript/${name}/${JAVA_VERSION}"
-export JDK_HOME="\$HOME/.shellscript/${name}/${JAVA_VERSION}"
-export PATH="\$HOME/.shellscript/${name}/${JAVA_VERSION}/bin:\$PATH"
+    cat >"${shellrc_file}" <<'WRAP'
+export JAVA_HOME="$HOME/.shellscript/java/current"
+export JDK_HOME="$HOME/.shellscript/java/current"
+export PATH="$HOME/.shellscript/java/current/bin:$PATH"
 WRAP
   else
     log "[dry-run] Would write to ${shellrc_file}"
   fi
 
-  log "Done. ${JAVA_LABEL} ${JAVA_VERSION} installed to ${install_dir}"
+  # The snippets written before java/current existed name a version, and would
+  # override the link.
+  local vendor
+  for vendor in temurin corretto oracle; do
+    run "rm -f \"${SHELLSCRIPT_SHELLRC}/java-${vendor}-init.sh\""
+  done
+
+  log "Done. ${JAVA_LABEL} ${JAVA_VERSION} installed to ${install_dir} and set as the active Java"
   log "Source ${shellrc_file} from your shell rc for JAVA_HOME environment variable"
 }

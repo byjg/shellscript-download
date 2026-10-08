@@ -19,6 +19,10 @@ load.sh java-temurin -- [options]
 Downloads and installs Eclipse Temurin (Adoptium) OpenJDK binary distribution for x86_64 and aarch64 Linux.
 Uses the Adoptium API to resolve the latest patch release for the requested major version.
 
+The installed version becomes the active Java, whatever its vendor:
+$HOME/.shellscript/java/current points at it and JAVA_HOME follows. Run the installer
+again with another --version to switch.
+
 Options:
   -h, --help           Show this help and exit
   --version <version>  Java major version to install (default: 21)
