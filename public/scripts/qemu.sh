@@ -115,6 +115,28 @@ UNINSTALL_CMD=uninstall
 MANIFEST
 }
 
+# Code shared with the other scripts that install distro packages. load.sh calls
+# postLoad once, right after it downloads or updates this script; a loader older than
+# that hook never does, so the file is also fetched here when it is missing.
+SHARED_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/system-packages.sh"
+
+postLoad() {
+  mkdir -p "$(dirname "$SHARED_LIB")"
+  if ! download "https://shellscript.download/scripts/lib/system-packages.sh" "$SHARED_LIB"; then
+    echo "Error: could not download lib/system-packages.sh, which this script needs" >&2
+    exit 3
+  fi
+}
+
+if [[ "${1-}" == "--post-load" ]]; then
+  postLoad
+  exit 0
+fi
+
+[[ -f "$SHARED_LIB" ]] || postLoad
+# shellcheck source=lib/system-packages.sh
+source "$SHARED_LIB"
+
 # Parse command and flags
 COMMAND=""
 VM_ARG=""
@@ -249,6 +271,7 @@ bridge_helper() {
 # Changes made to the host for bridged VMs, one per line ("allow <bridge>",
 # "setuid <helper>"), so 'load.sh remove -- qemu' can undo exactly those
 BRIDGE_STATE="${QEMU_HOME}/bridge-setup.conf"
+PACKAGES_STATE="${QEMU_HOME}/installed-packages.conf"
 
 record_bridge_change() {
   [[ "$DRY_RUN" == "1" ]] && return
@@ -265,8 +288,8 @@ ensure_bridge() {
   if ! ip link show "$br" >/dev/null 2>&1 && [[ "$br" == "virbr0" ]]; then
     pm=$(detect_pm) || true
     case "$pm" in
-      apt-get) install_packages "$pm" "libvirt-daemon-system" ;;
-      dnf)     install_packages "$pm" "libvirt-daemon-config-network libvirt-daemon-driver-network libvirt-client" ;;
+      apt-get) install_packages "$pm" "libvirt-daemon-system" "$PACKAGES_STATE" ;;
+      dnf)     install_packages "$pm" "libvirt-daemon-config-network libvirt-daemon-driver-network libvirt-client" "$PACKAGES_STATE" ;;
     esac
     if [[ "$pm" == "apt-get" || "$pm" == "dnf" ]]; then
       log "Starting libvirt's default network (virbr0)"
@@ -439,14 +462,6 @@ release_gpu() {
   fi
 }
 
-detect_pm() {
-  local pm
-  for pm in apt-get dnf pacman zypper apk; do
-    command -v "$pm" >/dev/null 2>&1 && { printf '%s' "$pm"; return 0; }
-  done
-  return 1
-}
-
 missing_packages() {
   # Check each required component and print the distro package names of the missing ones
   local pm="$1" qemu_pkg img_pkg iso_pkg fw_pkg
@@ -488,35 +503,10 @@ ensure_qemu() {
 
   local missing
   missing=$(missing_packages "$pm")
-  [[ -n "$missing" ]] && install_packages "$pm" "$missing"
+  [[ -n "$missing" ]] && install_packages "$pm" "$missing" "$PACKAGES_STATE"
 
   run "mkdir -p \"${IMAGES_DIR}\" \"${VMS_DIR}\""
   ensure_wrapper
-}
-
-SUDO="sudo"
-[[ "$(id -u)" == "0" ]] && SUDO=""
-
-# Installs packages and records them, so 'load.sh remove -- qemu' uninstalls only
-# what this script installed
-install_packages() {
-  local pm="$1" pkgs="$2"
-  log "Installing missing packages: ${pkgs}"
-  case "$pm" in
-    # An index that fails to update (a third-party source mid-sync) makes apt-get
-    # update fail, while apt keeps the old one and can still install: the install
-    # runs regardless, and reports the error itself if it truly cannot.
-    apt-get) run "${SUDO} apt-get update; ${SUDO} apt-get install -y ${pkgs}" ;;
-    dnf)     run "${SUDO} dnf install -y ${pkgs}" ;;
-    pacman)  run "${SUDO} pacman -S --noconfirm --needed ${pkgs}" ;;
-    zypper)  run "${SUDO} zypper install -y ${pkgs}" ;;
-    apk)     run "${SUDO} apk add ${pkgs}" ;;
-  esac
-  if [[ "$DRY_RUN" != "1" ]]; then
-    mkdir -p "$QEMU_HOME"
-    printf '%s\n' ${pkgs} >> "${QEMU_HOME}/installed-packages.conf"
-    sort -u -o "${QEMU_HOME}/installed-packages.conf" "${QEMU_HOME}/installed-packages.conf"
-  fi
 }
 
 iso_tool() {
@@ -734,24 +724,11 @@ cmd_uninstall() {
     [[ "$DRY_RUN" == "1" ]] || rm -f "$BRIDGE_STATE"
   fi
 
-  local state="${QEMU_HOME}/installed-packages.conf"
-  if [[ ! -s "$state" ]]; then
+  if [[ -s "$PACKAGES_STATE" ]]; then
+    remove_recorded_packages "$PACKAGES_STATE"
+  else
     log "QEMU was not installed by this script — leaving system packages untouched."
-    return
   fi
-
-  local pm pkgs
-  pm=$(detect_pm) || { err "No supported package manager found."; exit 3; }
-  pkgs=$(tr '\n' ' ' < "$state")
-  log "Removing packages installed by this script: ${pkgs}"
-  case "$pm" in
-    apt-get) run "${SUDO} apt-get remove -y ${pkgs}" ;;
-    dnf)     run "${SUDO} dnf remove -y ${pkgs}" ;;
-    pacman)  run "${SUDO} pacman -Rns --noconfirm ${pkgs}" ;;
-    zypper)  run "${SUDO} zypper remove -y ${pkgs}" ;;
-    apk)     run "${SUDO} apk del ${pkgs}" ;;
-  esac
-  [[ "$DRY_RUN" == "1" ]] || rm -f "$state"
 }
 
 boot_vm() {

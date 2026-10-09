@@ -20,6 +20,7 @@ Run any of them with `load.sh <script>`.
 | [node-docker](node-docker.md) | Create Docker-backed Node.js launchers (node, npm, npx, yarn) |
 | [nvm](nvm.md) | Install Node Version Manager (NVM) and set up a shell init snippet |
 | [php-docker](php-docker.md) | Create Docker-backed php and composer launchers |
+| [podman](podman.md) | Install Podman on Linux, optionally answering to the 'docker' command |
 | [qemu](qemu.md) | Download QEMU and manage local virtual machines (start, list, stop, remove) |
 | [remove](remove.md) | Remove installed tools from shellscript.download |
 | [ssh-agent](ssh-agent.md) | Configure ssh-agent startup and SSH key loading in your shell |

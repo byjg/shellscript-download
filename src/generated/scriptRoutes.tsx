@@ -13,6 +13,7 @@ import Script_maven from "../pages/scripts/maven";
 import Script_node_docker from "../pages/scripts/node-docker";
 import Script_nvm from "../pages/scripts/nvm";
 import Script_php_docker from "../pages/scripts/php-docker";
+import Script_podman from "../pages/scripts/podman";
 import Script_qemu from "../pages/scripts/qemu";
 import Script_remove from "../pages/scripts/remove";
 import Script_ssh_agent from "../pages/scripts/ssh-agent";
@@ -29,6 +30,7 @@ export const scriptRoutes = [
   { path: "/scripts/node-docker", element: <Script_node_docker /> },
   { path: "/scripts/nvm", element: <Script_nvm /> },
   { path: "/scripts/php-docker", element: <Script_php_docker /> },
+  { path: "/scripts/podman", element: <Script_podman /> },
   { path: "/scripts/qemu", element: <Script_qemu /> },
   { path: "/scripts/remove", element: <Script_remove /> },
   { path: "/scripts/ssh-agent", element: <Script_ssh_agent /> },
