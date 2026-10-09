@@ -149,7 +149,7 @@ export const InstallCommand = ({ command, spec, variants }: InstallCommandProps)
 
   return (
     <div className="relative w-full">
-      <div className="rounded-lg border border-border bg-card p-6 shadow-lg backdrop-blur-sm transition-all hover:shadow-[var(--shadow-glow)]">
+      <div className="rounded-lg border border-border bg-card p-6 shadow-lg backdrop-blur-xs transition-all hover:shadow-(--shadow-glow)">
         {hasVariants ? (
           <Tabs defaultValue={variants[0].label}>
             <div className="mb-3 flex items-center justify-between">

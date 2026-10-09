@@ -8,10 +8,10 @@ import { Terminal } from "lucide-react";
 
 export default function Script_java_corretto() {
   return (
-    <div className="min-h-screen bg-[var(--gradient-hero)]">
+    <div className="min-h-screen bg-(--gradient-hero)">
       <div style={{maxWidth: 900, margin: "0 auto", padding: "2rem"}}>
         <header className="mb-4 text-center">
-          <div className="inline-flex items-center gap-3 rounded-full border border-border bg-card/50 px-6 py-2 backdrop-blur-sm">
+          <div className="inline-flex items-center gap-3 rounded-full border border-border bg-card/50 px-6 py-2 backdrop-blur-xs">
             <Terminal className="h-5 w-5 text-accent" />
             <span className="font-mono text-sm font-medium text-foreground">shellscript.download</span>
           </div>

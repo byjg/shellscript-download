@@ -11,7 +11,7 @@ const NotFound = () => {
   }, [location.pathname]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[var(--gradient-hero)]">
+    <div className="flex min-h-screen items-center justify-center bg-(--gradient-hero)">
       <div className="text-center">
         <div className="mb-8 flex items-center justify-center gap-3">
           <Terminal className="h-16 w-16 text-accent" />
