@@ -167,6 +167,18 @@ java_install() {
 export JAVA_HOME="$HOME/.shellscript/java/current"
 export JDK_HOME="$HOME/.shellscript/java/current"
 export PATH="$HOME/.shellscript/java/current/bin:$PATH"
+
+# java-use <vendor> <version>: use another installed Java in this shell only
+java-use() {
+  local home="$HOME/.shellscript/java-${1-}/${2-}"
+  if [ $# -ne 2 ] || [ ! -x "$home/bin/java" ]; then
+    echo "Usage: java-use <vendor> <version>, with one of the installed:" >&2
+    (cd "$HOME/.shellscript" && ls -d java-*/*/ 2>/dev/null | sed 's|^java-||; s|/$||; s|/| |') >&2
+    return 1
+  fi
+  export JAVA_HOME="$home" JDK_HOME="$home"
+  export PATH="$home/bin:$PATH"
+}
 WRAP
   else
     log "[dry-run] Would write to ${shellrc_file}"

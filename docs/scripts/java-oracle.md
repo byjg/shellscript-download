@@ -20,7 +20,8 @@ Downloads and installs Oracle JDK binary distribution for x86_64 and aarch64 Lin
 
 The installed version becomes the active Java, whatever its vendor:
 $HOME/.shellscript/java/current points at it and JAVA_HOME follows. Run the installer
-again with another --version to switch.
+again with another --version to switch. To use another installed version in the
+current shell only: java-use <vendor> <version>, e.g. java-use temurin 17.
 
 Options:
   -h, --help           Show this help and exit
