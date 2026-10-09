@@ -17,7 +17,8 @@ load.sh eksctl
 load.sh eksctl -- [options]
 
 Downloads the eksctl binary for x86_64 and aarch64 Linux to
-$HOME/.shellscript/eksctl/<version> and creates the 'eksctl' command. Run it again with
+$HOME/.shellscript/eksctl/<version> and creates the 'eksctl' command, with its completion for
+bash (when the bash-completion package is installed) and zsh. Run it again with
 another --version to switch.
 
 Options:

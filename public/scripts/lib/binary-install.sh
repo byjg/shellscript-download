@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 # binary-install.sh: code shared by the scripts that install a tool released as one
-# binary (jq.sh, yq.sh, kubectl.sh, helm.sh, kustomize.sh, doctl.sh, eksctl.sh). Sourced,
-# never run.
+# binary (jq.sh, yq.sh, kubectl.sh, helm.sh, kustomize.sh, doctl.sh, eksctl.sh, gh.sh).
+# Sourced, never run.
 #
 # The installer defines print_usage, sets
 #   BINARY_NAME   the command, and its folder: $HOME/.shellscript/<name>/<version>
 #   BINARY_LABEL  name used in the messages ("jq")
+#   BINARY_COMPLETION  optional: the arguments that make the tool print its completion
+#                      script, without the shell name ("completion -s" for gh). The
+#                      script is generated at install time for bash, when the
+#                      bash-completion package it depends on is installed, and for
+#                      zsh, when zsh is installed. A shell init file loads them.
 # defines
 #   binary_latest_version  prints the latest version, as --version takes it
 #   binary_download_url    prints the URL for BINARY_VERSION and BINARY_ARCH (amd64 or
@@ -19,10 +24,12 @@ github_latest_tag() {
 }
 
 binary_print_manifest() {
+  local shellrc=""
+  [[ -z "${BINARY_COMPLETION:-}" ]] || shellrc="\$HOME/.shellscript/shellrc/${BINARY_NAME}-init.sh"
   cat <<MANIFEST
 BIN_FILES=${BINARY_NAME}
 FOLDERS=\$HOME/.shellscript/${BINARY_NAME}
-SHELLRC_FILE=
+SHELLRC_FILE=${shellrc}
 MANIFEST
 }
 
@@ -125,6 +132,36 @@ binary_install() {
 exec "\${HOME}/.shellscript/${BINARY_NAME}/current/${BINARY_NAME}" "\$@"
 WRAP
     chmod +x "$wrapper"
+  fi
+
+  # Command completion. Generated now, so that a new shell does not run the tool.
+  if [[ -n "${BINARY_COMPLETION:-}" ]]; then
+    local shellrc_file="${SHELLSCRIPT_SHELLRC}/${BINARY_NAME}-init.sh" shells="" shell snippet=""
+    # What the tools generate for bash needs the bash-completion package
+    if [[ -r /usr/share/bash-completion/bash_completion || -r /etc/bash_completion ]]; then
+      shells="bash"
+    fi
+    if command -v zsh >/dev/null 2>&1; then shells+=" zsh"; fi
+
+    if [[ -z "$shells" ]]; then
+      log "Skipping command completion: neither bash-completion nor zsh is installed."
+      run "rm -f \"${shellrc_file}\""
+    elif [[ "$DRY_RUN" == "1" ]]; then
+      log "[dry-run] Writing ${shellrc_file} (completion for: ${shells# })"
+    else
+      for shell in $shells; do
+        # shellcheck disable=SC2086  # split on purpose: BINARY_COMPLETION is a list of arguments
+        "${install_dir}/${BINARY_NAME}" ${BINARY_COMPLETION} "$shell" > "${home}/completion.${shell}"
+      done
+      if [[ " $shells " == *" bash "* ]]; then
+        snippet+="if [ -n \"\${BASH_VERSION:-}\" ]; then . \"\$HOME/.shellscript/${BINARY_NAME}/completion.bash\"; fi"$'\n'
+      fi
+      if [[ " $shells " == *" zsh "* ]]; then
+        snippet+="if [ -n \"\${ZSH_VERSION:-}\" ] && command -v compdef >/dev/null 2>&1; then . \"\$HOME/.shellscript/${BINARY_NAME}/completion.zsh\"; fi"$'\n'
+      fi
+      mkdir -p "${SHELLSCRIPT_SHELLRC}"
+      printf '%s' "$snippet" > "$shellrc_file"
+    fi
   fi
 
   log "Done. ${BINARY_LABEL} ${BINARY_VERSION} installed to ${install_dir}"

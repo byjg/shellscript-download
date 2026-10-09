@@ -18,6 +18,7 @@ Run any of them with `load.sh <script>`.
 | [doctl](doctl.md) | Download and install doctl, the DigitalOcean command-line tool |
 | [eksctl](eksctl.md) | Download and install eksctl, the command-line tool for Amazon EKS clusters |
 | [gcloud](gcloud.md) | Download and install the Google Cloud CLI (gcloud, gsutil, bq) |
+| [gh](gh.md) | Download and install gh, the GitHub command-line tool |
 | [helm](helm.md) | Download and install Helm, the Kubernetes package manager |
 | [java-corretto](java-corretto.md) | Download and install Amazon Corretto OpenJDK |
 | [java-oracle](java-oracle.md) | Download and install Oracle JDK |

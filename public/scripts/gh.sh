@@ -1,28 +1,28 @@
 #!/usr/bin/env bash
-# eksctl.sh: Download and install eksctl, the command-line tool for Amazon EKS clusters
+# gh.sh: Download and install gh, the GitHub command-line tool
 
 set -euo pipefail
 
 print_usage() {
   cat <<'USAGE'
-load.sh eksctl -- [options]
+load.sh gh -- [options]
 
-Downloads the eksctl binary for x86_64 and aarch64 Linux to
-$HOME/.shellscript/eksctl/<version> and creates the 'eksctl' command, with its completion for
+Downloads the GitHub CLI binary for x86_64 and aarch64 Linux to
+$HOME/.shellscript/gh/<version> and creates the 'gh' command, with its completion for
 bash (when the bash-completion package is installed) and zsh. Run it again with
 another --version to switch.
 
 Options:
   -h, --help           Show this help and exit
-  --version <version>  Version to install (default: latest), e.g. 0.231.0
+  --version <version>  Version to install (default: latest), e.g. 2.102.0
   --force              Re-download even if already installed
   --dry-run            Print actions without executing them
   --manifest           Print installation manifest and exit
 
 Examples:
-  load.sh eksctl
-  load.sh eksctl -- --version 0.231.0
-  load.sh eksctl -- --dry-run
+  load.sh gh
+  load.sh gh -- --version 2.102.0
+  load.sh gh -- --dry-run
 USAGE
 }
 
@@ -48,16 +48,16 @@ fi
 # shellcheck source=lib/binary-install.sh
 source "$SHARED_LIB"
 
-BINARY_NAME="eksctl"
-BINARY_LABEL="eksctl"
-BINARY_COMPLETION="completion"
+BINARY_NAME="gh"
+BINARY_LABEL="GitHub CLI"
+BINARY_COMPLETION="completion -s"
 
 binary_latest_version() {
-  github_latest_tag eksctl-io/eksctl | sed 's/^v//'
+  github_latest_tag cli/cli | sed 's/^v//'
 }
 
 binary_download_url() {
-  echo "https://github.com/eksctl-io/eksctl/releases/download/v${BINARY_VERSION}/eksctl_Linux_${BINARY_ARCH}.tar.gz"
+  echo "https://github.com/cli/cli/releases/download/v${BINARY_VERSION}/gh_${BINARY_VERSION}_linux_${BINARY_ARCH}.tar.gz"
 }
 
 binary_install "$@"

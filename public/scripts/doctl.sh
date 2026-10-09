@@ -8,7 +8,8 @@ print_usage() {
 load.sh doctl -- [options]
 
 Downloads the doctl binary for x86_64 and aarch64 Linux to
-$HOME/.shellscript/doctl/<version> and creates the 'doctl' command. Run it again with
+$HOME/.shellscript/doctl/<version> and creates the 'doctl' command, with its completion for
+bash (when the bash-completion package is installed) and zsh. Run it again with
 another --version to switch.
 
 Options:
@@ -49,6 +50,7 @@ source "$SHARED_LIB"
 
 BINARY_NAME="doctl"
 BINARY_LABEL="doctl"
+BINARY_COMPLETION="completion"
 
 binary_latest_version() {
   github_latest_tag digitalocean/doctl | sed 's/^v//'

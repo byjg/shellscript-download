@@ -8,7 +8,8 @@ print_usage() {
 load.sh yq -- [options]
 
 Downloads the yq binary for x86_64 and aarch64 Linux to
-$HOME/.shellscript/yq/<version> and creates the 'yq' command. Run it again with
+$HOME/.shellscript/yq/<version> and creates the 'yq' command, with its completion for
+bash (when the bash-completion package is installed) and zsh. Run it again with
 another --version to switch.
 
 Options:
@@ -49,6 +50,7 @@ source "$SHARED_LIB"
 
 BINARY_NAME="yq"
 BINARY_LABEL="yq"
+BINARY_COMPLETION="shell-completion"
 
 binary_latest_version() {
   github_latest_tag mikefarah/yq | sed 's/^v//'

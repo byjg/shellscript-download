@@ -8,7 +8,8 @@ print_usage() {
 load.sh helm -- [options]
 
 Downloads the Helm binary for x86_64 and aarch64 Linux to
-$HOME/.shellscript/helm/<version> and creates the 'helm' command. Run it again with
+$HOME/.shellscript/helm/<version> and creates the 'helm' command, with its completion for
+bash (when the bash-completion package is installed) and zsh. Run it again with
 another --version to switch.
 
 Options:
@@ -49,6 +50,7 @@ source "$SHARED_LIB"
 
 BINARY_NAME="helm"
 BINARY_LABEL="Helm"
+BINARY_COMPLETION="completion"
 
 binary_latest_version() {
   github_latest_tag helm/helm | sed 's/^v//'

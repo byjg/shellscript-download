@@ -8,7 +8,8 @@ print_usage() {
 load.sh kustomize -- [options]
 
 Downloads the Kustomize binary for x86_64 and aarch64 Linux to
-$HOME/.shellscript/kustomize/<version> and creates the 'kustomize' command. Run it again with
+$HOME/.shellscript/kustomize/<version> and creates the 'kustomize' command, with its completion for
+bash (when the bash-completion package is installed) and zsh. Run it again with
 another --version to switch.
 
 Options:
@@ -49,6 +50,7 @@ source "$SHARED_LIB"
 
 BINARY_NAME="kustomize"
 BINARY_LABEL="Kustomize"
+BINARY_COMPLETION="completion"
 
 # The repository also releases its libraries (kyaml/..., api/...): the latest release
 # of the repository is not always a Kustomize one.
