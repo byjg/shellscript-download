@@ -82,11 +82,7 @@ DOCKER_WRAPPER="${SHELLSCRIPT_BIN}/docker"
 # Internal hook, not part of the user interface: executed by 'load.sh remove -- podman'
 # through the UNINSTALL_CMD manifest key.
 if [[ "$UNINSTALL" == "1" ]]; then
-  if [[ -s "$PACKAGES_STATE" ]]; then
-    remove_recorded_packages "$PACKAGES_STATE"
-  else
-    log "Podman was not installed by this script — leaving system packages untouched."
-  fi
+  remove_recorded_packages "Podman" "$PACKAGES_STATE"
   exit 0
 fi
 
@@ -106,17 +102,7 @@ if [[ "$DOCKER_ALIAS" == "1" ]]; then
   done < <(type -aP docker 2>/dev/null || true)
 fi
 
-if command -v podman >/dev/null 2>&1; then
-  log "Podman is already installed: $(podman --version)"
-else
-  pm=$(detect_pm) || {
-    err "No supported package manager found (apt, dnf, pacman, zypper, apk)."
-    err "Install Podman manually and re-run your command."
-    exit 3
-  }
-  [[ -z "$SUDO" ]] || require_cmd sudo
-  install_packages "$pm" "podman" "$PACKAGES_STATE"
-fi
+ensure_package podman "Podman" podman "$PACKAGES_STATE"
 
 if [[ "$DOCKER_ALIAS" == "1" ]]; then
   run "mkdir -p \"${SHELLSCRIPT_BIN}\""

@@ -3,8 +3,13 @@
 // ------------------------------------------------------------------------------------
 
 import Script_ant from "../pages/scripts/ant";
+import Script_aws_cli from "../pages/scripts/aws-cli";
+import Script_buildah from "../pages/scripts/buildah";
 import Script_byjg_gluo from "../pages/scripts/byjg-gluo";
 import Script_docker from "../pages/scripts/docker";
+import Script_doctl from "../pages/scripts/doctl";
+import Script_eksctl from "../pages/scripts/eksctl";
+import Script_gcloud from "../pages/scripts/gcloud";
 import Script_helm from "../pages/scripts/helm";
 import Script_java_corretto from "../pages/scripts/java-corretto";
 import Script_java_oracle from "../pages/scripts/java-oracle";
@@ -25,8 +30,13 @@ import Script_yq from "../pages/scripts/yq";
 
 export const scriptRoutes = [
   { path: "/scripts/ant", element: <Script_ant /> },
+  { path: "/scripts/aws-cli", element: <Script_aws_cli /> },
+  { path: "/scripts/buildah", element: <Script_buildah /> },
   { path: "/scripts/byjg-gluo", element: <Script_byjg_gluo /> },
   { path: "/scripts/docker", element: <Script_docker /> },
+  { path: "/scripts/doctl", element: <Script_doctl /> },
+  { path: "/scripts/eksctl", element: <Script_eksctl /> },
+  { path: "/scripts/gcloud", element: <Script_gcloud /> },
   { path: "/scripts/helm", element: <Script_helm /> },
   { path: "/scripts/java-corretto", element: <Script_java_corretto /> },
   { path: "/scripts/java-oracle", element: <Script_java_oracle /> },

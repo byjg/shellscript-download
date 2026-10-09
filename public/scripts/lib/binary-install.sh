@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # binary-install.sh: code shared by the scripts that install a tool released as one
-# binary (jq.sh, yq.sh, kubectl.sh, helm.sh, kustomize.sh). Sourced, never run.
+# binary (jq.sh, yq.sh, kubectl.sh, helm.sh, kustomize.sh, doctl.sh, eksctl.sh). Sourced,
+# never run.
 #
 # The installer defines print_usage, sets
 #   BINARY_NAME   the command, and its folder: $HOME/.shellscript/<name>/<version>

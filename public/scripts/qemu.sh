@@ -724,11 +724,7 @@ cmd_uninstall() {
     [[ "$DRY_RUN" == "1" ]] || rm -f "$BRIDGE_STATE"
   fi
 
-  if [[ -s "$PACKAGES_STATE" ]]; then
-    remove_recorded_packages "$PACKAGES_STATE"
-  else
-    log "QEMU was not installed by this script — leaving system packages untouched."
-  fi
+  remove_recorded_packages "QEMU" "$PACKAGES_STATE"
 }
 
 boot_vm() {

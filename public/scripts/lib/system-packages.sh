@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # system-packages.sh: code shared by the scripts that install distro packages
-# (qemu.sh, podman.sh). Sourced, never run.
+# (qemu.sh, podman.sh, buildah.sh). Sourced, never run.
 #
 # Every install is recorded in a state file, so the script's uninstall hook removes
 # only the packages it installed and leaves the ones that were already there.
@@ -37,11 +37,31 @@ install_packages() {
   fi
 }
 
-# remove_recorded_packages <state_file>
-# Does nothing when the state file is empty: the script installed no package.
+# ensure_package <command> <label> <package> <state_file>
+# Installs <package> unless <command> is already available.
+ensure_package() {
+  local cmd="$1" label="$2" pkg="$3" state="$4" pm
+  if command -v "$cmd" >/dev/null 2>&1; then
+    log "${label} is already installed: $("$cmd" --version)"
+    return 0
+  fi
+  pm=$(detect_pm) || {
+    err "No supported package manager found (apt, dnf, pacman, zypper, apk)."
+    err "Install ${label} manually and re-run your command."
+    exit 3
+  }
+  [[ -z "$SUDO" ]] || require_cmd sudo
+  install_packages "$pm" "$pkg" "$state"
+}
+
+# remove_recorded_packages <label> <state_file>
+# Removes the packages the script installed; the ones that were already there stay.
 remove_recorded_packages() {
-  local state="$1" pm pkgs
-  [[ -s "$state" ]] || return 0
+  local label="$1" state="$2" pm pkgs
+  if [[ ! -s "$state" ]]; then
+    log "${label} was not installed by this script — leaving system packages untouched."
+    return 0
+  fi
 
   pm=$(detect_pm) || { err "No supported package manager found."; exit 3; }
   pkgs=$(tr '\n' ' ' < "$state")

@@ -10,8 +10,13 @@ Run any of them with `load.sh <script>`.
 | Script | Description |
 |---|---|
 | [ant](ant.md) | Download and install Apache Ant |
+| [aws-cli](aws-cli.md) | Download and install the AWS CLI v2 |
+| [buildah](buildah.md) | Install Buildah on Linux, to build container images without a daemon |
 | [byjg-gluo](byjg-gluo.md) | Create a new Gluo project (composer create-project byjg/gluo) in unattended mode |
 | [docker](docker.md) | Install the Docker Engine on Linux in a safe, idempotent, shell-friendly way |
+| [doctl](doctl.md) | Download and install doctl, the DigitalOcean command-line tool |
+| [eksctl](eksctl.md) | Download and install eksctl, the command-line tool for Amazon EKS clusters |
+| [gcloud](gcloud.md) | Download and install the Google Cloud CLI (gcloud, gsutil, bq) |
 | [helm](helm.md) | Download and install Helm, the Kubernetes package manager |
 | [java-corretto](java-corretto.md) | Download and install Amazon Corretto OpenJDK |
 | [java-oracle](java-oracle.md) | Download and install Oracle JDK |
