@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # system-packages.sh: code shared by the scripts that install distro packages
-# (qemu.sh, podman.sh, buildah.sh). Sourced, never run.
+# (qemu.sh, podman.sh, buildah.sh, byjg-repo.sh). Sourced, never run.
 #
 # Every install is recorded in a state file, so the script's uninstall hook removes
 # only the packages it installed and leaves the ones that were already there.

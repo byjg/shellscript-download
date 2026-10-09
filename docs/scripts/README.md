@@ -13,6 +13,7 @@ Run any of them with `load.sh <script>`.
 | [aws-cli](aws-cli.md) | Download and install the AWS CLI v2 |
 | [buildah](buildah.md) | Install Buildah on Linux, to build container images without a daemon |
 | [byjg-gluo](byjg-gluo.md) | Create a new Gluo project (composer create-project byjg/gluo) in unattended mode |
+| [byjg-repo](byjg-repo.md) | Add the ByJG package repository (APT or RPM) to install ByJG tools |
 | [docker](docker.md) | Install the Docker Engine on Linux in a safe, idempotent, shell-friendly way |
 | [doctl](doctl.md) | Download and install doctl, the DigitalOcean command-line tool |
 | [eksctl](eksctl.md) | Download and install eksctl, the command-line tool for Amazon EKS clusters |

@@ -6,6 +6,7 @@ import Script_ant from "../pages/scripts/ant";
 import Script_aws_cli from "../pages/scripts/aws-cli";
 import Script_buildah from "../pages/scripts/buildah";
 import Script_byjg_gluo from "../pages/scripts/byjg-gluo";
+import Script_byjg_repo from "../pages/scripts/byjg-repo";
 import Script_docker from "../pages/scripts/docker";
 import Script_doctl from "../pages/scripts/doctl";
 import Script_eksctl from "../pages/scripts/eksctl";
@@ -33,6 +34,7 @@ export const scriptRoutes = [
   { path: "/scripts/aws-cli", element: <Script_aws_cli /> },
   { path: "/scripts/buildah", element: <Script_buildah /> },
   { path: "/scripts/byjg-gluo", element: <Script_byjg_gluo /> },
+  { path: "/scripts/byjg-repo", element: <Script_byjg_repo /> },
   { path: "/scripts/docker", element: <Script_docker /> },
   { path: "/scripts/doctl", element: <Script_doctl /> },
   { path: "/scripts/eksctl", element: <Script_eksctl /> },
