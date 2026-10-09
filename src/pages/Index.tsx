@@ -28,16 +28,16 @@ const Index = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-[var(--gradient-hero)]">
+    <div className="min-h-screen bg-(--gradient-hero)">
       <div className="container mx-auto px-4 py-16">
         <header className="mb-16 text-center">
-          <div className="mb-6 inline-flex items-center gap-3 rounded-full border border-border bg-card/50 px-6 py-2 backdrop-blur-sm">
+          <div className="mb-6 inline-flex items-center gap-3 rounded-full border border-border bg-card/50 px-6 py-2 backdrop-blur-xs">
             <Terminal className="h-5 w-5 text-accent" />
             <span className="font-mono text-sm font-medium text-foreground">shellscript.download</span>
           </div>
           <h1 className="mb-6 text-5xl font-bold tracking-tight text-foreground md:text-6xl lg:text-7xl">
             Download & Run Scripts
-            <span className="bg-gradient-to-r from-accent to-accent/70 bg-clip-text text-transparent"> Easily</span>
+            <span className="bg-linear-to-r from-accent to-accent/70 bg-clip-text text-transparent"> Easily</span>
           </h1>
           <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
             Download and run pre-defined shell scripts in your Linux system with a single command.
