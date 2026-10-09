@@ -5,10 +5,13 @@
 import Script_ant from "../pages/scripts/ant";
 import Script_byjg_gluo from "../pages/scripts/byjg-gluo";
 import Script_docker from "../pages/scripts/docker";
+import Script_helm from "../pages/scripts/helm";
 import Script_java_corretto from "../pages/scripts/java-corretto";
 import Script_java_oracle from "../pages/scripts/java-oracle";
 import Script_java_temurin from "../pages/scripts/java-temurin";
 import Script_jq from "../pages/scripts/jq";
+import Script_kubectl from "../pages/scripts/kubectl";
+import Script_kustomize from "../pages/scripts/kustomize";
 import Script_load from "../pages/scripts/load";
 import Script_maven from "../pages/scripts/maven";
 import Script_node_docker from "../pages/scripts/node-docker";
@@ -24,10 +27,13 @@ export const scriptRoutes = [
   { path: "/scripts/ant", element: <Script_ant /> },
   { path: "/scripts/byjg-gluo", element: <Script_byjg_gluo /> },
   { path: "/scripts/docker", element: <Script_docker /> },
+  { path: "/scripts/helm", element: <Script_helm /> },
   { path: "/scripts/java-corretto", element: <Script_java_corretto /> },
   { path: "/scripts/java-oracle", element: <Script_java_oracle /> },
   { path: "/scripts/java-temurin", element: <Script_java_temurin /> },
   { path: "/scripts/jq", element: <Script_jq /> },
+  { path: "/scripts/kubectl", element: <Script_kubectl /> },
+  { path: "/scripts/kustomize", element: <Script_kustomize /> },
   { path: "/scripts/load", element: <Script_load /> },
   { path: "/scripts/maven", element: <Script_maven /> },
   { path: "/scripts/node-docker", element: <Script_node_docker /> },

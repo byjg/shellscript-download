@@ -12,10 +12,13 @@ Run any of them with `load.sh <script>`.
 | [ant](ant.md) | Download and install Apache Ant |
 | [byjg-gluo](byjg-gluo.md) | Create a new Gluo project (composer create-project byjg/gluo) in unattended mode |
 | [docker](docker.md) | Install the Docker Engine on Linux in a safe, idempotent, shell-friendly way |
+| [helm](helm.md) | Download and install Helm, the Kubernetes package manager |
 | [java-corretto](java-corretto.md) | Download and install Amazon Corretto OpenJDK |
 | [java-oracle](java-oracle.md) | Download and install Oracle JDK |
 | [java-temurin](java-temurin.md) | Download and install Eclipse Temurin Java (OpenJDK) |
 | [jq](jq.md) | Download and install jq, the command-line JSON processor |
+| [kubectl](kubectl.md) | Download and install kubectl, the Kubernetes command-line tool |
+| [kustomize](kustomize.md) | Download and install Kustomize, to customize Kubernetes manifests |
 | [load](load.md) | Fetch a script from https://shellscript.download, cache it locally, and optionally execute it. |
 | [maven](maven.md) | Download and install Apache Maven |
 | [node-docker](node-docker.md) | Create Docker-backed Node.js launchers (node, npm, npx, yarn) |

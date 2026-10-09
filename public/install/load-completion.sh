@@ -11,7 +11,7 @@ _load_sh_completion() {
   cur="${COMP_WORDS[COMP_CWORD]}"
 
   if [[ $COMP_CWORD -eq 1 ]]; then
-    mapfile -t COMPREPLY < <(compgen -W "--completion --developer --dont-run --help --list --update -h ant byjg-gluo docker java-corretto java-oracle java-temurin jq maven node-docker nvm php-docker podman qemu ssh-agent yq" -- "$cur")
+    mapfile -t COMPREPLY < <(compgen -W "--completion --developer --dont-run --help --list --update -h ant byjg-gluo docker helm java-corretto java-oracle java-temurin jq kubectl kustomize maven node-docker nvm php-docker podman qemu ssh-agent yq" -- "$cur")
     return
   fi
 
@@ -19,10 +19,13 @@ _load_sh_completion() {
     ant) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --manifest --version -h" -- "$cur") ;;
     byjg-gluo) mapfile -t COMPREPLY < <(compgen -W "--git-email --git-name --help --install-examples --manifest --mysql-uri --name --namespace --php-version --timezone --version -h" -- "$cur") ;;
     docker) mapfile -t COMPREPLY < <(compgen -W "--channel --dry-run --help --manifest --no-group -h" -- "$cur") ;;
+    helm) mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --help --manifest --version -h" -- "$cur") ;;
     java-corretto) mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --help --manifest --version --yes -h -y" -- "$cur") ;;
     java-oracle) mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --help --manifest --version --yes -h -y" -- "$cur") ;;
     java-temurin) mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --help --manifest --version --yes -h -y" -- "$cur") ;;
     jq) mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --help --manifest --version -h" -- "$cur") ;;
+    kubectl) mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --help --manifest --version -h" -- "$cur") ;;
+    kustomize) mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --help --manifest --version -h" -- "$cur") ;;
     maven) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --manifest --version -h" -- "$cur") ;;
     node-docker) mapfile -t COMPREPLY < <(compgen -W "--add --env --manifest --no-postinstall --postinstall --skip --volume" -- "$cur") ;;
     nvm) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --manifest -h" -- "$cur") ;;
