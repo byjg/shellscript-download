@@ -3,34 +3,58 @@
 // ------------------------------------------------------------------------------------
 
 import Script_ant from "../pages/scripts/ant";
+import Script_aws_cli from "../pages/scripts/aws-cli";
+import Script_buildah from "../pages/scripts/buildah";
 import Script_byjg_gluo from "../pages/scripts/byjg-gluo";
+import Script_byjg_repo from "../pages/scripts/byjg-repo";
 import Script_docker from "../pages/scripts/docker";
+import Script_doctl from "../pages/scripts/doctl";
+import Script_eksctl from "../pages/scripts/eksctl";
+import Script_gcloud from "../pages/scripts/gcloud";
+import Script_helm from "../pages/scripts/helm";
 import Script_java_corretto from "../pages/scripts/java-corretto";
 import Script_java_oracle from "../pages/scripts/java-oracle";
 import Script_java_temurin from "../pages/scripts/java-temurin";
+import Script_jq from "../pages/scripts/jq";
+import Script_kubectl from "../pages/scripts/kubectl";
+import Script_kustomize from "../pages/scripts/kustomize";
 import Script_load from "../pages/scripts/load";
 import Script_maven from "../pages/scripts/maven";
 import Script_node_docker from "../pages/scripts/node-docker";
 import Script_nvm from "../pages/scripts/nvm";
 import Script_php_docker from "../pages/scripts/php-docker";
+import Script_podman from "../pages/scripts/podman";
 import Script_qemu from "../pages/scripts/qemu";
 import Script_remove from "../pages/scripts/remove";
 import Script_ssh_agent from "../pages/scripts/ssh-agent";
+import Script_yq from "../pages/scripts/yq";
 
 export const scriptRoutes = [
   { path: "/scripts/ant", element: <Script_ant /> },
+  { path: "/scripts/aws-cli", element: <Script_aws_cli /> },
+  { path: "/scripts/buildah", element: <Script_buildah /> },
   { path: "/scripts/byjg-gluo", element: <Script_byjg_gluo /> },
+  { path: "/scripts/byjg-repo", element: <Script_byjg_repo /> },
   { path: "/scripts/docker", element: <Script_docker /> },
+  { path: "/scripts/doctl", element: <Script_doctl /> },
+  { path: "/scripts/eksctl", element: <Script_eksctl /> },
+  { path: "/scripts/gcloud", element: <Script_gcloud /> },
+  { path: "/scripts/helm", element: <Script_helm /> },
   { path: "/scripts/java-corretto", element: <Script_java_corretto /> },
   { path: "/scripts/java-oracle", element: <Script_java_oracle /> },
   { path: "/scripts/java-temurin", element: <Script_java_temurin /> },
+  { path: "/scripts/jq", element: <Script_jq /> },
+  { path: "/scripts/kubectl", element: <Script_kubectl /> },
+  { path: "/scripts/kustomize", element: <Script_kustomize /> },
   { path: "/scripts/load", element: <Script_load /> },
   { path: "/scripts/maven", element: <Script_maven /> },
   { path: "/scripts/node-docker", element: <Script_node_docker /> },
   { path: "/scripts/nvm", element: <Script_nvm /> },
   { path: "/scripts/php-docker", element: <Script_php_docker /> },
+  { path: "/scripts/podman", element: <Script_podman /> },
   { path: "/scripts/qemu", element: <Script_qemu /> },
   { path: "/scripts/remove", element: <Script_remove /> },
   { path: "/scripts/ssh-agent", element: <Script_ssh_agent /> },
+  { path: "/scripts/yq", element: <Script_yq /> },
 ];
 

@@ -66,7 +66,8 @@ JAVA_LTS_VERSIONS="8 11 17 21 25"
 
 # Resolve the latest patch release of the major version through the Adoptium API
 java_download_url() {
-  require_cmd jq
+  # A loader older than require_script cannot install jq: it has to be there already
+  if declare -F require_script >/dev/null; then require_script jq; else require_cmd jq; fi
   local url
   url=$(fetch "https://api.adoptium.net/v3/assets/latest/${JAVA_VERSION}/hotspot?architecture=${JAVA_ARCH}&image_type=jdk&os=linux&vendor=eclipse" \
     | jq -r '.[0].binary.package.link // empty') || true

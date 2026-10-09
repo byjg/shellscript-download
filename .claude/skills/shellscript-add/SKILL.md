@@ -25,7 +25,8 @@ If anything is unclear, ask before writing.
 
 | Pattern | Use when |
 |---|---|
-| **Binary download** | Tool ships a tarball/zip on GitHub releases (maven, java, gradle, …) |
+| **Single binary** | Tool ships one binary, or a .tar.gz that holds it (jq, yq, …) — use `lib/binary-install.sh`, see jq.sh |
+| **Binary download** | Tool ships a tarball/zip with a whole directory tree (maven, java, gradle, …) |
 | **Official installer** | Tool ships a curl-pipe-bash installer (nvm, rustup, …) |
 | **Docker-backed wrapper** | Tool should run inside Docker — nothing installed on host (php-docker, node-docker, …) |
 
@@ -110,6 +111,10 @@ done
 **DO NOT define these — they are injected by load.sh at runtime:**
 - `log()`, `err()`, `run()`, `require_cmd()`
 - `fetch()` (URL → stdout), `download()` (URL → file), `require_downloader()`
+- `require_script <script> [cmd]` — runs `load.sh <script>` unless `<cmd>` (default: the script
+  name) is already available. For a tool another script of the catalog installs (e.g. jq).
+  Loaders older than it do not have it: `if declare -F require_script >/dev/null; then
+  require_script jq; else require_cmd jq; fi`
 
 **DO NOT call `curl` or `wget` directly.** Use `fetch "<url>"` to read a URL to stdout and
 `download "<url>" "<dest>"` to save it to a file — both fall back from curl to wget
