@@ -362,12 +362,8 @@ async function generate() {
     // 4) Collect route info
     routeItems.push({ base, importName: makeComponentName(base), path: `/scripts/${base}`, source: "/scripts" })
 
-    // 5) Collect list info: first non-empty line of header (for short description), or fallback
-    const firstLine = (header || '')
-      .split(/\r?\n/)
-      .map((s) => s.trim())
-      .find((s) => s.length > 0) || `${base}.sh`
-    listItems.push({ base, firstLine })
+    // 5) Reuse the description without repeating the script filename.
+    listItems.push({ base, description })
 
     count++
   }
@@ -411,9 +407,9 @@ ${routesArray}
 
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Terminal } from "lucide-react";
+import { ArrowRight, Search } from "lucide-react";
 
-const data = ${listRows} as { base: string; firstLine: string }[];
+const data = ${listRows} as { base: string; description: string }[];
 
 export default function List() {
   const [q, setQ] = useState("");
@@ -423,58 +419,50 @@ export default function List() {
     return data.filter((item) => {
       return (
         item.base.toLowerCase().includes(query) ||
-        item.firstLine.toLowerCase().includes(query)
+        item.description.toLowerCase().includes(query)
       );
     });
   }, [q]);
 
   return (
-    <section className="mx-auto max-w-6xl">
-      <h2 className="mb-8 text-center text-3xl font-bold text-foreground">All Scripts</h2>
-      <div style={{margin: "0 0 1rem"}}>
+    <section id="packages" aria-labelledby="packages-title" className="scroll-mt-6">
+      <h2 id="packages-title" className="mb-2 text-2xl font-bold">Find a package</h2>
+      <p className="mb-4 text-sm text-muted-foreground">Browse all packages or search by name or description. Select one for installation instructions.</p>
+      <label htmlFor="package-search" className="sr-only">Search packages</label>
+      <div className="relative">
+        <Search aria-hidden="true" className="pointer-events-none absolute left-4 top-4 h-5 w-5 text-muted-foreground" />
         <input
-          aria-label="Search scripts"
-          placeholder="Search by script or description..."
+          id="package-search"
+          type="search"
+          placeholder="Search packages: docker, java, kubernetes…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          style={{
-            width: "100%",
-            padding: ".5rem .75rem",
-            borderRadius: ".375rem",
-            border: "1px solid #334155",
-            background: "#0b1020",
-            color: "#e5e7eb",
-            outline: "none"
-          }}
+          className="h-13 w-full rounded-lg border border-border bg-card pl-12 pr-4 text-base text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          aria-controls="package-results"
         />
       </div>
-      <div style={{overflowX: 'auto'}}>
-        <table style={{width: '100%', borderCollapse: 'collapse'}}>
-          <thead>
-            <tr>
-              <th style={{textAlign: 'left', padding: '.5rem', borderBottom: '1px solid #334155'}}>Script</th>
-              <th style={{textAlign: 'left', padding: '.5rem', borderBottom: '1px solid #334155'}}>Description</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(({ base, firstLine }) => (
-              <tr key={base}>
-                <td style={{verticalAlign: 'top', padding: '.5rem', borderBottom: '1px solid #1f2937'}}>
-                  <Link to={"/scripts/" + base}>{base}.sh</Link>
-                </td>
-                <td style={{verticalAlign: 'top', padding: '.5rem', borderBottom: '1px solid #1f2937'}}>
-                  {firstLine}
-                </td>
-              </tr>
-            ))}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={2} style={{padding: '.75rem', color: '#94a3b8'}}>No matches.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+      <div className="my-4 flex flex-wrap items-center justify-between gap-2 text-sm">
+        <p role="status" className="text-muted-foreground">
+          {q.trim() ? filtered.length + " of " + data.length + " packages" : data.length + " packages · A–Z"}
+        </p>
+        {q && <button type="button" onClick={() => setQ("")} className="rounded text-accent underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-accent">Clear search / Show all</button>}
       </div>
+      <ul id="package-results" className="divide-y divide-border border-y border-border">
+        {filtered.map(({ base, description }) => (
+          <li key={base}>
+            <Link to={"/scripts/" + base} className="group flex items-center gap-4 rounded px-3 py-4 transition-colors hover:bg-card focus-visible:outline-2 focus-visible:outline-accent">
+              <div className="grid min-w-0 flex-1 gap-1 sm:grid-cols-[10rem_1fr] sm:gap-6">
+                <span className="font-mono font-medium text-accent">{base}</span>
+                <span className="text-sm text-muted-foreground group-hover:text-foreground">{description}</span>
+              </div>
+              <ArrowRight aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground group-hover:text-accent" />
+            </Link>
+          </li>
+        ))}
+      </ul>
+      {filtered.length === 0 && (
+        <p className="py-8 text-center text-muted-foreground">No packages found. Try another name or clear the search to see all packages.</p>
+      )}
     </section>
   );
 }
