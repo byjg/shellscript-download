@@ -15,6 +15,7 @@ Run any of them with `load.sh <script>`.
 | [java-corretto](java-corretto.md) | Download and install Amazon Corretto OpenJDK |
 | [java-oracle](java-oracle.md) | Download and install Oracle JDK |
 | [java-temurin](java-temurin.md) | Download and install Eclipse Temurin Java (OpenJDK) |
+| [jq](jq.md) | Download and install jq, the command-line JSON processor |
 | [load](load.md) | Fetch a script from https://shellscript.download, cache it locally, and optionally execute it. |
 | [maven](maven.md) | Download and install Apache Maven |
 | [node-docker](node-docker.md) | Create Docker-backed Node.js launchers (node, npm, npx, yarn) |
@@ -24,3 +25,4 @@ Run any of them with `load.sh <script>`.
 | [qemu](qemu.md) | Download QEMU and manage local virtual machines (start, list, stop, remove) |
 | [remove](remove.md) | Remove installed tools from shellscript.download |
 | [ssh-agent](ssh-agent.md) | Configure ssh-agent startup and SSH key loading in your shell |
+| [yq](yq.md) | Download and install yq, the command-line YAML processor |

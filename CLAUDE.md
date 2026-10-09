@@ -20,6 +20,7 @@ require_cmd <cmd>              # exit 1 if command missing
 fetch "<url>"                  # URL to stdout (curl, falls back to wget)
 download "<url>" "<dest>"      # URL to file (curl, falls back to wget)
 require_downloader             # exit 1 unless curl or wget is available
+require_script <script> [cmd]  # run 'load.sh <script>' unless <cmd> (default: <script>) exists
 ```
 Never call `curl` or `wget` directly in scripts — use `fetch`/`download` so both tools work.
 Each script defines only its own `print_usage() { cat <<'USAGE' ... USAGE }` (and `print_manifest`).
@@ -31,6 +32,11 @@ Each script defines only its own `print_usage() { cat <<'USAGE' ... USAGE }` (an
   `--post-load` by calling it. `load.sh` runs `<script> --post-load` once after downloading or
   updating the script. The script must also call `postLoad` itself when the file is missing,
   because loaders older than the hook never do. See `php-docker.sh`.
+- A tool released as one binary (or a .tar.gz that holds it) is installed through
+  `lib/binary-install.sh`: the script only says where the latest version and the download are.
+  See `jq.sh`.
+- A script that needs a tool another script installs calls `require_script <script>`. Loaders
+  older than that helper do not have it: fall back to `require_cmd`. See `java-temurin.sh`.
 
 ### 3. Standard Flags Support
 All scripts should support:

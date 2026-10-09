@@ -272,7 +272,31 @@ require_cmd() { command -v "$1" >/dev/null 2>&1 || { err "Required command '$1' 
 fetch()       { if command -v curl >/dev/null 2>&1; then curl -fsSL "$1"; else wget -qO- "$1"; fi; }
 download()    { if command -v curl >/dev/null 2>&1; then curl -fsSL -o "$2" "$1"; else wget -qO "$2" "$1"; fi; }
 require_downloader() { command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1 || { err "Required command 'curl' or 'wget' not found"; exit 1; }; }
-export -f log err run require_cmd fetch download require_downloader
+# require_script <script> [command]: for a script that needs a tool another script of
+# the catalog installs. Runs 'load.sh <script>' unless <command> (the script name when
+# omitted) is already available. Everything goes to stderr, so it is safe to call
+# where the output of the script is being captured.
+SHELLSCRIPT_LOADER="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+SHELLSCRIPT_DEVELOPER_PATH="${DEVELOPER_PATH}"
+export SHELLSCRIPT_LOADER SHELLSCRIPT_DEVELOPER_PATH
+require_script() {
+  local script="$1" cmd="${2:-$1}"
+  command -v "$cmd" >/dev/null 2>&1 && return 0
+  log "'${cmd}' is required: installing it with 'load.sh ${script}'" >&2
+  if [[ "${DRY_RUN:-0}" == "1" ]]; then printf "[dry-run] load.sh %s\n" "$script" >&2; return 0; fi
+  local loader=("$SHELLSCRIPT_LOADER")
+  [[ -z "$SHELLSCRIPT_DEVELOPER_PATH" ]] || loader+=(--developer "$SHELLSCRIPT_DEVELOPER_PATH")
+  "${loader[@]}" "$script" >&2 || { err "'load.sh ${script}' failed"; exit 1; }
+  command -v "$cmd" >/dev/null 2>&1 || { err "'${cmd}' is still not available after 'load.sh ${script}'"; exit 1; }
+}
+export -f log err run require_cmd fetch download require_downloader require_script
+
+# What the scripts install to ${SHELLSCRIPT_BIN} must be found by the ones that run next
+case ":${PATH}:" in
+  *":${SHELLSCRIPT_BIN}:"*) ;;
+  *) PATH="${SHELLSCRIPT_BIN}:${PATH}" ;;
+esac
+export PATH
 
 # Post-load hook: a script that defines postLoad() has it called once, right
 # after it was downloaded or updated, to fetch what it depends on (for example a

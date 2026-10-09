@@ -105,6 +105,7 @@ following so scripts can use them without redeclaring:
 | `err "message"` | Prints `[<script>.sh][ERROR] message` to stderr |
 | `run "command"` | Runs the command normally, or prints `[dry-run] command` when `DRY_RUN=1` |
 | `require_cmd curl` | Exits with an error if the command is not on `PATH` |
+| `require_script jq` | Runs `load.sh jq` unless the `jq` command is already on `PATH`. A second argument names the command when it differs from the script |
 
 `log` and `err` use `basename "$0"` so the script name in the output is always correct.
 
@@ -222,6 +223,19 @@ what the script depends on, such as a file it shares with other scripts. `php-do
 `node-docker` use it to download `lib/docker-wrapper.sh` next to themselves in
 `$HOME/.shellscript/downloads`. The hook is not called when the cached copy of the script is used,
 nor with `--developer`, where the shared file is read from the local folder.
+
+## Scripts that depend on another script
+
+A script that needs a tool installed by another script of the catalog calls `require_script`:
+
+```bash
+# A loader older than require_script cannot install jq: it has to be there already
+if declare -F require_script >/dev/null; then require_script jq; else require_cmd jq; fi
+```
+
+`require_script jq` does nothing when `jq` is already available, and runs `load.sh jq` otherwise.
+It writes to stderr only, so it can be called where the output of the script is being captured.
+With `--dry-run` it prints what it would install and installs nothing.
 
 ---
 

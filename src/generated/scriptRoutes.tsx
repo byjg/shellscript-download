@@ -8,6 +8,7 @@ import Script_docker from "../pages/scripts/docker";
 import Script_java_corretto from "../pages/scripts/java-corretto";
 import Script_java_oracle from "../pages/scripts/java-oracle";
 import Script_java_temurin from "../pages/scripts/java-temurin";
+import Script_jq from "../pages/scripts/jq";
 import Script_load from "../pages/scripts/load";
 import Script_maven from "../pages/scripts/maven";
 import Script_node_docker from "../pages/scripts/node-docker";
@@ -17,6 +18,7 @@ import Script_podman from "../pages/scripts/podman";
 import Script_qemu from "../pages/scripts/qemu";
 import Script_remove from "../pages/scripts/remove";
 import Script_ssh_agent from "../pages/scripts/ssh-agent";
+import Script_yq from "../pages/scripts/yq";
 
 export const scriptRoutes = [
   { path: "/scripts/ant", element: <Script_ant /> },
@@ -25,6 +27,7 @@ export const scriptRoutes = [
   { path: "/scripts/java-corretto", element: <Script_java_corretto /> },
   { path: "/scripts/java-oracle", element: <Script_java_oracle /> },
   { path: "/scripts/java-temurin", element: <Script_java_temurin /> },
+  { path: "/scripts/jq", element: <Script_jq /> },
   { path: "/scripts/load", element: <Script_load /> },
   { path: "/scripts/maven", element: <Script_maven /> },
   { path: "/scripts/node-docker", element: <Script_node_docker /> },
@@ -34,5 +37,6 @@ export const scriptRoutes = [
   { path: "/scripts/qemu", element: <Script_qemu /> },
   { path: "/scripts/remove", element: <Script_remove /> },
   { path: "/scripts/ssh-agent", element: <Script_ssh_agent /> },
+  { path: "/scripts/yq", element: <Script_yq /> },
 ];
 
