@@ -11,6 +11,7 @@ import Script_docker from "../pages/scripts/docker";
 import Script_doctl from "../pages/scripts/doctl";
 import Script_eksctl from "../pages/scripts/eksctl";
 import Script_gcloud from "../pages/scripts/gcloud";
+import Script_gh from "../pages/scripts/gh";
 import Script_helm from "../pages/scripts/helm";
 import Script_java_corretto from "../pages/scripts/java-corretto";
 import Script_java_oracle from "../pages/scripts/java-oracle";
@@ -39,6 +40,7 @@ export const scriptRoutes = [
   { path: "/scripts/doctl", element: <Script_doctl /> },
   { path: "/scripts/eksctl", element: <Script_eksctl /> },
   { path: "/scripts/gcloud", element: <Script_gcloud /> },
+  { path: "/scripts/gh", element: <Script_gh /> },
   { path: "/scripts/helm", element: <Script_helm /> },
   { path: "/scripts/java-corretto", element: <Script_java_corretto /> },
   { path: "/scripts/java-oracle", element: <Script_java_oracle /> },

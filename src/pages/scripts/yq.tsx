@@ -22,7 +22,8 @@ export default function Script_yq() {
         <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem', marginTop: '1rem'}}>{`load.sh yq -- [options]
 
 Downloads the yq binary for x86_64 and aarch64 Linux to
-$HOME/.shellscript/yq/<version> and creates the 'yq' command. Run it again with
+$HOME/.shellscript/yq/<version> and creates the 'yq' command, with its completion for
+bash (when the bash-completion package is installed) and zsh. Run it again with
 another --version to switch.
 
 Options:

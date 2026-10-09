@@ -11,7 +11,7 @@ _load_sh_completion() {
   cur="${COMP_WORDS[COMP_CWORD]}"
 
   if [[ $COMP_CWORD -eq 1 ]]; then
-    mapfile -t COMPREPLY < <(compgen -W "--completion --developer --dont-run --help --list --update -h ant aws-cli buildah byjg-gluo byjg-repo docker doctl eksctl gcloud helm java-corretto java-oracle java-temurin jq kubectl kustomize maven node-docker nvm php-docker podman qemu ssh-agent yq" -- "$cur")
+    mapfile -t COMPREPLY < <(compgen -W "--completion --developer --dont-run --help --list --update -h ant aws-cli buildah byjg-gluo byjg-repo docker doctl eksctl gcloud gh helm java-corretto java-oracle java-temurin jq kubectl kustomize maven node-docker nvm php-docker podman qemu ssh-agent yq" -- "$cur")
     return
   fi
 
@@ -25,6 +25,7 @@ _load_sh_completion() {
     doctl) mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --help --manifest --version -h" -- "$cur") ;;
     eksctl) mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --help --manifest --version -h" -- "$cur") ;;
     gcloud) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --manifest --version -h" -- "$cur") ;;
+    gh) mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --help --manifest --version -h" -- "$cur") ;;
     helm) mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --help --manifest --version -h" -- "$cur") ;;
     java-corretto) mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --help --manifest --version --yes -h -y" -- "$cur") ;;
     java-oracle) mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --help --manifest --version --yes -h -y" -- "$cur") ;;

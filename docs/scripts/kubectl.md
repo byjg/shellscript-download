@@ -17,7 +17,8 @@ load.sh kubectl
 load.sh kubectl -- [options]
 
 Downloads the kubectl binary for x86_64 and aarch64 Linux to
-$HOME/.shellscript/kubectl/<version> and creates the 'kubectl' command. Run it again with
+$HOME/.shellscript/kubectl/<version> and creates the 'kubectl' command, with its completion for
+bash (when the bash-completion package is installed) and zsh. Run it again with
 another --version to switch.
 
 Options:

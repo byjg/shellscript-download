@@ -17,7 +17,8 @@ load.sh helm
 load.sh helm -- [options]
 
 Downloads the Helm binary for x86_64 and aarch64 Linux to
-$HOME/.shellscript/helm/<version> and creates the 'helm' command. Run it again with
+$HOME/.shellscript/helm/<version> and creates the 'helm' command, with its completion for
+bash (when the bash-completion package is installed) and zsh. Run it again with
 another --version to switch.
 
 Options:

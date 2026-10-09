@@ -8,7 +8,8 @@ print_usage() {
 load.sh kubectl -- [options]
 
 Downloads the kubectl binary for x86_64 and aarch64 Linux to
-$HOME/.shellscript/kubectl/<version> and creates the 'kubectl' command. Run it again with
+$HOME/.shellscript/kubectl/<version> and creates the 'kubectl' command, with its completion for
+bash (when the bash-completion package is installed) and zsh. Run it again with
 another --version to switch.
 
 Options:
@@ -49,6 +50,7 @@ source "$SHARED_LIB"
 
 BINARY_NAME="kubectl"
 BINARY_LABEL="kubectl"
+BINARY_COMPLETION="completion"
 
 binary_latest_version() {
   fetch https://dl.k8s.io/release/stable.txt | sed 's/^v//'
