@@ -118,6 +118,23 @@ sys_install() {
   fi
 }
 
+# start_docker_daemon: a container has no init system to start it. For the tests with
+# '# privileged: yes'.
+start_docker_daemon() {
+  local i
+  sudo sh -c 'dockerd >/tmp/dockerd.log 2>&1 &'
+  for i in $(seq 1 60); do
+    if sudo docker info >/dev/null 2>&1; then pass "the Docker daemon is running"; return 0; fi
+    sleep 1
+  done
+  fail "the Docker daemon did not start"
+  sudo tail -5 /tmp/dockerd.log | sed 's/^/        /'
+}
+
+# in_new_session "<command>": as the user does after logging in again, which is when a
+# new group membership takes effect
+in_new_session() { printf 'sudo -u %s -H bash -lc %q' "$(id -un)" "$1"; }
+
 # manifest_value <script> <KEY>: what the manifest of a script declares, with $HOME expanded
 manifest_value() {
   local value

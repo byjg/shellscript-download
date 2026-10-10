@@ -58,7 +58,9 @@ for test in "${tests[@]}"; do
   [[ -f "$file" ]] || { echo "No such test: ${test}" >&2; exit 2; }
   applies="$(sed -n 's/^# images: *//p' "$file")"
   docker_options=()
-  if grep -q '^# privileged: yes' "$file"; then docker_options+=(--privileged); fi
+  # A container engine inside a container cannot keep its data on the overlay
+  # filesystem of the container: /var/lib/docker goes to a volume, gone with it.
+  if grep -q '^# privileged: yes' "$file"; then docker_options+=(--privileged -v /var/lib/docker); fi
   for image in "${IMAGE_ORDER[@]}"; do
     [[ -z "$only_image" || "$only_image" == "$image" ]] || continue
     [[ -z "$applies" || " ${applies} " == *" ${image} "* ]] || continue
