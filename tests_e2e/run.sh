@@ -25,7 +25,7 @@ declare -A IMAGES=(
 IMAGE_ORDER=(ubuntu fedora alpine)
 
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCRIPTS_DIR="$(cd "${TESTS_DIR}/../public/scripts" && pwd)"
+PUBLIC_DIR="$(cd "${TESTS_DIR}/../public" && pwd)"
 
 only_image=""
 verbose=""
@@ -67,7 +67,7 @@ for test in "${tests[@]}"; do
 
     printf '\n######## %s on %s (%s)\n' "$test" "$image" "${IMAGES[$image]}"
     if docker run --rm -e "E2E_VERBOSE=${verbose}" ${docker_options[@]+"${docker_options[@]}"} \
-        -v "${SCRIPTS_DIR}:/repo:ro" -v "${TESTS_DIR}:/tests:ro" \
+        -v "${PUBLIC_DIR}:/repo:ro" -v "${TESTS_DIR}:/tests:ro" \
         "${IMAGES[$image]}" sh /tests/shared/container.sh "$test"; then
       results+=("PASS  ${test} on ${image}")
     else

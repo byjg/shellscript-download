@@ -2,17 +2,15 @@
 # remove.sh: 'load.sh remove': its options, the dry run, and the uninstall hook
 source "$(dirname "${BASH_SOURCE[0]}")/../shared/lib.sh"
 
-fixtures
-DEV_FIXTURES="${LOADER} --developer ${FIXTURES}"
 wrapper="${SHELLSCRIPT_HOME}/bin/jq"
 tool_home="${SHELLSCRIPT_HOME}/jq"
 
 step "remove: usage and wrong calls"
-assert_exit 0 "${DEV} remove -- --help"
-assert_exit 2 "${DEV} remove"
-assert_exit 2 "${DEV} remove -- --no-such-option jq"
-assert_exit 2 "${DEV} remove -- jq yq"
-assert_exit 3 "${DEV} remove -- no-such-script"
+assert_exit 0 "${LOADER} remove -- --help"
+assert_exit 2 "${LOADER} remove"
+assert_exit 2 "${LOADER} remove -- --no-such-option jq"
+assert_exit 2 "${LOADER} remove -- jq yq"
+assert_exit 3 "${LOADER} remove -- no-such-script"
 
 step "remove: nothing installed"
 load remove -- jq
@@ -47,7 +45,7 @@ case "${1-}" in
   uninstall)  echo "hook ran" > "$HOME/e2e-hook-ran" ;;
 esac
 PROBE
-assert_exit 0 "${DEV_FIXTURES} remove -- hooked"
+assert_exit 0 "${LOADER} remove -- hooked"
 assert_exists "${HOME}/e2e-hook-ran"
 
 step "remove: a hook that is not one word is not run"
@@ -59,7 +57,7 @@ case "${1-}" in
 esac
 touch "$HOME/e2e-bad-hook-called-with-${1-nothing}"
 PROBE
-assert_exit 0 "${DEV_FIXTURES} remove -- bad-hook"
+assert_exit 0 "${LOADER} remove -- bad-hook"
 assert_log "Ignoring invalid UNINSTALL_CMD"
 assert_missing "${HOME}/e2e-bad-hook"
 assert_missing "${HOME}/e2e-bad-hook-called-with-touch"

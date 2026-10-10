@@ -3,6 +3,12 @@
 # as root. Usage: container.sh <testcase>
 #
 # load.sh never runs as root: the test runs as 'tester', a regular user with sudo.
+# The container is left as a machine where the loader was installed, with the working
+# copy of the repository (/repo is its public folder) in place of what is published:
+#   - the installer puts load.sh in ~/.shellscript/bin, as it does for a user
+#   - the scripts are in ~/.shellscript/downloads, the cache of the loader, where it
+#     finds them and downloads nothing
+# The tests then call 'load.sh <script> -- <options>', as the documentation says.
 set -eu
 
 setup() {
@@ -29,5 +35,13 @@ if ! setup >/tmp/setup.log 2>&1; then
   exit 2
 fi
 echo 'tester ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/tester
+
+if ! su tester -c 'sh /repo/install/loader --developer \
+    && mkdir -p ~/.shellscript/downloads \
+    && cp -r /repo/scripts/. ~/.shellscript/downloads/' >/tmp/install.log 2>&1; then
+  echo "container.sh: could not install the loader:" >&2
+  cat /tmp/install.log >&2
+  exit 2
+fi
 
 exec su tester -c "E2E_VERBOSE=${E2E_VERBOSE:-} bash /tests/testcases/$1.sh"

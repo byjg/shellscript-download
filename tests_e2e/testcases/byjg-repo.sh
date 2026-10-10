@@ -28,7 +28,7 @@ assert_exists "$repo_file"
 assert_exists "${tool_home}/repository-added"
 
 step "byjg-repo: --list shows the packages"
-assert_output "bash ${SCRIPTS_DIR}/load.sh --developer ${SCRIPTS_DIR} byjg-repo -- --list 2>/dev/null" "static-httpserver"
+assert_output "${LOADER} byjg-repo -- --list 2>/dev/null" "static-httpserver"
 
 step "byjg-repo: install again changes nothing, --install adds a package"
 load byjg-repo -- --install static-httpserver

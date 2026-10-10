@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # lib.sh: what the tests share. Sourced by each test, never run.
 #
-# A test runs inside a container started by run.sh, as a regular user, with the
-# scripts of the repository in /repo. It installs with the loader of the repository,
-# in --developer mode, so that it tests the working copy and not what is published.
+# A test runs inside a container started by run.sh, as a regular user, on a machine
+# where the loader is installed (see container.sh): it calls 'load.sh <script>', which
+# runs the working copy of the scripts and not what is published.
 
 set -euo pipefail
 
-SCRIPTS_DIR="/repo"
+SCRIPTS_DIR="/repo/scripts"
 SHELLSCRIPT_HOME="${HOME}/.shellscript"
 export PATH="${SHELLSCRIPT_HOME}/bin:${PATH}"
 
@@ -18,14 +18,15 @@ step() { printf '\n== %s\n' "$*"; }
 pass() { printf '  ok    %s\n' "$*"; }
 fail() { printf '  FAIL  %s\n' "$*"; FAILURES=$((FAILURES + 1)); }
 
-# The loader of the repository, and the same in --developer mode on its scripts
-LOADER="bash ${SCRIPTS_DIR}/load.sh"
-DEV="${LOADER} --developer ${SCRIPTS_DIR}"
+# The installed loader. Named by its path where the PATH of the test does not reach,
+# such as under sudo.
+LOADER="load.sh"
+LOADER_PATH="${SHELLSCRIPT_HOME}/bin/load.sh"
 
-# load <script> [-- options]: runs the loader of the repository. Its output is shown
-# only when it fails, or always with 'run.sh --verbose'.
+# load <script> [-- options]: runs the loader. Its output is shown only when it fails,
+# or always with 'run.sh --verbose'.
 load() {
-  if $DEV "$@" >"$LOG_FILE" 2>&1; then
+  if $LOADER "$@" >"$LOG_FILE" 2>&1; then
     pass "load.sh $*"
     [[ -z "${E2E_VERBOSE:-}" ]] || sed 's/^/        /' "$LOG_FILE"
   else
@@ -36,7 +37,7 @@ load() {
 
 # load_fails <script> [-- options]: the loader must stop with an error
 load_fails() {
-  if $DEV "$@" >"$LOG_FILE" 2>&1; then
+  if $LOADER "$@" >"$LOG_FILE" 2>&1; then
     fail "load.sh $* should have failed"
   else
     pass "load.sh $* fails"
@@ -63,16 +64,11 @@ assert_no_output() {
   if [[ "$output" == *"$2"* ]]; then fail "$1: printed '$2'"; else pass "$1 does not print: $2"; fi
 }
 
-# fixtures: a copy of the scripts of the repository, where a test adds scripts of its own
-# to drive the loader. Run them with: $LOADER --developer "$FIXTURES" <script>
-FIXTURES="/tmp/e2e-fixtures"
-fixtures() {
-  rm -rf "$FIXTURES"
-  cp -r "$SCRIPTS_DIR" "$FIXTURES"
-}
+# fixture <name>: a script of the test itself, read from stdin, put in the cache of the
+# loader as if it had been downloaded. Run it with: load.sh <name>
 fixture() {
-  cat > "${FIXTURES}/$1.sh"
-  chmod +x "${FIXTURES}/$1.sh"
+  cat > "${SHELLSCRIPT_HOME}/downloads/$1.sh"
+  chmod +x "${SHELLSCRIPT_HOME}/downloads/$1.sh"
 }
 
 # home_snapshot: what is in the home, apart from the folders the loader always creates
@@ -140,7 +136,7 @@ in_new_session() { printf 'sudo -u %s -H bash -lc %q' "$(id -un)" "$1"; }
 manifest_value() {
   local script="$1" key="$2" value
   shift 2
-  value="$($DEV "$script" -- "$@" --manifest 2>/dev/null | sed -n "s/^${key}=//p")"
+  value="$($LOADER "$script" -- "$@" --manifest 2>/dev/null | sed -n "s/^${key}=//p")"
   eval "printf '%s' \"${value}\""
 }
 
@@ -324,7 +320,7 @@ test_java_vendor() {
   assert_output "${java} -version" 'version "25.'
 
   step "${name}: a version that is not LTS asks first, and installs nothing on 'n'"
-  assert_output "echo n | bash ${SCRIPTS_DIR}/load.sh --developer ${SCRIPTS_DIR} ${name} -- --version 22" "Aborted."
+  assert_output "echo n | ${LOADER} ${name} -- --version 22" "Aborted."
   assert_missing "${vendor_home}/22"
 
   step "${name}: remove keeps the folders"
@@ -463,9 +459,9 @@ test_docker_wrapper() {
   assert_no_output "$(in_container "$cmd" 'cat /e2e-postinstall')" "post-install ran"
 
   step "${script}: the manifest of one version, and of everything"
-  assert_output "${DEV} ${script} -- ${older} --manifest 2>/dev/null" "FOLDERS=\$HOME/.shellscript/${tool}/${older}"
-  assert_output "${DEV} ${script} -- --manifest 2>/dev/null" "${cmd}${version}"
-  assert_output "${DEV} ${script} -- --manifest 2>/dev/null" "${cmd}${older}"
+  assert_output "${LOADER} ${script} -- ${older} --manifest 2>/dev/null" "FOLDERS=\$HOME/.shellscript/${tool}/${older}"
+  assert_output "${LOADER} ${script} -- --manifest 2>/dev/null" "${cmd}${version}"
+  assert_output "${LOADER} ${script} -- --manifest 2>/dev/null" "${cmd}${older}"
 
   step "${script}: remove takes out the wrappers of every version, keeps the folder"
   load remove -- "$script"

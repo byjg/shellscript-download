@@ -16,24 +16,24 @@ for file in "${SCRIPTS_DIR}"/*.sh; do
   name="$(basename "$file" .sh)"
   step "${name}"
 
-  assert_exit 0 "${DEV} ${name} -- --help"
+  assert_exit 0 "${LOADER} ${name} -- --help"
   assert_log "$name"
 
   if [[ "$NO_MANIFEST" != *" ${name} "* ]]; then
-    assert_exit 0 "${DEV} ${name} -- --manifest"
+    assert_exit 0 "${LOADER} ${name} -- --manifest"
     assert_log "FOLDERS="
     assert_log "SHELLRC_FILE="
   fi
 
   code=0
-  $DEV "$name" -- --no-such-option-e2e >"$LOG_FILE" 2>&1 || code=$?
+  $LOADER "$name" -- --no-such-option-e2e >"$LOG_FILE" 2>&1 || code=$?
   if [[ "$code" != "0" ]]; then pass "refuses an unknown option (exit ${code})"; else fail "accepted an unknown option"; fi
 
   if [[ "$name" == "byjg-repo" ]] && on_image alpine; then
     skip "--dry-run: byjg-repo has no packages for this image, see its own test"
   elif [[ "$NO_DRY_RUN" != *" ${name} "* ]]; then
     before="$(home_snapshot)"
-    assert_exit 0 "${DEV} ${name} -- --dry-run"
+    assert_exit 0 "${LOADER} ${name} -- --dry-run"
     if [[ "$(home_snapshot)" == "$before" ]]; then
       pass "--dry-run changed nothing"
     else
