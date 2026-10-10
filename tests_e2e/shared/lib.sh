@@ -18,10 +18,14 @@ step() { printf '\n== %s\n' "$*"; }
 pass() { printf '  ok    %s\n' "$*"; }
 fail() { printf '  FAIL  %s\n' "$*"; FAILURES=$((FAILURES + 1)); }
 
+# The loader of the repository, and the same in --developer mode on its scripts
+LOADER="bash ${SCRIPTS_DIR}/load.sh"
+DEV="${LOADER} --developer ${SCRIPTS_DIR}"
+
 # load <script> [-- options]: runs the loader of the repository. Its output is shown
 # only when it fails, or always with 'run.sh --verbose'.
 load() {
-  if bash "${SCRIPTS_DIR}/load.sh" --developer "${SCRIPTS_DIR}" "$@" >"$LOG_FILE" 2>&1; then
+  if $DEV "$@" >"$LOG_FILE" 2>&1; then
     pass "load.sh $*"
     [[ -z "${E2E_VERBOSE:-}" ]] || sed 's/^/        /' "$LOG_FILE"
   else
@@ -32,11 +36,51 @@ load() {
 
 # load_fails <script> [-- options]: the loader must stop with an error
 load_fails() {
-  if bash "${SCRIPTS_DIR}/load.sh" --developer "${SCRIPTS_DIR}" "$@" >"$LOG_FILE" 2>&1; then
+  if $DEV "$@" >"$LOG_FILE" 2>&1; then
     fail "load.sh $* should have failed"
   else
     pass "load.sh $* fails"
   fi
+}
+
+# assert_exit <code> "<command>": the command ends with that exit code. What it printed
+# is left in $LOG_FILE.
+assert_exit() {
+  local code=0
+  bash -c "$2" >"$LOG_FILE" 2>&1 || code=$?
+  if [[ "$code" == "$1" ]]; then pass "exit $1: $2"; else fail "$2: expected exit $1, got ${code}"; fi
+}
+
+# assert_log "<text>": what the last load, load_fails or assert_exit printed has the text
+assert_log() {
+  if grep -qF -- "$1" "$LOG_FILE"; then pass "printed: $1"; else fail "did not print: $1"; sed 's/^/        /' "$LOG_FILE"; fi
+}
+
+# assert_no_output "<command>" "<text>": the command does not print the text
+assert_no_output() {
+  local output
+  output="$(bash -c "$1" 2>&1)" || true
+  if [[ "$output" == *"$2"* ]]; then fail "$1: printed '$2'"; else pass "$1 does not print: $2"; fi
+}
+
+# fixtures: a copy of the scripts of the repository, where a test adds scripts of its own
+# to drive the loader. Run them with: $LOADER --developer "$FIXTURES" <script>
+FIXTURES="/tmp/e2e-fixtures"
+fixtures() {
+  rm -rf "$FIXTURES"
+  cp -r "$SCRIPTS_DIR" "$FIXTURES"
+}
+fixture() {
+  cat > "${FIXTURES}/$1.sh"
+  chmod +x "${FIXTURES}/$1.sh"
+}
+
+# home_snapshot: what is in the home, apart from the folders the loader always creates
+home_snapshot() {
+  # grep ends with 1 when it prints nothing: an empty home is not an error
+  find "$HOME" -mindepth 1 2>/dev/null \
+    | { grep -vx -e "${SHELLSCRIPT_HOME}" -e "${SHELLSCRIPT_HOME}/bin" -e "${SHELLSCRIPT_HOME}/shellrc" -e "${SHELLSCRIPT_HOME}/downloads" || true; } \
+    | sort
 }
 
 # assert_output "<command>" "<text>": the command succeeds and prints the text
