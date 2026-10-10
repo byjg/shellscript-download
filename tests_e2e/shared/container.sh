@@ -30,4 +30,4 @@ if ! setup >/tmp/setup.log 2>&1; then
 fi
 echo 'tester ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/tester
 
-exec su tester -c "bash /tests/testcases/$1.sh"
+exec su tester -c "E2E_VERBOSE=${E2E_VERBOSE:-} bash /tests/testcases/$1.sh"

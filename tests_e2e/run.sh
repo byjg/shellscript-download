@@ -5,11 +5,15 @@
 #   tests_e2e/run.sh                     every test, on every image
 #   tests_e2e/run.sh jq yq               these tests, on every image
 #   tests_e2e/run.sh --image alpine jq   this test, on one image
+#   tests_e2e/run.sh --verbose jq        also show the output of every load.sh
 #
 # A test is tests_e2e/testcases/<name>.sh. It runs on every image below, unless it has
 # a line
 #   # images: ubuntu fedora
-# naming the ones it applies to. What the tests share is in tests_e2e/shared.
+# naming the ones it applies to, and in a privileged container when it has a line
+#   # privileged: yes
+# which a test needs to run containers inside its own. What the tests share is in
+# tests_e2e/shared.
 set -euo pipefail
 
 # The images every test is run on. One place, so that all tests see the same systems.
@@ -24,11 +28,13 @@ TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR="$(cd "${TESTS_DIR}/../public/scripts" && pwd)"
 
 only_image=""
+verbose=""
 tests=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --image) only_image="${2:?--image requires a name}"; shift ;;
-    -h|--help) sed -n '2,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --verbose) verbose=1 ;;
+    -h|--help) sed -n '2,16p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) tests+=("$1") ;;
   esac
   shift
@@ -51,12 +57,14 @@ for test in "${tests[@]}"; do
   file="${TESTS_DIR}/testcases/${test}.sh"
   [[ -f "$file" ]] || { echo "No such test: ${test}" >&2; exit 2; }
   applies="$(sed -n 's/^# images: *//p' "$file")"
+  docker_options=()
+  if grep -q '^# privileged: yes' "$file"; then docker_options+=(--privileged); fi
   for image in "${IMAGE_ORDER[@]}"; do
     [[ -z "$only_image" || "$only_image" == "$image" ]] || continue
     [[ -z "$applies" || " ${applies} " == *" ${image} "* ]] || continue
 
     printf '\n######## %s on %s (%s)\n' "$test" "$image" "${IMAGES[$image]}"
-    if docker run --rm \
+    if docker run --rm -e "E2E_VERBOSE=${verbose}" ${docker_options[@]+"${docker_options[@]}"} \
         -v "${SCRIPTS_DIR}:/repo:ro" -v "${TESTS_DIR}:/tests:ro" \
         "${IMAGES[$image]}" sh /tests/shared/container.sh "$test"; then
       results+=("PASS  ${test} on ${image}")

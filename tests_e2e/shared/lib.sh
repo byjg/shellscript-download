@@ -19,10 +19,11 @@ pass() { printf '  ok    %s\n' "$*"; }
 fail() { printf '  FAIL  %s\n' "$*"; FAILURES=$((FAILURES + 1)); }
 
 # load <script> [-- options]: runs the loader of the repository. Its output is shown
-# only when it fails.
+# only when it fails, or always with 'run.sh --verbose'.
 load() {
   if bash "${SCRIPTS_DIR}/load.sh" --developer "${SCRIPTS_DIR}" "$@" >"$LOG_FILE" 2>&1; then
     pass "load.sh $*"
+    [[ -z "${E2E_VERBOSE:-}" ]] || sed 's/^/        /' "$LOG_FILE"
   else
     fail "load.sh $* (exit $?)"
     sed 's/^/        /' "$LOG_FILE"
@@ -48,11 +49,30 @@ assert_output() {
   fi
 }
 
+# hash -r: the shell remembers where it found a command, even after it is uninstalled
+assert_command()    { hash -r; if command -v "$1" >/dev/null 2>&1; then pass "command: $1"; else fail "no command: $1"; fi; }
+assert_no_command() { hash -r; if command -v "$1" >/dev/null 2>&1; then fail "command still there: $1"; else pass "no command: $1"; fi; }
 assert_exists()  { if [[ -e "$1" ]]; then pass "exists: $1"; else fail "missing: $1"; fi; }
 assert_missing() { if [[ -e "$1" || -L "$1" ]]; then fail "still there: $1"; else pass "gone: $1"; fi; }
 
 # The version the 'current' link of a tool points at
 current_version() { readlink "${SHELLSCRIPT_HOME}/$1/current"; }
+
+# on_image <name>: true in a container of that image (ubuntu, fedora, alpine)
+on_image() { [[ "$(. /etc/os-release && echo "$ID")" == "$1" ]]; }
+skip() { printf '  skip  %s\n' "$*"; }
+
+# sys_install <package>: installs with the package manager of the image, as a user
+# would have done before running the script
+sys_install() {
+  if command -v apt-get >/dev/null 2>&1; then
+    sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$1" >"$LOG_FILE" 2>&1
+  elif command -v dnf >/dev/null 2>&1; then
+    sudo dnf install -y -q "$1" >"$LOG_FILE" 2>&1
+  else
+    sudo apk add -q "$1" >"$LOG_FILE" 2>&1
+  fi
+}
 
 # manifest_value <script> <KEY>: what the manifest of a script declares, with $HOME expanded
 manifest_value() {
@@ -134,4 +154,41 @@ test_single_binary() {
   load remove -- "$name" --purge
   assert_missing "$wrapper"
   assert_missing "$tool_home"
+}
+
+# test_system_package <name> <command> [check]
+# For the scripts that install one package with lib/system-packages.sh: install, remove
+# and purge, and a package that was already there is left alone. <check> is a function
+# of the test that proves the tool works; it runs after the install.
+test_system_package() {
+  local name="$1" cmd="$2" check="${3:-}"
+  local tool_home="${SHELLSCRIPT_HOME}/${name}"
+  local state="${tool_home}/installed-packages.conf"
+
+  step "${name}: install with the defaults"
+  load "$name"
+  assert_command "$cmd"
+  assert_output "cat '${state}'" "$name"
+  [[ -z "$check" ]] || "$check"
+
+  step "${name}: install again changes nothing"
+  load "$name"
+  assert_output "cat '$LOG_FILE'" "already installed"
+
+  step "${name}: remove uninstalls the package and keeps the folder"
+  load remove -- "$name"
+  assert_no_command "$cmd"
+  assert_exists "$tool_home"
+
+  step "${name}: purge removes the folder"
+  load remove -- "$name" --purge
+  assert_missing "$tool_home"
+
+  step "${name}: a package that was already installed is left alone"
+  if sys_install "$name"; then pass "installed ${name} with the package manager"; else fail "could not install ${name}"; fi
+  load "$name"
+  assert_missing "$state"
+  load remove -- "$name" --purge
+  assert_output "cat '$LOG_FILE'" "was not installed by this script"
+  assert_command "$cmd"
 }
