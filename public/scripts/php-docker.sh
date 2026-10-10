@@ -251,6 +251,10 @@ ${ENV_FILTER}
 
 ${VOLUME_ARGS}
 
+# Docker creates a folder it mounts when it is missing, and as root: on an account
+# that has no ~/.cache yet, nothing could write to it afterwards
+mkdir -p "${HOME}/.cache"
+
 docker run \${TTY_ARG} --rm \
   -v "\${PWD}":"\${PWD}" \
   -v "${HOME}/.cache:${HOME}/.cache" \

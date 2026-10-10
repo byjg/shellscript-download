@@ -135,12 +135,35 @@ start_docker_daemon() {
 # new group membership takes effect
 in_new_session() { printf 'sudo -u %s -H bash -lc %q' "$(id -un)" "$1"; }
 
-# manifest_value <script> <KEY>: what the manifest of a script declares, with $HOME expanded
+# manifest_value <script> <KEY> [arguments]: what the manifest of a script declares, with
+# $HOME expanded. The arguments go before --manifest, for the scripts that take a version.
 manifest_value() {
-  local value
-  value="$(bash "${SCRIPTS_DIR}/load.sh" --developer "${SCRIPTS_DIR}" "$1" -- --manifest 2>/dev/null \
-    | sed -n "s/^$2=//p")"
+  local script="$1" key="$2" value
+  shift 2
+  value="$($DEV "$script" -- "$@" --manifest 2>/dev/null | sed -n "s/^${key}=//p")"
   eval "printf '%s' \"${value}\""
+}
+
+# need_docker: for the tests of what runs on Docker. Installs it with our own script
+# (with the package manager on Alpine, which the installer of Docker does not cover),
+# starts the daemon, and starts the test again in a new session, where the user is in
+# the 'docker' group. Needs '# privileged: yes'.
+need_docker() {
+  if docker info >/dev/null 2>&1; then return 0; fi
+  if [[ -n "${E2E_DOCKER_READY:-}" ]]; then
+    fail "the user cannot use Docker in the new session"
+    finish
+  fi
+
+  step "prepare: Docker"
+  if on_image alpine; then
+    if sys_install docker && sudo addgroup "$(id -un)" docker >/dev/null; then pass "installed docker"; else fail "could not install docker"; fi
+  else
+    load docker
+  fi
+  start_docker_daemon
+  [[ "$FAILURES" == "0" ]] || finish
+  exec sudo -u "$(id -un)" -H env E2E_DOCKER_READY=1 E2E_VERBOSE="${E2E_VERBOSE:-}" bash "$0"
 }
 
 # finish: the last line of every test
@@ -357,4 +380,104 @@ test_java_build_tool() {
   load remove -- "$name" --purge
   assert_removed "$name"
   assert_purged "$tool_home"
+}
+
+# test_docker_wrapper <script> <tool> <command> <version> <older_version> "<version text>"
+# For the Docker-backed wrappers of lib/docker-wrapper.sh (php-docker, node-docker): a
+# version, an older one, the options they share, remove and purge. <tool> is the folder
+# under ~/.shellscript, <command> the main wrapper, and <version text> what
+# '<command> --version' prints, with %s where the version goes.
+# The test defines in_container <command> "<shell command>": it prints the command line
+# that runs a shell command inside the container of the wrapper. It may define
+# extra_checks, which runs after the first install, and container_path <path>, which
+# prints where a folder of the host is inside the container when it is not the same path.
+test_docker_wrapper() {
+  local script="$1" tool="$2" cmd="$3" version="$4" older="$5" version_text="$6"
+  local tool_home="${SHELLSCRIPT_HOME}/${tool}" shellrc="${SHELLSCRIPT_HOME}/shellrc/${tool}-init.sh"
+  local project="/tmp/e2e-project" extra="${HOME}/e2e-extra" postinstall="/tmp/e2e-postinstall.sh"
+  local user bin extra_inside
+  user="$(id -un)"
+  extra_inside="$extra"
+  if declare -F container_path >/dev/null; then extra_inside="$(container_path "$extra")"; fi
+  # shellcheck disable=SC2059  # the format comes from the test
+  local text_version text_older
+  text_version="$(printf "$version_text" "$version")"
+  text_older="$(printf "$version_text" "$older")"
+  mkdir -p "$project" "$extra"
+  echo "from the extra volume" > "${extra}/file.txt"
+  printf '#!/bin/sh\necho "post-install ran" > /e2e-postinstall\n' > "$postinstall"
+  # The wrappers mount the current folder: work from a project, as a user does
+  cd "$project"
+
+  step "${script}: a version is required"
+  load_fails "$script"
+
+  step "${script}: install version ${version}"
+  load "$script" -- "$version"
+  for bin in $(manifest_value "$script" BIN_FILES "$version"); do
+    assert_exists "${SHELLSCRIPT_HOME}/bin/${bin}"
+  done
+  assert_output "${cmd} --version" "$text_version"
+  assert_output "${cmd}${version} --version" "$text_version"
+  if declare -F extra_checks >/dev/null; then extra_checks; fi
+
+  step "${script}: runs in the current folder, as the user"
+  assert_output "cd ${project} && $(in_container "$cmd" 'pwd')" "$project"
+  assert_output "cd ${project} && $(in_container "$cmd" 'id -u')" "$(id -u)"
+  assert_output "cd ${project} && $(in_container "$cmd" 'touch made-inside') && stat -c %U made-inside" "$user"
+
+  step "${script}: forwards the environment"
+  assert_output "E2E_FORWARDED=hello $(in_container "$cmd" 'printenv E2E_FORWARDED')" "hello"
+
+  step "${script}: install an older version (${older}), which becomes the default"
+  load "$script" -- "$older"
+  assert_output "${cmd} --version" "$text_older"
+  assert_output "${cmd}${older} --version" "$text_older"
+  assert_output "${cmd}${version} --version" "$text_version"
+
+  step "${script}: --add installs a package in the image, and keeps it for the next installs"
+  assert_exit 127 "$(in_container "$cmd" 'jq --version')"
+  load "$script" -- "$older" --add jq
+  assert_output "cat '${tool_home}/packages.conf'" "jq"
+  assert_output "$(in_container "$cmd" 'jq --version')" "jq-"
+  load "$script" -- "$older"
+  assert_output "$(in_container "$cmd" 'jq --version')" "jq-"
+
+  step "${script}: --skip packages leaves them out of this install only"
+  load "$script" -- "$older" --skip packages
+  assert_exit 127 "$(in_container "$cmd" 'jq --version')"
+  assert_output "cat '${tool_home}/packages.conf'" "jq"
+
+  step "${script}: --volume mounts another folder"
+  assert_no_output "cd ${project} && $(in_container "$cmd" "cat ${extra_inside}/file.txt")" "from the extra volume"
+  load "$script" -- "$older" --volume "$extra"
+  assert_output "cat '${tool_home}/volumes.conf'" "$extra"
+  assert_output "cd ${project} && $(in_container "$cmd" "cat ${extra_inside}/file.txt")" "from the extra volume"
+
+  step "${script}: --postinstall runs a script in the image, --no-postinstall forgets it"
+  load "$script" -- "$older" --postinstall "$postinstall"
+  assert_exists "${tool_home}/${older}/postinstall.sh"
+  assert_output "$(in_container "$cmd" 'cat /e2e-postinstall')" "post-install ran"
+  load "$script" -- "$older" --no-postinstall
+  assert_missing "${tool_home}/${older}/postinstall.sh"
+  assert_no_output "$(in_container "$cmd" 'cat /e2e-postinstall')" "post-install ran"
+
+  step "${script}: the manifest of one version, and of everything"
+  assert_output "${DEV} ${script} -- ${older} --manifest 2>/dev/null" "FOLDERS=\$HOME/.shellscript/${tool}/${older}"
+  assert_output "${DEV} ${script} -- --manifest 2>/dev/null" "${cmd}${version}"
+  assert_output "${DEV} ${script} -- --manifest 2>/dev/null" "${cmd}${older}"
+
+  step "${script}: remove takes out the wrappers of every version, keeps the folder"
+  load remove -- "$script"
+  assert_missing "${SHELLSCRIPT_HOME}/bin/${cmd}"
+  assert_missing "${SHELLSCRIPT_HOME}/bin/${cmd}${version}"
+  assert_missing "${SHELLSCRIPT_HOME}/bin/${cmd}${older}"
+  assert_missing "$shellrc"
+  assert_exists "$tool_home"
+
+  step "${script}: purge removes the folder"
+  load "$script" -- "$older"
+  load remove -- "$script" --purge
+  assert_missing "${SHELLSCRIPT_HOME}/bin/${cmd}"
+  assert_missing "$tool_home"
 }
