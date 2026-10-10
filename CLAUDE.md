@@ -48,7 +48,10 @@ All scripts should support:
 - **Binary installations**: Extract to `$HOME/.shellscript/<tool-name>/<version>` (if the tool can have different versions)
 - **Wrapper scripts**: Create in `$HOME/.shellscript/bin/` (automatically in PATH via load.sh framework)
 - **Environment variables**: Write to `$HOME/.shellscript/shellrc/<tool-name>-init.sh`
-- Wrappers should be simple: `exec "${HOME}/.shellscript/<tool>/current/bin/<cmd>" "$@"`
+- Wrappers should be simple: `exec "/home/<user>/.shellscript/<tool>/current/bin/<cmd>" "$@"`.
+  The path is written at install time (`${SHELLSCRIPT_HOME}` expanded in the heredoc), not
+  looked up through `$HOME` when the wrapper runs, so it keeps working for another user or
+  another HOME (CI systems).
 
 ### 5. After Creating the Script
 - Run `npm run build` to auto-generate:
