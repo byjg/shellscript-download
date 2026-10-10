@@ -92,6 +92,23 @@ finish() {
   printf '\nAll checks passed\n'
 }
 
+# What the manifest of a script says 'load.sh remove' takes out, checked against the disk
+assert_removed() {
+  local name="$1" bin shellrc
+  for bin in $(manifest_value "$name" BIN_FILES); do
+    assert_missing "${SHELLSCRIPT_HOME}/bin/${bin}"
+  done
+  shellrc="$(manifest_value "$name" SHELLRC_FILE)"
+  [[ -z "$shellrc" ]] || assert_missing "$shellrc"
+}
+
+# What 'load.sh remove --purge' takes out too. Read the folders before the purge: the
+# manifest of some scripts depends on what is installed.
+assert_purged() {
+  local folder
+  for folder in "$@"; do assert_missing "$folder"; done
+}
+
 # ---------------------------------------------------------------------------
 # Shared tests
 # ---------------------------------------------------------------------------
@@ -191,4 +208,92 @@ test_system_package() {
   load remove -- "$name" --purge
   assert_output "cat '$LOG_FILE'" "was not installed by this script"
   assert_command "$cmd"
+}
+
+# test_java_vendor <vendor>
+# For the java-<vendor> installers of lib/java-install.sh: Java 21 by default, then
+# Java 25, the active Java and java-use, remove and purge.
+test_java_vendor() {
+  local vendor="$1" name="java-$1"
+  local vendor_home="${SHELLSCRIPT_HOME}/java-$1" java_home="${SHELLSCRIPT_HOME}/java"
+  local shellrc="${SHELLSCRIPT_HOME}/shellrc/java-init.sh"
+  local java="${java_home}/current/bin/java"
+
+  step "${name}: install with the defaults (Java 21)"
+  load "$name"
+  assert_exists "${vendor_home}/21/bin/java"
+  assert_output "${java} -version" 'version "21.'
+  assert_output ". '${shellrc}'; echo \$JAVA_HOME; java -version" 'version "21.'
+  assert_output ". '${shellrc}'; echo \$JAVA_HOME" "${java_home}/current"
+
+  step "${name}: install again changes nothing"
+  load "$name"
+  assert_output "cat '$LOG_FILE'" "already installed"
+
+  step "${name}: install another version (--version 25), which becomes the active Java"
+  load "$name" -- --version 25
+  assert_output "${java} -version" 'version "25.'
+  assert_exists "${vendor_home}/21/bin/java"
+
+  step "${name}: java-use picks another installed Java in one shell"
+  assert_output ". '${shellrc}'; java-use ${vendor} 21; java -version" 'version "21.'
+  assert_output "${java} -version" 'version "25.'
+
+  step "${name}: a version that is not LTS asks first, and installs nothing on 'n'"
+  assert_output "echo n | bash ${SCRIPTS_DIR}/load.sh --developer ${SCRIPTS_DIR} ${name} -- --version 22" "Aborted."
+  assert_missing "${vendor_home}/22"
+
+  step "${name}: remove keeps the folders"
+  load remove -- "$name"
+  assert_missing "$shellrc"
+  assert_exists "${vendor_home}/21/bin/java"
+
+  step "${name}: purge removes the versions and the active Java"
+  load "$name" -- --version 25
+  load remove -- "$name" --purge
+  assert_purged "$vendor_home" "$java_home"
+  assert_missing "$shellrc"
+}
+
+# test_java_build_tool <name> <old_version> "<version command>" "<latest text>" "<old text>"
+# For the tools that need Java to run (maven, ant): the latest version by default, one
+# older version, remove and purge. Java comes from java-temurin.
+test_java_build_tool() {
+  local name="$1" old_version="$2" version_cmd="$3" latest_text="$4" old_text="$5"
+  local tool_home="${SHELLSCRIPT_HOME}/${name}" java_rc="${SHELLSCRIPT_HOME}/shellrc/java-init.sh"
+  local shellrc bin
+  shellrc="$(manifest_value "$name" SHELLRC_FILE)"
+
+  step "${name}: needs Java"
+  load java-temurin
+
+  step "${name}: install with the defaults (latest version)"
+  load "$name"
+  for bin in $(manifest_value "$name" BIN_FILES); do
+    assert_exists "${SHELLSCRIPT_HOME}/bin/${bin}"
+  done
+  assert_exists "$shellrc"
+  assert_output ". '${java_rc}'; ${version_cmd}" "$latest_text"
+
+  step "${name}: install an older version (--version ${old_version})"
+  load "$name" -- --version "$old_version"
+  assert_output ". '${java_rc}'; ${version_cmd}" "$old_text"
+
+  step "${name}: a version that does not exist stops and changes nothing"
+  load_fails "$name" -- --version 0.0.0
+  assert_output ". '${java_rc}'; ${version_cmd}" "$old_text"
+
+  step "${name}: the wrapper does not depend on HOME"
+  assert_output ". '${java_rc}'; HOME=/tmp/another-home ${version_cmd}" "$old_text"
+
+  step "${name}: remove keeps the folder"
+  load remove -- "$name"
+  assert_removed "$name"
+  assert_exists "$tool_home"
+
+  step "${name}: purge removes the folder"
+  load "$name" -- --version "$old_version"
+  load remove -- "$name" --purge
+  assert_removed "$name"
+  assert_purged "$tool_home"
 }

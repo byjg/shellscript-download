@@ -31,7 +31,7 @@ current shell only: java-use <vendor> <version>, e.g. java-use temurin 17.
 Options:
   -h, --help           Show this help and exit
   --version <version>  Java major version to install (default: 21)
-                       LTS versions: 17, 21, 25 (publicly available)
+                       LTS versions: 21, 25 (publicly available)
                        Non-LTS versions require confirmation (or --yes)
                        Note: Oracle only provides public downloads for recent LTS versions
   --yes, -y            Skip confirmation for non-LTS versions
