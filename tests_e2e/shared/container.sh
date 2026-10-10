@@ -8,13 +8,13 @@ set -eu
 setup() {
   if command -v apt-get >/dev/null 2>&1; then
     apt-get update -qq
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq bash curl ca-certificates sudo
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq bash bash-completion curl ca-certificates sudo
     useradd --create-home --shell /bin/bash tester
   elif command -v dnf >/dev/null 2>&1; then
-    dnf install -y -q bash curl sudo shadow-utils util-linux tar gzip
+    dnf install -y -q bash bash-completion curl sudo shadow-utils util-linux tar gzip
     useradd --create-home --shell /bin/bash tester
   elif command -v apk >/dev/null 2>&1; then
-    apk add -q bash curl ca-certificates sudo
+    apk add -q bash bash-completion curl ca-certificates sudo
     adduser -D -s /bin/bash tester
   else
     echo "no supported package manager in this image"

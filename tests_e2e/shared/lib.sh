@@ -54,6 +54,14 @@ assert_missing() { if [[ -e "$1" || -L "$1" ]]; then fail "still there: $1"; els
 # The version the 'current' link of a tool points at
 current_version() { readlink "${SHELLSCRIPT_HOME}/$1/current"; }
 
+# manifest_value <script> <KEY>: what the manifest of a script declares, with $HOME expanded
+manifest_value() {
+  local value
+  value="$(bash "${SCRIPTS_DIR}/load.sh" --developer "${SCRIPTS_DIR}" "$1" -- --manifest 2>/dev/null \
+    | sed -n "s/^$2=//p")"
+  eval "printf '%s' \"${value}\""
+}
+
 # finish: the last line of every test
 finish() {
   rm -f "$LOG_FILE"
@@ -68,21 +76,31 @@ finish() {
 # Shared tests
 # ---------------------------------------------------------------------------
 
-# test_single_binary <name> <old_version> [check]
+# test_single_binary <name> <old_version> "<version command>" [check]
 # For the tools installed by lib/binary-install.sh: the latest version by default, one
-# older version, remove and purge. <check> is a function of the test that proves the
-# tool works; it runs after each install.
+# older version, remove and purge. <version command> prints the installed version.
+# <check> is a function of the test that proves the tool works; it runs after each
+# install. The containers have bash-completion: a tool whose manifest declares a shell
+# init file must have its completion registered.
 test_single_binary() {
-  local name="$1" old_version="$2" check="${3:-}"
-  local tool_home="${SHELLSCRIPT_HOME}/${name}" wrapper="${SHELLSCRIPT_HOME}/bin/${name}" latest
+  local name="$1" old_version="$2" version_cmd="$3" check="${4:-}"
+  local tool_home="${SHELLSCRIPT_HOME}/${name}" wrapper="${SHELLSCRIPT_HOME}/bin/${name}"
+  local latest shellrc
+  shellrc="$(manifest_value "$name" SHELLRC_FILE)"
 
   step "${name}: install with the defaults (latest version)"
   load "$name"
   assert_exists "$wrapper"
   latest="$(current_version "$name")"
   assert_exists "${tool_home}/${latest}/${name}"
-  assert_output "${name} --version" "$latest"
+  assert_output "$version_cmd" "$latest"
   [[ -z "$check" ]] || "$check"
+
+  if [[ -n "$shellrc" ]]; then
+    step "${name}: command completion"
+    assert_exists "$shellrc"
+    assert_output ". /usr/share/bash-completion/bash_completion; . '${shellrc}'; complete -p ${name}" "${name}"
+  fi
 
   step "${name}: install again changes nothing"
   load "$name"
@@ -93,21 +111,22 @@ test_single_binary() {
     fail "the older version of the test is the latest one: pick another"
   fi
   load "$name" -- --version "$old_version"
-  assert_output "${name} --version" "$old_version"
+  assert_output "$version_cmd" "$old_version"
   assert_exists "${tool_home}/${latest}/${name}"
   [[ -z "$check" ]] || "$check"
 
   step "${name}: a version that does not exist stops and changes nothing"
   load_fails "$name" -- --version 0.0.0
-  assert_output "${name} --version" "$old_version"
+  assert_output "$version_cmd" "$old_version"
   assert_missing "${tool_home}/0.0.0"
 
   step "${name}: the wrapper does not depend on HOME"
-  assert_output "HOME=/nonexistent ${name} --version" "$old_version"
+  assert_output "HOME=/tmp/another-home ${version_cmd}" "$old_version"
 
   step "${name}: remove keeps the folder"
   load remove -- "$name"
   assert_missing "$wrapper"
+  [[ -z "$shellrc" ]] || assert_missing "$shellrc"
   assert_exists "$tool_home"
 
   step "${name}: purge removes the folder"

@@ -6,6 +6,6 @@ yq_works() {
   assert_output "printf 'a:\n  b: 7\n' | yq '.a.b'" "7"
 }
 
-test_single_binary yq 4.44.1 yq_works
+test_single_binary yq 4.44.1 "yq --version" yq_works
 
 finish

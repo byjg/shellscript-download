@@ -6,6 +6,6 @@ jq_works() {
   assert_output "echo '{\"a\":[1,2]}' | jq -c '.a | add'" "3"
 }
 
-test_single_binary jq 1.7.1 jq_works
+test_single_binary jq 1.7.1 "jq --version" jq_works
 
 finish
