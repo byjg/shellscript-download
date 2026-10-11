@@ -106,6 +106,7 @@ following so scripts can use them without redeclaring:
 | `run "command"` | Runs the command normally, or prints `[dry-run] command` when `DRY_RUN=1` |
 | `require_cmd curl` | Exits with an error if the command is not on `PATH` |
 | `fetch "<url>"`, `download "<url>" "<file>"` | Read a URL to stdout, or save it to a file, with curl or wget. With `GITHUB_TOKEN` set they send it to `api.github.com`, and to no other host |
+| `github_latest_tag jqlang/jq` | Prints the tag of the latest release of a GitHub repository (`jq-1.8.2`). It reads where `github.com/<owner>/<repo>/releases/latest` redirects to, with `final_url "<url>"`, so it costs no request of the GitHub API, which allows 60 an hour. Loaders older than it do not have it: fall back to the API, as `maven.sh` does |
 | `require_script jq` | Runs `load.sh jq` unless the `jq` command is already on `PATH`. A second argument names the command when it differs from the script |
 
 `log` and `err` use `basename "$0"` so the script name in the output is always correct.

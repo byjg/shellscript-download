@@ -17,11 +17,14 @@
 #                          arm64): the binary itself, or a .tar.gz that holds it
 # and calls: binary_install "$@"
 
-# github_latest_tag <owner/repo>: tag of the latest release
-github_latest_tag() {
-  fetch "https://api.github.com/repos/$1/releases/latest" \
-    | grep '"tag_name"' | sed 's/.*"tag_name": *"\(.*\)".*/\1/'
-}
+# github_latest_tag <owner/repo>: tag of the latest release. load.sh gives it, without
+# the GitHub API; a loader older than that does not, and the API answers it.
+if ! declare -F github_latest_tag >/dev/null; then
+  github_latest_tag() {
+    fetch "https://api.github.com/repos/$1/releases/latest" \
+      | grep '"tag_name"' | sed 's/.*"tag_name": *"\(.*\)".*/\1/'
+  }
+fi
 
 binary_print_manifest() {
   local shellrc=""

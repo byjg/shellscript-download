@@ -112,7 +112,14 @@ done
 
 **DO NOT define these — they are injected by load.sh at runtime:**
 - `log()`, `err()`, `run()`, `require_cmd()`
-- `fetch()` (URL → stdout), `download()` (URL → file), `require_downloader()`
+- `fetch()` (URL → stdout), `download()` (URL → file), `require_downloader()`. With
+  `GITHUB_TOKEN` set they send it to `api.github.com`, and to no other host.
+- `github_latest_tag <owner/repo>` — the tag of the latest release, read from where
+  `github.com/<owner>/<repo>/releases/latest` redirects to (`final_url "<url>"`), so it
+  costs no request of the GitHub API and its quota of 60 an hour. Use it, not the API,
+  whenever "latest" is the latest release of the repository. Loaders older than it do
+  not have it: `lib/binary-install.sh` falls back to the API by itself; a script that
+  does not use that file does it as `maven.sh` does.
 - `require_script <script> [cmd]` — runs `load.sh <script>` unless `<cmd>` (default: the script
   name) is already available. For a tool another script of the catalog installs (e.g. jq).
   Loaders older than it do not have it: `if declare -F require_script >/dev/null; then
@@ -250,10 +257,15 @@ the script added: see `byjg-repo.sh`.
 require_downloader
 require_cmd tar   # or unzip
 
-# Fetch latest version from GitHub if none given
+# Latest version from GitHub if none given. A loader older than github_latest_tag
+# does not have it: the GitHub API answers
 if [[ -z "$VERSION" ]]; then
-  VERSION=$(fetch https://api.github.com/repos/<owner>/<repo>/releases/latest \
-    | grep '"tag_name"' | sed 's/.*"tag_name": *"v\?\(.*\)".*/\1/')
+  if declare -F github_latest_tag >/dev/null; then
+    VERSION=$(github_latest_tag <owner>/<repo> | sed 's/^v//')
+  else
+    VERSION=$(fetch https://api.github.com/repos/<owner>/<repo>/releases/latest \
+      | grep '"tag_name"' | sed 's/.*"tag_name": *"v\?\(.*\)".*/\1/')
+  fi
   log "Latest version: ${VERSION}"
 fi
 

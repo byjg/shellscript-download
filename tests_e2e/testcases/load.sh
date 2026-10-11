@@ -96,6 +96,23 @@ step "load: a script that is not published"
 assert_exit 3 "${LOADER} --dont-run no-such-script-e2e"
 assert_missing "${SHELLSCRIPT_HOME}/downloads/no-such-script-e2e.sh"
 
+step "load: the latest release of a repository, without the GitHub API"
+fixture latest-probe <<'PROBE'
+#!/usr/bin/env bash
+set -euo pipefail
+echo "final=$(final_url https://github.com/jqlang/jq/releases/latest)"
+echo "same=$(final_url https://shellscript.download/list.json)"
+echo "tag=$(github_latest_tag jqlang/jq)"
+github_latest_tag byjg/no-such-repository-e2e || echo "no-release"
+PROBE
+assert_exit 0 "${LOADER} latest-probe 2>/dev/null"
+assert_log "final=https://github.com/jqlang/jq/releases/tag/jq-"
+assert_log "same=https://shellscript.download/list.json"
+assert_log "tag=jq-"
+assert_log "no-release"
+# An unknown token would make the API refuse: the lookup does not go through it
+assert_output "GITHUB_TOKEN=e2e-not-a-token ${LOADER} latest-probe 2>/dev/null" "tag=jq-"
+
 step "load: GITHUB_TOKEN goes to the GitHub API, and nowhere else"
 fixture token-probe <<'PROBE'
 #!/usr/bin/env bash
@@ -117,6 +134,29 @@ fetch "$1" >/dev/null && echo "fetched"
 PROBE
 assert_exit 22 "GITHUB_TOKEN=e2e-not-a-token ${LOADER} token-fetch -- https://api.github.com/rate_limit"
 assert_output "GITHUB_TOKEN=e2e-not-a-token ${LOADER} token-fetch -- https://shellscript.download/list.json 2>/dev/null" "fetched"
+
+step "load: everything works with wget, where there is no curl"
+if sys_install wget; then pass "installed wget"; else fail "could not install wget"; fi
+curl_path="$(command -v curl)"
+sudo mv "$curl_path" "${curl_path}.e2e-off"
+hash -r
+assert_no_command curl
+assert_exit 0 "${LOADER} latest-probe 2>/dev/null"
+assert_log "final=https://github.com/jqlang/jq/releases/tag/jq-"
+assert_log "same=https://shellscript.download/list.json"
+assert_log "tag=jq-"
+assert_log "no-release"
+assert_output "${LOADER} token-fetch -- https://shellscript.download/list.json 2>/dev/null" "fetched"
+assert_output "GITHUB_TOKEN=e2e-not-a-token ${LOADER} token-fetch -- https://shellscript.download/list.json 2>/dev/null" "fetched"
+code=0
+GITHUB_TOKEN=e2e-not-a-token $LOADER token-fetch -- https://api.github.com/rate_limit >"$LOG_FILE" 2>&1 || code=$?
+if [[ "$code" != "0" ]]; then pass "the API refuses an unknown token sent by wget (exit ${code})"; else fail "wget did not send the token"; fi
+assert_output "${LOADER} --update --dont-run yq" "Fetching"
+load jq
+assert_output "jq --version" "jq-"
+load remove -- jq --purge
+sudo mv "${curl_path}.e2e-off" "$curl_path"
+hash -r
 
 step "load: --list and --completion"
 assert_output "${LOADER} --list 2>/dev/null" "kubectl"

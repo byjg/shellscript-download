@@ -233,7 +233,8 @@ else
         fi
       elif command -v wget >/dev/null 2>&1; then
         # Check final HTTP status code with wget (spider request)
-        http_code=$(wget -q --server-response --spider "${URL}" 2>&1 | awk '/HTTP\//{code=$2} END{print code}')
+        # "HTTP/1.1 200 OK" from GNU Wget and BusyBox, "HTTP response 200 [<url>]" from Wget2
+        http_code=$(wget --server-response --spider "${URL}" 2>&1 | awk '/^ *HTTP\//{code=$2} /^HTTP response /{code=$3} END{print code}')
         if [[ -z "${http_code}" || "${http_code}" != "200" ]]; then
           [[ -z "${http_code}" ]] && http_code="unknown"
           echo "Error: Remote URL responded with HTTP ${http_code} for ${URL}" >&2
@@ -290,6 +291,29 @@ download() {
   if command -v curl >/dev/null 2>&1; then curl -fsSL ${auth:+-H "$auth"} -o "$2" "$1"; else wget -qO "$2" ${auth:+--header="$auth"} "$1"; fi
 }
 require_downloader() { command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1 || { err "Required command 'curl' or 'wget' not found"; exit 1; }; }
+# final_url <url>: where a URL leads after its redirects, without downloading it
+final_url() {
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSIL -o /dev/null -w '%{url_effective}\n' "$1"
+  else
+    # wget shows every answer of the chain, and the last one is where it ends: as a
+    # Location header (GNU Wget, BusyBox), or as "HTTP response 200 [<url>]" (Wget2)
+    local answers location
+    answers="$(wget -S --spider "$1" 2>&1)" || true
+    location="$(printf '%s\n' "$answers" | sed -n 's/^ *[Ll]ocation: *//p' | tail -n 1 | tr -d '\r')"
+    [[ -n "$location" ]] || location="$(printf '%s\n' "$answers" | sed -n 's/^HTTP response [0-9]* *\[\(.*\)\]$/\1/p' | tail -n 1)"
+    printf '%s\n' "${location:-$1}"
+  fi
+}
+# github_latest_tag <owner/repo>: the tag of the latest release of a repository. Read from
+# where github.com/<owner>/<repo>/releases/latest redirects to, which costs no request of
+# the GitHub API and its hourly quota.
+github_latest_tag() {
+  local url
+  url="$(final_url "https://github.com/$1/releases/latest")" || return 1
+  [[ "$url" == */releases/tag/* ]] || return 1
+  printf '%s\n' "${url##*/releases/tag/}"
+}
 # require_script <script> [command]: for a script that needs a tool another script of
 # the catalog installs. Runs 'load.sh <script>' unless <command> (the script name when
 # omitted) is already available. Everything goes to stderr, so it is safe to call
@@ -307,7 +331,7 @@ require_script() {
   "${loader[@]}" "$script" >&2 || { err "'load.sh ${script}' failed"; exit 1; }
   command -v "$cmd" >/dev/null 2>&1 || { err "'${cmd}' is still not available after 'load.sh ${script}'"; exit 1; }
 }
-export -f log err run require_cmd github_auth_header fetch download require_downloader require_script
+export -f log err run require_cmd github_auth_header fetch download require_downloader final_url github_latest_tag require_script
 
 # What the scripts install to ${SHELLSCRIPT_BIN} must be found by the ones that run next
 case ":${PATH}:" in

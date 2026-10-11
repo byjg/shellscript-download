@@ -55,7 +55,12 @@ require_cmd tar
 
 # Resolve latest version if not specified
 if [[ -z "$MAVEN_VERSION" ]]; then
-  MAVEN_VERSION=$(fetch https://api.github.com/repos/apache/maven/releases/latest | grep '"tag_name"' | sed 's/.*"tag_name": *"maven-\(.*\)".*/\1/')
+  # A loader older than github_latest_tag does not have it: the GitHub API answers
+  if declare -F github_latest_tag >/dev/null; then
+    MAVEN_VERSION=$(github_latest_tag apache/maven | sed 's/^maven-//')
+  else
+    MAVEN_VERSION=$(fetch https://api.github.com/repos/apache/maven/releases/latest | grep '"tag_name"' | sed 's/.*"tag_name": *"maven-\(.*\)".*/\1/')
+  fi
   log "Latest Maven version: ${MAVEN_VERSION}"
 fi
 

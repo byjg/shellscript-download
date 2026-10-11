@@ -59,7 +59,12 @@ remove_nvm_lines() {
 
 # Install NVM
 # Using the official installer; see https://github.com/nvm-sh/nvm
-NVM_VERSION=$(fetch https://api.github.com/repos/nvm-sh/nvm/releases/latest | grep '"tag_name"' | sed 's/.*"tag_name": *"\(.*\)".*/\1/')
+# A loader older than github_latest_tag does not have it: the GitHub API answers
+if declare -F github_latest_tag >/dev/null; then
+  NVM_VERSION=$(github_latest_tag nvm-sh/nvm)
+else
+  NVM_VERSION=$(fetch https://api.github.com/repos/nvm-sh/nvm/releases/latest | grep '"tag_name"' | sed 's/.*"tag_name": *"\(.*\)".*/\1/')
+fi
 log "Installing NVM ${NVM_VERSION}"
 run "fetch https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/install.sh | bash"
 
