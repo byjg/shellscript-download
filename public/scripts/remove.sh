@@ -64,6 +64,15 @@ BIN_DIR="$BASE_DIR/bin"
 DOWNLOADS_DIR="$BASE_DIR/downloads"
 SCRIPT_PATH="$DOWNLOADS_DIR/${SCRIPT_NAME}.sh"
 
+# With 'load.sh --developer <path>' the script is the local one, as it was to install
+if [[ -n "${SHELLSCRIPT_DEVELOPER_PATH:-}" ]]; then
+  SCRIPT_PATH="${SHELLSCRIPT_DEVELOPER_PATH}/${SCRIPT_NAME}.sh"
+  if [[ ! -f "$SCRIPT_PATH" ]]; then
+    err "Developer script not found: $SCRIPT_PATH"
+    exit 3
+  fi
+fi
+
 # Ensure the script is downloaded
 if [[ ! -f "$SCRIPT_PATH" ]]; then
   log "Script not found in cache, downloading..."

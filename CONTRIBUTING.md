@@ -105,6 +105,8 @@ following so scripts can use them without redeclaring:
 | `err "message"` | Prints `[<script>.sh][ERROR] message` to stderr |
 | `run "command"` | Runs the command normally, or prints `[dry-run] command` when `DRY_RUN=1` |
 | `require_cmd curl` | Exits with an error if the command is not on `PATH` |
+| `fetch "<url>"`, `download "<url>" "<file>"` | Read a URL to stdout, or save it to a file, with curl or wget. With `GITHUB_TOKEN` set they send it to `api.github.com`, and to no other host |
+| `github_latest_tag jqlang/jq` | Prints the tag of the latest release of a GitHub repository (`jq-1.8.2`). It reads where `github.com/<owner>/<repo>/releases/latest` redirects to, with `final_url "<url>"`, so it costs no request of the GitHub API, which allows 60 an hour. Loaders older than it do not have it: fall back to the API, as `maven.sh` does |
 | `require_script jq` | Runs `load.sh jq` unless the `jq` command is already on `PATH`. A second argument names the command when it differs from the script |
 
 `log` and `err` use `basename "$0"` so the script name in the output is always correct.
@@ -167,11 +169,16 @@ Paths may use `$HOME` — `remove.sh` expands them via `eval`.
 | Wrapper scripts | `$SHELLSCRIPT_BIN/<cmd>` | `$SHELLSCRIPT_BIN/mvn` |
 | Shell init snippet | `$SHELLSCRIPT_SHELLRC/<tool>-init.sh` | `$SHELLSCRIPT_SHELLRC/maven-init.sh` |
 
-Wrappers should be minimal:
+Wrappers should be minimal. The path is written at install time, not looked up through `$HOME`
+when the wrapper runs, so it keeps working for another user or with another `HOME`, as CI
+systems run it. Write it with an unquoted heredoc, so that `${SHELLSCRIPT_HOME}` is expanded
+and `\$@` is not:
 
 ```bash
+cat >"${SHELLSCRIPT_BIN}/<cmd>" <<WRAP
 #!/usr/bin/env bash
-exec "${HOME}/.shellscript/<tool>/current/bin/<cmd>" "$@"
+exec "${SHELLSCRIPT_HOME}/<tool>/current/bin/<cmd>" "\$@"
+WRAP
 ```
 
 ---
@@ -182,7 +189,7 @@ exec "${HOME}/.shellscript/<tool>/current/bin/<cmd>" "$@"
 
 `load.sh --developer ./public/scripts <name>` runs your working copy instead of downloading it,
 with the same helpers a published script gets. How to use it, how to test a change to `load.sh`
-itself, and how to test in a clean container are in
+itself, and how to run the end-to-end tests are in
 [Testing scripts before publishing](docs/development.md), which is also published with the
 documentation.
 
@@ -258,10 +265,12 @@ The website is a static Vite build (`npm run build` writes `dist/`), hosted on C
 
 ---
 
-## Testing in a clean environment
+## Testing
 
-Test scripts in a clean, non-root Linux environment before submitting: see
-[Test in a clean environment](docs/development.md#test-in-a-clean-environment).
+Every script has an end-to-end test in `tests_e2e/testcases/`, and a new script comes with
+its own. `tests_e2e/run.sh <name>` runs it in a fresh container of each standard image, with
+nothing installed on your machine: see
+[Run the end-to-end tests](docs/development.md#run-the-end-to-end-tests).
 
 ### Checklist before opening a PR
 
@@ -271,8 +280,8 @@ Test scripts in a clean, non-root Linux environment before submitting: see
 - [ ] `--manifest` output is correct (verified with `load.sh remove -- --dry-run <name>`)
 - [ ] `--dry-run` prints all actions without side-effects
 - [ ] Paths use `$SHELLSCRIPT_*` variables, not hardcoded `$HOME/.shellscript/…`
-- [ ] No `log`, `err`, `run`, or `require_cmd` defined locally (they are injected)
-- [ ] Tested in a clean Docker container
+- [ ] No injected helper (`log`, `err`, `run`, `require_cmd`, `fetch`, `download`, ...) defined locally
+- [ ] `tests_e2e/testcases/<name>.sh` exists and passes: `tests_e2e/run.sh <name> all-scripts`
 - [ ] `npm run build` completes without errors
 - [ ] Generated files (`src/pages/scripts/`, `src/generated/`, `docs/scripts/`) are included in the commit
 

@@ -17,11 +17,14 @@
 #                          arm64): the binary itself, or a .tar.gz that holds it
 # and calls: binary_install "$@"
 
-# github_latest_tag <owner/repo>: tag of the latest release
-github_latest_tag() {
-  fetch "https://api.github.com/repos/$1/releases/latest" \
-    | grep '"tag_name"' | sed 's/.*"tag_name": *"\(.*\)".*/\1/'
-}
+# github_latest_tag <owner/repo>: tag of the latest release. load.sh gives it, without
+# the GitHub API; a loader older than that does not, and the API answers it.
+if ! declare -F github_latest_tag >/dev/null; then
+  github_latest_tag() {
+    fetch "https://api.github.com/repos/$1/releases/latest" \
+      | grep '"tag_name"' | sed 's/.*"tag_name": *"\(.*\)".*/\1/'
+  }
+fi
 
 binary_print_manifest() {
   local shellrc=""
@@ -74,8 +77,8 @@ binary_install() {
   fi
 
   # Configuration
-  local home="${SHELLSCRIPT_HOME}/${BINARY_NAME}"
-  local install_dir="${home}/${BINARY_VERSION}"
+  local tool_home="${SHELLSCRIPT_HOME}/${BINARY_NAME}"
+  local install_dir="${tool_home}/${BINARY_VERSION}"
   local wrapper="${SHELLSCRIPT_BIN}/${BINARY_NAME}"
 
   log "Installing ${BINARY_LABEL} ${BINARY_VERSION}"
@@ -121,15 +124,17 @@ binary_install() {
 
   # Make it the active version. The link is relative, so it holds whatever the home
   # directory is called.
-  run "mkdir -p \"${home}\" \"${SHELLSCRIPT_BIN}\""
-  run "ln -sfn \"${BINARY_VERSION}\" \"${home}/current\""
+  run "mkdir -p \"${tool_home}\" \"${SHELLSCRIPT_BIN}\""
+  run "ln -sfn \"${BINARY_VERSION}\" \"${tool_home}/current\""
 
   if [[ "$DRY_RUN" == "1" ]]; then
     log "[dry-run] Writing ${wrapper}"
   else
+    # The path is written now, not looked up through \$HOME when the wrapper runs:
+    # it keeps working for another user or with another HOME, as CI systems run it.
     cat >"$wrapper" <<WRAP
 #!/usr/bin/env bash
-exec "\${HOME}/.shellscript/${BINARY_NAME}/current/${BINARY_NAME}" "\$@"
+exec "${tool_home}/current/${BINARY_NAME}" "\$@"
 WRAP
     chmod +x "$wrapper"
   fi
@@ -151,7 +156,7 @@ WRAP
     else
       for shell in $shells; do
         # shellcheck disable=SC2086  # split on purpose: BINARY_COMPLETION is a list of arguments
-        "${install_dir}/${BINARY_NAME}" ${BINARY_COMPLETION} "$shell" > "${home}/completion.${shell}"
+        "${install_dir}/${BINARY_NAME}" ${BINARY_COMPLETION} "$shell" > "${tool_home}/completion.${shell}"
       done
       if [[ " $shells " == *" bash "* ]]; then
         snippet+="if [ -n \"\${BASH_VERSION:-}\" ]; then . \"\$HOME/.shellscript/${BINARY_NAME}/completion.bash\"; fi"$'\n'

@@ -53,10 +53,11 @@ BINARY_LABEL="Kustomize"
 BINARY_COMPLETION="completion"
 
 # The repository also releases its libraries (kyaml/..., api/...): the latest release
-# of the repository is not always a Kustomize one.
+# of the repository is not always a Kustomize one. sed -n 1p, not head -1: head closes
+# the pipe early, and with pipefail the script dies of SIGPIPE.
 binary_latest_version() {
   fetch "https://api.github.com/repos/kubernetes-sigs/kustomize/releases?per_page=50" \
-    | grep '"tag_name": *"kustomize/v' | head -1 | sed 's/.*"kustomize\/v\(.*\)".*/\1/'
+    | grep '"tag_name": *"kustomize/v' | sed -n 1p | sed 's/.*"kustomize\/v\(.*\)".*/\1/'
 }
 
 binary_download_url() {

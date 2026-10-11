@@ -20,6 +20,8 @@ require_cmd <cmd>              # exit 1 if command missing
 fetch "<url>"                  # URL to stdout (curl, falls back to wget)
 download "<url>" "<dest>"      # URL to file (curl, falls back to wget)
 require_downloader             # exit 1 unless curl or wget is available
+final_url "<url>"              # where a URL leads after its redirects, without downloading it
+github_latest_tag <owner/repo> # tag of the latest release, without the GitHub API and its quota
 require_script <script> [cmd]  # run 'load.sh <script>' unless <cmd> (default: <script>) exists
 ```
 Never call `curl` or `wget` directly in scripts — use `fetch`/`download` so both tools work.
@@ -48,7 +50,10 @@ All scripts should support:
 - **Binary installations**: Extract to `$HOME/.shellscript/<tool-name>/<version>` (if the tool can have different versions)
 - **Wrapper scripts**: Create in `$HOME/.shellscript/bin/` (automatically in PATH via load.sh framework)
 - **Environment variables**: Write to `$HOME/.shellscript/shellrc/<tool-name>-init.sh`
-- Wrappers should be simple: `exec "${HOME}/.shellscript/<tool>/current/bin/<cmd>" "$@"`
+- Wrappers should be simple: `exec "/home/<user>/.shellscript/<tool>/current/bin/<cmd>" "$@"`.
+  The path is written at install time (`${SHELLSCRIPT_HOME}` expanded in the heredoc), not
+  looked up through `$HOME` when the wrapper runs, so it keeps working for another user or
+  another HOME (CI systems).
 
 ### 5. After Creating the Script
 - Run `npm run build` to auto-generate:

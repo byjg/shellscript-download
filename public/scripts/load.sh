@@ -51,12 +51,14 @@ echo >&2
 
 print_usage() {
   cat <<'USAGE'
-load.sh [--update] [--dont-run] [--list] [--completion] [--developer <path>] <script> [optional args...]
+load.sh [--update] [--dont-run] [--list] [--installed] [--completion] [--developer <path>] <script> [optional args...]
 
 Options:
   --update           Force re-download/update of the script even if it exists locally
   --dont-run         Do not execute the script after ensuring it is downloaded
-  --list             List all available scripts from shellscript.download
+  --list             List all available scripts from shellscript.download, with the
+                     version of the ones installed on this machine
+  --installed        List only the scripts installed on this machine
   --completion       Install/update bash completion for load.sh into ~/.shellscript/shellrc/
   --developer <path> Use a local directory instead of downloading (for development)
   -h, --help         Show this help message
@@ -64,12 +66,17 @@ Options:
 Arguments:
   <script>      The script name (without .sh) to fetch from shellscript.download
   [args...]     Optional arguments to pass through to the downloaded script
+
+Environment:
+  GITHUB_TOKEN  Sent to the GitHub API, where the scripts look up the latest version of
+                a tool. Without it GitHub answers 60 requests an hour per address.
 USAGE
 }
 
 UPDATE=false
 DONT_RUN=false
 LIST=false
+INSTALLED=false
 COMPLETION=false
 DEVELOPER_PATH=""
 SCRIPT_NAME=""
@@ -88,6 +95,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --list)
       LIST=true
+      shift
+      ;;
+    --installed)
+      INSTALLED=true
       shift
       ;;
     --completion)
@@ -131,9 +142,56 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# This loader, by its path: to ask a script for its manifest
+LOADER_SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+
+# installed_state <script>: prints the installed version of what a script installs, or
+# "yes" when it has no version to show, and nothing when it is not on this machine.
+# It reads the manifest of the script, the one 'load.sh remove' uses, so it knows only
+# the scripts that were downloaded (or, with --developer, that are in that folder):
+#   - a command of BIN_FILES is in ~/.shellscript/bin, or SHELLRC_FILE exists
+#   - else a folder of FOLDERS has something in it, for a script that declares neither,
+#     or that records there what it installed on the system (UNINSTALL_CMD)
+# The version is where <folder>/current points, for a folder under ~/.shellscript: in a
+# folder of the tool itself, such a link is not ours to read (~/.nvm/current is a Node).
+installed_state() {
+  local name="$1" dir="${DEVELOPER_PATH:-$HOME/.shellscript/downloads}"
+  local manifest bins shellrc folders hook item found="" version=""
+  [[ -f "${dir}/${name}.sh" ]] || return 0
+  manifest="$("$LOADER_SELF" ${DEVELOPER_PATH:+--developer "$DEVELOPER_PATH"} "$name" -- --manifest 2>/dev/null)" || return 0
+  [[ "$manifest" == *"FOLDERS="* ]] || return 0
+
+  bins="$(sed -n 's/^BIN_FILES=//p' <<<"$manifest")"
+  shellrc="$(sed -n 's/^SHELLRC_FILE=//p' <<<"$manifest")"
+  folders="$(sed -n 's/^FOLDERS=//p' <<<"$manifest")"
+  hook="$(sed -n 's/^UNINSTALL_CMD=//p' <<<"$manifest")"
+  shellrc="${shellrc//\$HOME/$HOME}"
+  folders="${folders//\$HOME/$HOME}"
+
+  for item in $bins; do
+    if [[ -e "$HOME/.shellscript/bin/${item}" ]]; then found=yes; fi
+  done
+  if [[ -n "$shellrc" && -e "$shellrc" ]]; then found=yes; fi
+  if [[ -z "$found" && ( -n "$hook" || ( -z "$bins" && -z "$shellrc" ) ) ]]; then
+    for item in $folders; do
+      if [[ -d "$item" && -n "$(ls -A "$item" 2>/dev/null)" ]]; then found=yes; fi
+    done
+  fi
+  [[ -n "$found" ]] || return 0
+
+  for item in $folders; do
+    if [[ "$item" == "$HOME/.shellscript/"* && -L "${item}/current" ]]; then
+      version="$(basename "$(readlink "${item}/current")")"
+    fi
+  done
+  printf '%s\n' "${version:-yes}"
+}
+
+LIST_FORMAT="%-16s %-10s %s\n"
+
 list_scripts() {
   local url="https://shellscript.download/list.json"
-  local json
+  local json name desc
   if command -v curl >/dev/null 2>&1; then
     json=$(curl -fsSL "${url}") || { echo "Error: Failed to download list.json" >&2; exit 3; }
   elif command -v wget >/dev/null 2>&1; then
@@ -143,24 +201,41 @@ list_scripts() {
     exit 3
   fi
 
-  if command -v jq >/dev/null 2>&1; then
-    printf "%-25s %s\n" "SCRIPT" "DESCRIPTION"
-    printf "%-25s %s\n" "-------------------------" "-----------"
-    echo "${json}" | jq -r '.[] | [.name, .description] | @tsv' | while IFS=$'\t' read -r name desc; do
-      printf "%-25s %s\n" "${name}" "${desc}"
-    done
-  elif command -v python3 >/dev/null 2>&1; then
-    echo "${json}" | python3 -c "
-import json, sys
-data = json.load(sys.stdin)
-print('%-25s %s' % ('SCRIPT', 'DESCRIPTION'))
-print('%-25s %s' % ('-' * 25, '-----------'))
-for item in data:
-    print('%-25s %s' % (item['name'], item['description']))
-"
-  else
-    echo "${json}"
-  fi
+  # list.json has one "name" and one "description" per line, in that order
+  # shellcheck disable=SC2059  # the format is a constant
+  printf "$LIST_FORMAT" "SCRIPT" "INSTALLED" "DESCRIPTION"
+  printf "$LIST_FORMAT" "----------------" "----------" "-----------"
+  while IFS= read -r line; do
+    case "$line" in
+      *'"name":'*)
+        name="$(sed 's/^ *"name": *"\(.*\)",\{0,1\}$/\1/' <<<"$line")"
+        ;;
+      *'"description":'*)
+        desc="$(sed 's/^ *"description": *"\(.*\)",\{0,1\}$/\1/; s/\\"/"/g' <<<"$line")"
+        printf "$LIST_FORMAT" "$name" "$(installed_state "$name")" "${desc#"${name}.sh: "}"
+        ;;
+    esac
+  done <<<"$json"
+}
+
+# What is installed, from the scripts this machine has: it needs no network
+list_installed() {
+  local dir="${DEVELOPER_PATH:-$HOME/.shellscript/downloads}" file name state desc any=""
+  for file in "$dir"/*.sh; do
+    [[ -f "$file" ]] || continue
+    name="$(basename "$file" .sh)"
+    state="$(installed_state "$name")"
+    [[ -n "$state" ]] || continue
+    if [[ -z "$any" ]]; then
+      # shellcheck disable=SC2059  # the format is a constant
+      printf "$LIST_FORMAT" "SCRIPT" "INSTALLED" "DESCRIPTION"
+      printf "$LIST_FORMAT" "----------------" "----------" "-----------"
+      any=yes
+    fi
+    desc="$(sed -n '2s/^# *//p' "$file")"
+    printf "$LIST_FORMAT" "$name" "$state" "${desc#"${name}.sh: "}"
+  done
+  [[ -n "$any" ]] || echo "Nothing installed with load.sh on this machine." >&2
 }
 
 install_completion() {
@@ -181,6 +256,11 @@ install_completion() {
 
 if [[ "${LIST}" == true ]]; then
   list_scripts
+  exit 0
+fi
+
+if [[ "${INSTALLED}" == true ]]; then
+  list_installed
   exit 0
 fi
 
@@ -229,7 +309,8 @@ else
         fi
       elif command -v wget >/dev/null 2>&1; then
         # Check final HTTP status code with wget (spider request)
-        http_code=$(wget -q --server-response --spider "${URL}" 2>&1 | awk '/HTTP\//{code=$2} END{print code}')
+        # "HTTP/1.1 200 OK" from GNU Wget and BusyBox, "HTTP response 200 [<url>]" from Wget2
+        http_code=$(wget --server-response --spider "${URL}" 2>&1 | awk '/^ *HTTP\//{code=$2} /^HTTP response /{code=$3} END{print code}')
         if [[ -z "${http_code}" || "${http_code}" != "200" ]]; then
           [[ -z "${http_code}" ]] && http_code="unknown"
           echo "Error: Remote URL responded with HTTP ${http_code} for ${URL}" >&2
@@ -268,10 +349,47 @@ log()         { printf "[%s] %s\n"        "$(basename "$0")" "$*"; }
 err()         { printf "[%s][ERROR] %s\n" "$(basename "$0")" "$*" >&2; }
 run()         { if [[ "${DRY_RUN:-0}" == "1" ]]; then printf "[dry-run] %s\n" "$*"; else bash -c "$@"; fi; }
 require_cmd() { command -v "$1" >/dev/null 2>&1 || { err "Required command '$1' not found"; exit 1; }; }
-# Network helpers with curl -> wget fallback
-fetch()       { if command -v curl >/dev/null 2>&1; then curl -fsSL "$1"; else wget -qO- "$1"; fi; }
-download()    { if command -v curl >/dev/null 2>&1; then curl -fsSL -o "$2" "$1"; else wget -qO "$2" "$1"; fi; }
+# Network helpers with curl -> wget fallback.
+# The GitHub API answers 60 requests an hour to who does not identify itself, which a
+# shared address (a CI runner, an office) uses up fast. With GITHUB_TOKEN set, fetch and
+# download send it to api.github.com, and to no other host.
+github_auth_header() {
+  if [[ -n "${GITHUB_TOKEN:-}" && "$1" == https://api.github.com/* ]]; then
+    printf 'Authorization: Bearer %s' "$GITHUB_TOKEN"
+  fi
+}
+fetch() {
+  local auth; auth="$(github_auth_header "$1")"
+  if command -v curl >/dev/null 2>&1; then curl -fsSL ${auth:+-H "$auth"} "$1"; else wget -qO- ${auth:+--header="$auth"} "$1"; fi
+}
+download() {
+  local auth; auth="$(github_auth_header "$1")"
+  if command -v curl >/dev/null 2>&1; then curl -fsSL ${auth:+-H "$auth"} -o "$2" "$1"; else wget -qO "$2" ${auth:+--header="$auth"} "$1"; fi
+}
 require_downloader() { command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1 || { err "Required command 'curl' or 'wget' not found"; exit 1; }; }
+# final_url <url>: where a URL leads after its redirects, without downloading it
+final_url() {
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSIL -o /dev/null -w '%{url_effective}\n' "$1"
+  else
+    # wget shows every answer of the chain, and the last one is where it ends: as a
+    # Location header (GNU Wget, BusyBox), or as "HTTP response 200 [<url>]" (Wget2)
+    local answers location
+    answers="$(wget -S --spider "$1" 2>&1)" || true
+    location="$(printf '%s\n' "$answers" | sed -n 's/^ *[Ll]ocation: *//p' | tail -n 1 | tr -d '\r')"
+    [[ -n "$location" ]] || location="$(printf '%s\n' "$answers" | sed -n 's/^HTTP response [0-9]* *\[\(.*\)\]$/\1/p' | tail -n 1)"
+    printf '%s\n' "${location:-$1}"
+  fi
+}
+# github_latest_tag <owner/repo>: the tag of the latest release of a repository. Read from
+# where github.com/<owner>/<repo>/releases/latest redirects to, which costs no request of
+# the GitHub API and its hourly quota.
+github_latest_tag() {
+  local url
+  url="$(final_url "https://github.com/$1/releases/latest")" || return 1
+  [[ "$url" == */releases/tag/* ]] || return 1
+  printf '%s\n' "${url##*/releases/tag/}"
+}
 # require_script <script> [command]: for a script that needs a tool another script of
 # the catalog installs. Runs 'load.sh <script>' unless <command> (the script name when
 # omitted) is already available. Everything goes to stderr, so it is safe to call
@@ -289,7 +407,7 @@ require_script() {
   "${loader[@]}" "$script" >&2 || { err "'load.sh ${script}' failed"; exit 1; }
   command -v "$cmd" >/dev/null 2>&1 || { err "'${cmd}' is still not available after 'load.sh ${script}'"; exit 1; }
 }
-export -f log err run require_cmd fetch download require_downloader require_script
+export -f log err run require_cmd github_auth_header fetch download require_downloader final_url github_latest_tag require_script
 
 # What the scripts install to ${SHELLSCRIPT_BIN} must be found by the ones that run next
 case ":${PATH}:" in

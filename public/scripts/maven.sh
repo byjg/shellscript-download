@@ -55,7 +55,12 @@ require_cmd tar
 
 # Resolve latest version if not specified
 if [[ -z "$MAVEN_VERSION" ]]; then
-  MAVEN_VERSION=$(fetch https://api.github.com/repos/apache/maven/releases/latest | grep '"tag_name"' | sed 's/.*"tag_name": *"maven-\(.*\)".*/\1/')
+  # A loader older than github_latest_tag does not have it: the GitHub API answers
+  if declare -F github_latest_tag >/dev/null; then
+    MAVEN_VERSION=$(github_latest_tag apache/maven | sed 's/^maven-//')
+  else
+    MAVEN_VERSION=$(fetch https://api.github.com/repos/apache/maven/releases/latest | grep '"tag_name"' | sed 's/.*"tag_name": *"maven-\(.*\)".*/\1/')
+  fi
   log "Latest Maven version: ${MAVEN_VERSION}"
 fi
 
@@ -108,10 +113,14 @@ run "chmod +x \"${BIN_DIR}/mvnDebug\""
 
 # Write shell init snippet
 run "mkdir -p \"${SHELLRC_DIR}\""
-cat >"${SHELLRC_DIR}/maven-init.sh" <<'WRAP'
+if [[ "$DRY_RUN" == "1" ]]; then
+  log "[dry-run] Writing ${SHELLRC_DIR}/maven-init.sh"
+else
+  cat >"${SHELLRC_DIR}/maven-init.sh" <<'WRAP'
 export MAVEN_HOME="$HOME/.shellscript/maven/current"
 export M2_HOME="$HOME/.shellscript/maven/current"
 WRAP
+fi
 
 log "Done. Maven ${MAVEN_VERSION} installed to ${MAVEN_HOME}/current"
 log "Source ${SHELLRC_DIR}/maven-init.sh from your shell rc for MAVEN_HOME environment variable"
