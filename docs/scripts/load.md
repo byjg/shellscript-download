@@ -13,7 +13,8 @@ Fetch a script from https://shellscript.download, cache it locally, and optional
 load.sh [--update] [--dont-run] [--list] [--installed] [--completion] [--developer <path>] <script> [optional args...]
 
 Options:
-  --update           Force re-download/update of the script even if it exists locally
+  --update           Update the loader and the local cached copies of the scripts.
+                     With a script: update only that script, then run it
   --dont-run         Do not execute the script after ensuring it is downloaded
   --list             List all available scripts from shellscript.download, with the
                      version of the ones installed on this machine
