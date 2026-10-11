@@ -6,6 +6,17 @@
 #   tests_e2e/run.sh jq yq               these tests, on every image
 #   tests_e2e/run.sh --image alpine jq   this test, on one image
 #   tests_e2e/run.sh --verbose jq        also show the output of every load.sh
+#   tests_e2e/run.sh --changed main      the tests of what changed since main
+#   tests_e2e/run.sh --changed main --list   name them, and run nothing
+#
+# --changed <ref> takes what this branch changed since <ref> (or a range, a..b):
+#   public/scripts/<name>.sh       the test of that script
+#   public/scripts/lib/<file>.sh   the tests of the scripts that use that file
+#   public/install/*               the test of the loader
+#   tests_e2e/testcases/<name>.sh  that test
+#   tests_e2e/run.sh, shared/*     every test
+# and adds all-scripts, which checks what every script must do. With nothing of that
+# changed, there is nothing to run.
 #
 # The scripts look up the latest version of the tools in the GitHub API, which answers
 # 60 requests an hour to who does not identify itself: less than a full run makes. Run
@@ -34,12 +45,45 @@ PUBLIC_DIR="$(cd "${TESTS_DIR}/../public" && pwd)"
 
 only_image=""
 verbose=""
+changed=""
+list_only=""
 tests=()
+
+# tests_for_changes <ref or range>: prints the tests of what changed, one per line
+tests_for_changes() {
+  local range="$1" file name user all="" names=""
+  [[ "$range" == *..* ]] || range="${range}...HEAD"
+  while IFS= read -r file; do
+    case "$file" in
+      public/scripts/lib/*.sh)
+        for user in "${PUBLIC_DIR}"/scripts/*.sh; do
+          if grep -q "lib/$(basename "$file")" "$user"; then names+=" $(basename "$user" .sh)"; fi
+        done
+        ;;
+      public/scripts/*.sh)       names+=" $(basename "$file" .sh)" ;;
+      public/install/*)          names+=" load" ;;
+      tests_e2e/testcases/*.sh)  names+=" $(basename "$file" .sh)" ;;
+      tests_e2e/*)               all=yes ;;
+    esac
+  done < <(git -C "${TESTS_DIR}/.." diff --name-only "$range")
+
+  if [[ -n "$all" ]]; then
+    for file in "${TESTS_DIR}"/testcases/*.sh; do basename "$file" .sh; done
+    return 0
+  fi
+  [[ -n "$names" ]] || return 0
+  # Only what has a test: a script that was deleted has none
+  for name in $names all-scripts; do
+    if [[ -f "${TESTS_DIR}/testcases/${name}.sh" ]]; then echo "$name"; fi
+  done | sort -u
+}
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --image) only_image="${2:?--image requires a name}"; shift ;;
     --verbose) verbose=1 ;;
-    -h|--help) sed -n '2,21p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --changed) changed="${2:?--changed requires a git ref or a range}"; shift ;;
+    --list) list_only=1 ;;
+    -h|--help) sed -n '2,33p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) tests+=("$1") ;;
   esac
   shift
@@ -50,10 +94,21 @@ if [[ -n "$only_image" && -z "${IMAGES[$only_image]:-}" ]]; then
   exit 2
 fi
 
-if [[ ${#tests[@]} -eq 0 ]]; then
+if [[ -n "$changed" ]]; then
+  mapfile -t tests < <(tests_for_changes "$changed")
+  if [[ ${#tests[@]} -eq 0 ]]; then
+    echo "Nothing that has a test changed since ${changed}." >&2
+    exit 0
+  fi
+elif [[ ${#tests[@]} -eq 0 ]]; then
   for file in "${TESTS_DIR}"/testcases/*.sh; do
     tests+=("$(basename "$file" .sh)")
   done
+fi
+
+if [[ -n "$list_only" ]]; then
+  printf '%s\n' "${tests[@]}"
+  exit 0
 fi
 
 results=()

@@ -497,7 +497,12 @@ tests_e2e/run.sh <name>                  # this test, on every image
 tests_e2e/run.sh --image alpine <name>   # on one image
 tests_e2e/run.sh --verbose <name>        # also show the output of every load.sh
 tests_e2e/run.sh                         # every test: about 40 minutes
+tests_e2e/run.sh --changed main          # the tests of what the branch changed since main
 ```
+
+A pull request runs that last one by itself (`.github/workflows/e2e.yml`): the test of each
+script it changes, the tests of the scripts that use a `lib/` file it changes, and
+`all-scripts`.
 
 A test is short when a shared test of `tests_e2e/shared/lib.sh` fits the script:
 

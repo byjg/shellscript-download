@@ -1,0 +1,101 @@
+name: End-to-end tests
+
+# Runs the tests of what a pull request changed: for a script of public/scripts, its own
+# test and all-scripts, which checks what every script must do. tests_e2e/run.sh decides
+# (--changed), so that the same choice can be made on a developer's machine.
+
+on:
+  pull_request:
+    paths:
+      - 'public/scripts/**'
+      - 'public/install/**'
+      - 'tests_e2e/**'
+      - '.github/workflows/e2e.yml'
+  workflow_dispatch:
+    inputs:
+      tests:
+        description: 'Tests to run, separated by spaces (empty: every test)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  select:
+    name: Select the tests
+    runs-on: ubuntu-latest
+    outputs:
+      tests: ${{ steps.select.outputs.tests }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          # The whole history: the tests are chosen from what changed since the base
+          fetch-depth: 0
+
+      - name: Select the tests of what changed
+        id: select
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          TESTS: ${{ github.event.inputs.tests }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            names="$(tests_e2e/run.sh --changed "${BASE}...${HEAD}" --list)"
+          elif [[ -n "$TESTS" ]]; then
+            names="$(tests_e2e/run.sh --list $TESTS)"
+          else
+            names="$(tests_e2e/run.sh --list)"
+          fi
+          tests="$(jq -R . <<<"$names" | jq -sc 'map(select(length > 0))')"
+          echo "Tests: ${tests}"
+          echo "tests=${tests}" >> "$GITHUB_OUTPUT"
+
+  test:
+    name: ${{ matrix.test }}
+    needs: select
+    if: needs.select.outputs.tests != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        test: ${{ fromJson(needs.select.outputs.tests) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Run the test on every image it applies to
+        env:
+          # For the scripts that ask the GitHub API, which allows 60 requests an hour to
+          # an address that does not identify itself, and a runner shares its address
+          GITHUB_TOKEN: ${{ github.token }}
+          TEST: ${{ matrix.test }}
+        run: |
+          # Once more when it fails: the tests download from the internet, and a name
+          # that did not resolve is not a bug of the script
+          tests_e2e/run.sh "$TEST" || {
+            echo "::warning::${TEST} failed, running it once more"
+            tests_e2e/run.sh "$TEST"
+          }
+
+  # One check to require in the branch protection, whatever tests were selected
+  result:
+    name: End-to-end tests
+    needs: [select, test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the result of the tests
+        env:
+          SELECT: ${{ needs.select.result }}
+          TEST: ${{ needs.test.result }}
+        run: |
+          echo "select: ${SELECT}, tests: ${TEST}"
+          [[ "$SELECT" == "success" ]]
+          [[ "$TEST" == "success" || "$TEST" == "skipped" ]]
