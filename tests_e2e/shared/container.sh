@@ -36,6 +36,13 @@ if ! setup >/tmp/setup.log 2>&1; then
 fi
 echo 'tester ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/tester
 
+# Fedora keeps /etc/shadow with no permission at all, and its sudo reads it through a
+# helper (unix_chkpwd) that then needs a capability to do so. In a privileged container,
+# the AppArmor of an Ubuntu 24.04 host (a GitHub runner) applies its own profile to that
+# helper, which denies the capability: sudo fails with "PAM account management error".
+# Readable by its owner, root, the file needs no capability.
+chmod u+r /etc/shadow
+
 if ! su tester -c 'sh /repo/install/loader --developer \
     && mkdir -p ~/.shellscript/downloads \
     && cp -r /repo/scripts/. ~/.shellscript/downloads/' >/tmp/install.log 2>&1; then
