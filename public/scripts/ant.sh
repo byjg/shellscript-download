@@ -56,7 +56,9 @@ require_cmd tar
 # Resolve latest version if not specified
 if [[ -z "$ANT_VERSION" ]]; then
   # apache/ant publishes no GitHub releases, only rel/<version> tags (newest first)
-  ANT_VERSION=$(fetch https://api.github.com/repos/apache/ant/tags | grep -o '"name": *"rel/[^"]*"' | head -1 | sed 's/.*"rel\/\(.*\)"/\1/')
+  # sed -n 1p, not head -1: head closes the pipe early, and with pipefail the script
+  # dies of SIGPIPE
+  ANT_VERSION=$(fetch https://api.github.com/repos/apache/ant/tags | grep -o '"name": *"rel/[^"]*"' | sed -n 1p | sed 's/.*"rel\/\(.*\)"/\1/')
   log "Latest Ant version: ${ANT_VERSION}"
 fi
 

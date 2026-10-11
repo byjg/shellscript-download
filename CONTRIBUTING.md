@@ -167,11 +167,16 @@ Paths may use `$HOME` — `remove.sh` expands them via `eval`.
 | Wrapper scripts | `$SHELLSCRIPT_BIN/<cmd>` | `$SHELLSCRIPT_BIN/mvn` |
 | Shell init snippet | `$SHELLSCRIPT_SHELLRC/<tool>-init.sh` | `$SHELLSCRIPT_SHELLRC/maven-init.sh` |
 
-Wrappers should be minimal:
+Wrappers should be minimal. The path is written at install time, not looked up through `$HOME`
+when the wrapper runs, so it keeps working for another user or with another `HOME`, as CI
+systems run it. Write it with an unquoted heredoc, so that `${SHELLSCRIPT_HOME}` is expanded
+and `\$@` is not:
 
 ```bash
+cat >"${SHELLSCRIPT_BIN}/<cmd>" <<WRAP
 #!/usr/bin/env bash
-exec "${HOME}/.shellscript/<tool>/current/bin/<cmd>" "$@"
+exec "${SHELLSCRIPT_HOME}/<tool>/current/bin/<cmd>" "\$@"
+WRAP
 ```
 
 ---

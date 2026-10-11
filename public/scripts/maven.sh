@@ -108,10 +108,14 @@ run "chmod +x \"${BIN_DIR}/mvnDebug\""
 
 # Write shell init snippet
 run "mkdir -p \"${SHELLRC_DIR}\""
-cat >"${SHELLRC_DIR}/maven-init.sh" <<'WRAP'
+if [[ "$DRY_RUN" == "1" ]]; then
+  log "[dry-run] Writing ${SHELLRC_DIR}/maven-init.sh"
+else
+  cat >"${SHELLRC_DIR}/maven-init.sh" <<'WRAP'
 export MAVEN_HOME="$HOME/.shellscript/maven/current"
 export M2_HOME="$HOME/.shellscript/maven/current"
 WRAP
+fi
 
 log "Done. Maven ${MAVEN_VERSION} installed to ${MAVEN_HOME}/current"
 log "Source ${SHELLRC_DIR}/maven-init.sh from your shell rc for MAVEN_HOME environment variable"

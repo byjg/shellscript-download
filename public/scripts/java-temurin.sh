@@ -66,11 +66,16 @@ JAVA_LTS_VERSIONS="8 11 17 21 25"
 
 # Resolve the latest patch release of the major version through the Adoptium API
 java_download_url() {
+  local api="https://api.adoptium.net/v3/assets/latest/${JAVA_VERSION}/hotspot?architecture=${JAVA_ARCH}&image_type=jdk&os=linux&vendor=eclipse"
   # A loader older than require_script cannot install jq: it has to be there already
   if declare -F require_script >/dev/null; then require_script jq; else require_cmd jq; fi
+  # A dry run does not install jq: without it, say where the link would come from
+  if [[ "${DRY_RUN:-0}" == "1" ]] && ! command -v jq >/dev/null 2>&1; then
+    echo "the link that ${api} gives"
+    return
+  fi
   local url
-  url=$(fetch "https://api.adoptium.net/v3/assets/latest/${JAVA_VERSION}/hotspot?architecture=${JAVA_ARCH}&image_type=jdk&os=linux&vendor=eclipse" \
-    | jq -r '.[0].binary.package.link // empty') || true
+  url=$(fetch "$api" | jq -r '.[0].binary.package.link // empty') || true
 
   # Hardcoded fallback for EOL versions not available via Adoptium (hosted under AdoptOpenJDK, x64 only)
   if [[ -z "$url" && "$JAVA_ARCH" == "x64" ]]; then

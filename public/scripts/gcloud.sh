@@ -84,9 +84,11 @@ for cmd in gcloud gsutil bq; do
   if [[ "$DRY_RUN" == "1" ]]; then
     log "[dry-run] Writing ${SHELLSCRIPT_BIN}/${cmd}"
   else
+    # The path is written now, not looked up through \$HOME when the wrapper runs:
+    # it keeps working for another user or with another HOME, as CI systems run it.
     cat >"${SHELLSCRIPT_BIN}/${cmd}" <<WRAP
 #!/usr/bin/env bash
-exec "\${HOME}/.shellscript/gcloud/google-cloud-sdk/bin/${cmd}" "\$@"
+exec "${GCLOUD_HOME}/google-cloud-sdk/bin/${cmd}" "\$@"
 WRAP
     chmod +x "${SHELLSCRIPT_BIN}/${cmd}"
   fi
