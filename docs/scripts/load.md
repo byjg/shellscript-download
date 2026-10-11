@@ -10,12 +10,14 @@ Fetch a script from https://shellscript.download, cache it locally, and optional
 ## Usage
 
 ```text
-load.sh [--update] [--dont-run] [--list] [--completion] [--developer <path>] <script> [optional args...]
+load.sh [--update] [--dont-run] [--list] [--installed] [--completion] [--developer <path>] <script> [optional args...]
 
 Options:
   --update           Force re-download/update of the script even if it exists locally
   --dont-run         Do not execute the script after ensuring it is downloaded
-  --list             List all available scripts from shellscript.download
+  --list             List all available scripts from shellscript.download, with the
+                     version of the ones installed on this machine
+  --installed        List only the scripts installed on this machine
   --completion       Install/update bash completion for load.sh into ~/.shellscript/shellrc/
   --developer <path> Use a local directory instead of downloading (for development)
   -h, --help         Show this help message

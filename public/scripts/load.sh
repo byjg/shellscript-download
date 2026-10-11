@@ -51,12 +51,14 @@ echo >&2
 
 print_usage() {
   cat <<'USAGE'
-load.sh [--update] [--dont-run] [--list] [--completion] [--developer <path>] <script> [optional args...]
+load.sh [--update] [--dont-run] [--list] [--installed] [--completion] [--developer <path>] <script> [optional args...]
 
 Options:
   --update           Force re-download/update of the script even if it exists locally
   --dont-run         Do not execute the script after ensuring it is downloaded
-  --list             List all available scripts from shellscript.download
+  --list             List all available scripts from shellscript.download, with the
+                     version of the ones installed on this machine
+  --installed        List only the scripts installed on this machine
   --completion       Install/update bash completion for load.sh into ~/.shellscript/shellrc/
   --developer <path> Use a local directory instead of downloading (for development)
   -h, --help         Show this help message
@@ -74,6 +76,7 @@ USAGE
 UPDATE=false
 DONT_RUN=false
 LIST=false
+INSTALLED=false
 COMPLETION=false
 DEVELOPER_PATH=""
 SCRIPT_NAME=""
@@ -92,6 +95,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --list)
       LIST=true
+      shift
+      ;;
+    --installed)
+      INSTALLED=true
       shift
       ;;
     --completion)
@@ -135,9 +142,56 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# This loader, by its path: to ask a script for its manifest
+LOADER_SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+
+# installed_state <script>: prints the installed version of what a script installs, or
+# "yes" when it has no version to show, and nothing when it is not on this machine.
+# It reads the manifest of the script, the one 'load.sh remove' uses, so it knows only
+# the scripts that were downloaded (or, with --developer, that are in that folder):
+#   - a command of BIN_FILES is in ~/.shellscript/bin, or SHELLRC_FILE exists
+#   - else a folder of FOLDERS has something in it, for a script that declares neither,
+#     or that records there what it installed on the system (UNINSTALL_CMD)
+# The version is where <folder>/current points, for a folder under ~/.shellscript: in a
+# folder of the tool itself, such a link is not ours to read (~/.nvm/current is a Node).
+installed_state() {
+  local name="$1" dir="${DEVELOPER_PATH:-$HOME/.shellscript/downloads}"
+  local manifest bins shellrc folders hook item found="" version=""
+  [[ -f "${dir}/${name}.sh" ]] || return 0
+  manifest="$("$LOADER_SELF" ${DEVELOPER_PATH:+--developer "$DEVELOPER_PATH"} "$name" -- --manifest 2>/dev/null)" || return 0
+  [[ "$manifest" == *"FOLDERS="* ]] || return 0
+
+  bins="$(sed -n 's/^BIN_FILES=//p' <<<"$manifest")"
+  shellrc="$(sed -n 's/^SHELLRC_FILE=//p' <<<"$manifest")"
+  folders="$(sed -n 's/^FOLDERS=//p' <<<"$manifest")"
+  hook="$(sed -n 's/^UNINSTALL_CMD=//p' <<<"$manifest")"
+  shellrc="${shellrc//\$HOME/$HOME}"
+  folders="${folders//\$HOME/$HOME}"
+
+  for item in $bins; do
+    if [[ -e "$HOME/.shellscript/bin/${item}" ]]; then found=yes; fi
+  done
+  if [[ -n "$shellrc" && -e "$shellrc" ]]; then found=yes; fi
+  if [[ -z "$found" && ( -n "$hook" || ( -z "$bins" && -z "$shellrc" ) ) ]]; then
+    for item in $folders; do
+      if [[ -d "$item" && -n "$(ls -A "$item" 2>/dev/null)" ]]; then found=yes; fi
+    done
+  fi
+  [[ -n "$found" ]] || return 0
+
+  for item in $folders; do
+    if [[ "$item" == "$HOME/.shellscript/"* && -L "${item}/current" ]]; then
+      version="$(basename "$(readlink "${item}/current")")"
+    fi
+  done
+  printf '%s\n' "${version:-yes}"
+}
+
+LIST_FORMAT="%-16s %-10s %s\n"
+
 list_scripts() {
   local url="https://shellscript.download/list.json"
-  local json
+  local json name desc
   if command -v curl >/dev/null 2>&1; then
     json=$(curl -fsSL "${url}") || { echo "Error: Failed to download list.json" >&2; exit 3; }
   elif command -v wget >/dev/null 2>&1; then
@@ -147,24 +201,41 @@ list_scripts() {
     exit 3
   fi
 
-  if command -v jq >/dev/null 2>&1; then
-    printf "%-25s %s\n" "SCRIPT" "DESCRIPTION"
-    printf "%-25s %s\n" "-------------------------" "-----------"
-    echo "${json}" | jq -r '.[] | [.name, .description] | @tsv' | while IFS=$'\t' read -r name desc; do
-      printf "%-25s %s\n" "${name}" "${desc}"
-    done
-  elif command -v python3 >/dev/null 2>&1; then
-    echo "${json}" | python3 -c "
-import json, sys
-data = json.load(sys.stdin)
-print('%-25s %s' % ('SCRIPT', 'DESCRIPTION'))
-print('%-25s %s' % ('-' * 25, '-----------'))
-for item in data:
-    print('%-25s %s' % (item['name'], item['description']))
-"
-  else
-    echo "${json}"
-  fi
+  # list.json has one "name" and one "description" per line, in that order
+  # shellcheck disable=SC2059  # the format is a constant
+  printf "$LIST_FORMAT" "SCRIPT" "INSTALLED" "DESCRIPTION"
+  printf "$LIST_FORMAT" "----------------" "----------" "-----------"
+  while IFS= read -r line; do
+    case "$line" in
+      *'"name":'*)
+        name="$(sed 's/^ *"name": *"\(.*\)",\{0,1\}$/\1/' <<<"$line")"
+        ;;
+      *'"description":'*)
+        desc="$(sed 's/^ *"description": *"\(.*\)",\{0,1\}$/\1/; s/\\"/"/g' <<<"$line")"
+        printf "$LIST_FORMAT" "$name" "$(installed_state "$name")" "${desc#"${name}.sh: "}"
+        ;;
+    esac
+  done <<<"$json"
+}
+
+# What is installed, from the scripts this machine has: it needs no network
+list_installed() {
+  local dir="${DEVELOPER_PATH:-$HOME/.shellscript/downloads}" file name state desc any=""
+  for file in "$dir"/*.sh; do
+    [[ -f "$file" ]] || continue
+    name="$(basename "$file" .sh)"
+    state="$(installed_state "$name")"
+    [[ -n "$state" ]] || continue
+    if [[ -z "$any" ]]; then
+      # shellcheck disable=SC2059  # the format is a constant
+      printf "$LIST_FORMAT" "SCRIPT" "INSTALLED" "DESCRIPTION"
+      printf "$LIST_FORMAT" "----------------" "----------" "-----------"
+      any=yes
+    fi
+    desc="$(sed -n '2s/^# *//p' "$file")"
+    printf "$LIST_FORMAT" "$name" "$state" "${desc#"${name}.sh: "}"
+  done
+  [[ -n "$any" ]] || echo "Nothing installed with load.sh on this machine." >&2
 }
 
 install_completion() {
@@ -185,6 +256,11 @@ install_completion() {
 
 if [[ "${LIST}" == true ]]; then
   list_scripts
+  exit 0
+fi
+
+if [[ "${INSTALLED}" == true ]]; then
+  list_installed
   exit 0
 fi
 

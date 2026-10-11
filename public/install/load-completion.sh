@@ -11,7 +11,7 @@ _load_sh_completion() {
   cur="${COMP_WORDS[COMP_CWORD]}"
 
   if [[ $COMP_CWORD -eq 1 ]]; then
-    mapfile -t COMPREPLY < <(compgen -W "--completion --developer --dont-run --help --list --update -h ant aws-cli buildah byjg-gluo byjg-repo docker doctl eksctl gcloud gh helm java-corretto java-oracle java-temurin jq kubectl kustomize maven node-docker nvm php-docker podman qemu ssh-agent yq" -- "$cur")
+    mapfile -t COMPREPLY < <(compgen -W "--completion --developer --dont-run --help --installed --list --update -h ant aws-cli buildah byjg-gluo byjg-repo docker doctl eksctl gcloud gh helm java-corretto java-oracle java-temurin jq kubectl kustomize maven node-docker nvm php-docker podman qemu ssh-agent yq" -- "$cur")
     return
   fi
 

@@ -158,8 +158,52 @@ load remove -- jq --purge
 sudo mv "${curl_path}.e2e-off" "$curl_path"
 hash -r
 
-step "load: --list and --completion"
+fixture ssh-agent-e2e <<'PROBE'
+#!/usr/bin/env bash
+# ssh-agent-e2e.sh: a script that only writes a shell init file
+case "${1-}" in
+  --manifest) printf 'BIN_FILES=\nFOLDERS=\nSHELLRC_FILE=$HOME/.shellscript/shellrc/ssh-agent-e2e-init.sh\n' ;;
+  *) echo "# init" > "${SHELLSCRIPT_SHELLRC}/ssh-agent-e2e-init.sh" ;;
+esac
+PROBE
+
+step "load: --list shows the catalog, --installed nothing yet"
 assert_output "${LOADER} --list 2>/dev/null" "kubectl"
+assert_output "${LOADER} --list 2>/dev/null | sed -n 1p" "INSTALLED"
+assert_output "${LOADER} --list 2>/dev/null | grep '^jq ' | awk '{print \$2}'" "Download"
+assert_exit 0 "${LOADER} --installed"
+assert_log "Nothing installed with load.sh on this machine."
+
+step "load: --list and --installed show the version of what is installed"
+load jq -- --version 1.7.1
+load ssh-agent-e2e
+assert_output "${LOADER} --list 2>/dev/null | grep '^jq ' | awk '{print \$2}'" "1.7.1"
+assert_output "${LOADER} --installed 2>/dev/null | grep '^jq '" "1.7.1"
+assert_output "${LOADER} --installed 2>/dev/null | grep '^ssh-agent-e2e ' | awk '{print \$2}'" "yes"
+assert_no_output "${LOADER} --installed 2>/dev/null" "yq"
+assert_output "${LOADER} --installed 2>/dev/null | grep -c ." "4"
+
+step "load: what was removed is not listed, even with its folder kept"
+load remove -- jq
+assert_exists "${SHELLSCRIPT_HOME}/jq"
+assert_no_output "${LOADER} --installed 2>/dev/null" "jq"
+load remove -- jq --purge
+
+step "load: a script that installs on the system is listed by what it recorded"
+fixture system-e2e <<'PROBE'
+#!/usr/bin/env bash
+# system-e2e.sh: a script that records what it installed on the system
+case "${1-}" in
+  --manifest) printf 'BIN_FILES=never-created-e2e\nFOLDERS=$HOME/.shellscript/system-e2e\nSHELLRC_FILE=\nUNINSTALL_CMD=uninstall\n' ;;
+esac
+PROBE
+mkdir -p "${SHELLSCRIPT_HOME}/system-e2e"
+assert_no_output "${LOADER} --installed 2>/dev/null" "system-e2e"
+echo "a-package" > "${SHELLSCRIPT_HOME}/system-e2e/installed-packages.conf"
+assert_output "${LOADER} --installed 2>/dev/null | grep '^system-e2e ' | awk '{print \$2}'" "yes"
+rm -rf "${SHELLSCRIPT_HOME}/system-e2e" "${SHELLSCRIPT_HOME}/shellrc/ssh-agent-e2e-init.sh"
+
+step "load: --completion"
 rm -f "${SHELLSCRIPT_HOME}/shellrc/01-load-completion.sh"
 assert_exit 0 "${LOADER} --completion"
 assert_exists "${SHELLSCRIPT_HOME}/shellrc/01-load-completion.sh"
