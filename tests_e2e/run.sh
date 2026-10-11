@@ -7,6 +7,11 @@
 #   tests_e2e/run.sh --image alpine jq   this test, on one image
 #   tests_e2e/run.sh --verbose jq        also show the output of every load.sh
 #
+# The scripts look up the latest version of the tools in the GitHub API, which answers
+# 60 requests an hour to who does not identify itself: less than a full run makes. Run
+# with GITHUB_TOKEN set and the containers get it:
+#   GITHUB_TOKEN=$(gh auth token) tests_e2e/run.sh
+#
 # A test is tests_e2e/testcases/<name>.sh. It runs on every image below, unless it has
 # a line
 #   # images: ubuntu fedora
@@ -34,7 +39,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --image) only_image="${2:?--image requires a name}"; shift ;;
     --verbose) verbose=1 ;;
-    -h|--help) sed -n '2,16p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,21p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) tests+=("$1") ;;
   esac
   shift
@@ -66,7 +71,8 @@ for test in "${tests[@]}"; do
     [[ -z "$applies" || " ${applies} " == *" ${image} "* ]] || continue
 
     printf '\n######## %s on %s (%s)\n' "$test" "$image" "${IMAGES[$image]}"
-    if docker run --rm -e "E2E_VERBOSE=${verbose}" ${docker_options[@]+"${docker_options[@]}"} \
+    # -e GITHUB_TOKEN, by name: its value comes from the environment, not the command line
+    if docker run --rm -e "E2E_VERBOSE=${verbose}" ${GITHUB_TOKEN:+-e GITHUB_TOKEN} ${docker_options[@]+"${docker_options[@]}"} \
         -v "${PUBLIC_DIR}:/repo:ro" -v "${TESTS_DIR}:/tests:ro" \
         "${IMAGES[$image]}" sh /tests/shared/container.sh "$test"; then
       results+=("PASS  ${test} on ${image}")

@@ -159,7 +159,7 @@ need_docker() {
   fi
   start_docker_daemon
   [[ "$FAILURES" == "0" ]] || finish
-  exec sudo -u "$(id -un)" -H env E2E_DOCKER_READY=1 E2E_VERBOSE="${E2E_VERBOSE:-}" bash "$0"
+  exec sudo --preserve-env=GITHUB_TOKEN,E2E_VERBOSE -u "$(id -un)" -H env E2E_DOCKER_READY=1 bash "$0"
 }
 
 # finish: the last line of every test

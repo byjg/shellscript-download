@@ -64,6 +64,10 @@ Options:
 Arguments:
   <script>      The script name (without .sh) to fetch from shellscript.download
   [args...]     Optional arguments to pass through to the downloaded script
+
+Environment:
+  GITHUB_TOKEN  Sent to the GitHub API, where the scripts look up the latest version of
+                a tool. Without it GitHub answers 60 requests an hour per address.
 USAGE
 }
 
@@ -268,9 +272,23 @@ log()         { printf "[%s] %s\n"        "$(basename "$0")" "$*"; }
 err()         { printf "[%s][ERROR] %s\n" "$(basename "$0")" "$*" >&2; }
 run()         { if [[ "${DRY_RUN:-0}" == "1" ]]; then printf "[dry-run] %s\n" "$*"; else bash -c "$@"; fi; }
 require_cmd() { command -v "$1" >/dev/null 2>&1 || { err "Required command '$1' not found"; exit 1; }; }
-# Network helpers with curl -> wget fallback
-fetch()       { if command -v curl >/dev/null 2>&1; then curl -fsSL "$1"; else wget -qO- "$1"; fi; }
-download()    { if command -v curl >/dev/null 2>&1; then curl -fsSL -o "$2" "$1"; else wget -qO "$2" "$1"; fi; }
+# Network helpers with curl -> wget fallback.
+# The GitHub API answers 60 requests an hour to who does not identify itself, which a
+# shared address (a CI runner, an office) uses up fast. With GITHUB_TOKEN set, fetch and
+# download send it to api.github.com, and to no other host.
+github_auth_header() {
+  if [[ -n "${GITHUB_TOKEN:-}" && "$1" == https://api.github.com/* ]]; then
+    printf 'Authorization: Bearer %s' "$GITHUB_TOKEN"
+  fi
+}
+fetch() {
+  local auth; auth="$(github_auth_header "$1")"
+  if command -v curl >/dev/null 2>&1; then curl -fsSL ${auth:+-H "$auth"} "$1"; else wget -qO- ${auth:+--header="$auth"} "$1"; fi
+}
+download() {
+  local auth; auth="$(github_auth_header "$1")"
+  if command -v curl >/dev/null 2>&1; then curl -fsSL ${auth:+-H "$auth"} -o "$2" "$1"; else wget -qO "$2" ${auth:+--header="$auth"} "$1"; fi
+}
 require_downloader() { command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1 || { err "Required command 'curl' or 'wget' not found"; exit 1; }; }
 # require_script <script> [command]: for a script that needs a tool another script of
 # the catalog installs. Runs 'load.sh <script>' unless <command> (the script name when
@@ -289,7 +307,7 @@ require_script() {
   "${loader[@]}" "$script" >&2 || { err "'load.sh ${script}' failed"; exit 1; }
   command -v "$cmd" >/dev/null 2>&1 || { err "'${cmd}' is still not available after 'load.sh ${script}'"; exit 1; }
 }
-export -f log err run require_cmd fetch download require_downloader require_script
+export -f log err run require_cmd github_auth_header fetch download require_downloader require_script
 
 # What the scripts install to ${SHELLSCRIPT_BIN} must be found by the ones that run next
 case ":${PATH}:" in

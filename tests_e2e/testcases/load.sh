@@ -96,6 +96,28 @@ step "load: a script that is not published"
 assert_exit 3 "${LOADER} --dont-run no-such-script-e2e"
 assert_missing "${SHELLSCRIPT_HOME}/downloads/no-such-script-e2e.sh"
 
+step "load: GITHUB_TOKEN goes to the GitHub API, and nowhere else"
+fixture token-probe <<'PROBE'
+#!/usr/bin/env bash
+set -euo pipefail
+echo "api=[$(github_auth_header https://api.github.com/rate_limit)]"
+echo "other=[$(github_auth_header https://shellscript.download/list.json)]"
+echo "lookalike=[$(github_auth_header https://api.github.com.example.org/x)]"
+PROBE
+assert_output "GITHUB_TOKEN=e2e-fake ${LOADER} token-probe 2>/dev/null" "api=[Authorization: Bearer e2e-fake]"
+assert_output "GITHUB_TOKEN=e2e-fake ${LOADER} token-probe 2>/dev/null" "other=[]"
+assert_output "GITHUB_TOKEN=e2e-fake ${LOADER} token-probe 2>/dev/null" "lookalike=[]"
+assert_output "env -u GITHUB_TOKEN ${LOADER} token-probe 2>/dev/null" "api=[]"
+
+# GitHub refuses a token it does not know: that the call fails shows the token was sent
+fixture token-fetch <<'PROBE'
+#!/usr/bin/env bash
+set -euo pipefail
+fetch "$1" >/dev/null && echo "fetched"
+PROBE
+assert_exit 22 "GITHUB_TOKEN=e2e-not-a-token ${LOADER} token-fetch -- https://api.github.com/rate_limit"
+assert_output "GITHUB_TOKEN=e2e-not-a-token ${LOADER} token-fetch -- https://shellscript.download/list.json 2>/dev/null" "fetched"
+
 step "load: --list and --completion"
 assert_output "${LOADER} --list 2>/dev/null" "kubectl"
 rm -f "${SHELLSCRIPT_HOME}/shellrc/01-load-completion.sh"

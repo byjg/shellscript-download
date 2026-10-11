@@ -105,6 +105,7 @@ following so scripts can use them without redeclaring:
 | `err "message"` | Prints `[<script>.sh][ERROR] message` to stderr |
 | `run "command"` | Runs the command normally, or prints `[dry-run] command` when `DRY_RUN=1` |
 | `require_cmd curl` | Exits with an error if the command is not on `PATH` |
+| `fetch "<url>"`, `download "<url>" "<file>"` | Read a URL to stdout, or save it to a file, with curl or wget. With `GITHUB_TOKEN` set they send it to `api.github.com`, and to no other host |
 | `require_script jq` | Runs `load.sh jq` unless the `jq` command is already on `PATH`. A second argument names the command when it differs from the script |
 
 `log` and `err` use `basename "$0"` so the script name in the output is always correct.
