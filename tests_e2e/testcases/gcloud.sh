@@ -13,6 +13,10 @@ assert_output "gsutil version" "gsutil version"
 assert_output "bq version" "BigQuery CLI"
 assert_output ". /usr/share/bash-completion/bash_completion; . '${shellrc}'; complete -p gcloud" "gcloud"
 
+step "gcloud: install again downloads nothing"
+load gcloud
+assert_log "is already installed. Skipping download"
+
 step "gcloud: install an older version (--version 540.0.0)"
 load gcloud -- --version 540.0.0
 assert_output "gcloud --version" "Google Cloud SDK 540.0.0"

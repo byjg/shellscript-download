@@ -112,6 +112,7 @@ BIN_FILES=qemu-vm
 FOLDERS=$HOME/.shellscript/qemu
 SHELLRC_FILE=
 UNINSTALL_CMD=uninstall
+UPGRADE=no
 MANIFEST
 }
 

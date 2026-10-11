@@ -3,8 +3,8 @@
 # --help, --manifest, refuse an option it does not know, and change nothing with --dry-run
 source "$(dirname "${BASH_SOURCE[0]}")/../shared/lib.sh"
 
-# The loader and 'remove' install nothing. byjg-gluo needs its arguments first.
-NO_MANIFEST=" load remove byjg-gluo "
+# The loader and 'remove' install nothing
+NO_MANIFEST=" load remove "
 # The Docker-backed wrappers have no --dry-run. ssh-agent has its own test, with the
 # OpenSSH client it needs.
 NO_DRY_RUN=" load remove byjg-gluo node-docker php-docker ssh-agent "

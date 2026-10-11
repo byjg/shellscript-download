@@ -23,6 +23,7 @@ $HOME/.shellscript/bin. Nothing needs root. Run it again to update.
 Options:
   -h, --help           Show this help and exit
   --version <version>  Version to install (default: latest), e.g. 2.31.0
+  --force              Re-download even if already installed
   --dry-run            Print actions without executing them
   --manifest           Print installation manifest and exit
 

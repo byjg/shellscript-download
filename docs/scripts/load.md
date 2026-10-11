@@ -10,11 +10,15 @@ Fetch a script from https://shellscript.download, cache it locally, and optional
 ## Usage
 
 ```text
-load.sh [--update] [--dont-run] [--list] [--installed] [--completion] [--developer <path>] <script> [optional args...]
+load.sh [--update] [--upgrade] [--dont-run] [--list] [--installed] [--completion] [--developer <path>] <script> [optional args...]
 
 Options:
   --update           Update the loader and the local cached copies of the scripts.
                      With a script: update only that script, then run it
+  --upgrade          Install again what is installed, each script with the arguments it
+                     was last installed with, so that a tool follows its latest version
+                     and one that was given a version keeps it. With a script: only
+                     that one. A script that has nothing newer to install skips it
   --dont-run         Do not execute the script after ensuring it is downloaded
   --list             List all available scripts from shellscript.download, with the
                      version of the ones installed on this machine

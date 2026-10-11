@@ -40,11 +40,15 @@ echo >&2
 
 print_usage() {
   cat <<'USAGE'
-load.sh [--update] [--dont-run] [--list] [--installed] [--completion] [--developer <path>] <script> [optional args...]
+load.sh [--update] [--upgrade] [--dont-run] [--list] [--installed] [--completion] [--developer <path>] <script> [optional args...]
 
 Options:
   --update           Update the loader and the local cached copies of the scripts.
                      With a script: update only that script, then run it
+  --upgrade          Install again what is installed, each script with the arguments it
+                     was last installed with, so that a tool follows its latest version
+                     and one that was given a version keeps it. With a script: only
+                     that one. A script that has nothing newer to install skips it
   --dont-run         Do not execute the script after ensuring it is downloaded
   --list             List all available scripts from shellscript.download, with the
                      version of the ones installed on this machine
@@ -67,6 +71,7 @@ UPDATE=false
 DONT_RUN=false
 LIST=false
 INSTALLED=false
+UPGRADE=false
 COMPLETION=false
 DEVELOPER_PATH=""
 SCRIPT_NAME=""
@@ -89,6 +94,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --installed)
       INSTALLED=true
+      shift
+      ;;
+    --upgrade)
+      UPGRADE=true
       shift
       ;;
     --completion)
@@ -144,15 +153,23 @@ LOADER_SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SO
 #     or that records there what it installed on the system (UNINSTALL_CMD)
 # The version is where <folder>/current points, for a folder under ~/.shellscript: in a
 # folder of the tool itself, such a link is not ours to read (~/.nvm/current is a Node).
-installed_state() {
-  local name="$1" dir="${DEVELOPER_PATH:-$HOME/.shellscript/downloads}"
-  local manifest bins shellrc folders hook item found="" version=""
+# script_manifest <script>: prints the manifest of a script this machine has, or nothing
+script_manifest() {
+  local name="$1" dir="${DEVELOPER_PATH:-$HOME/.shellscript/downloads}" manifest
   [[ -f "${dir}/${name}.sh" ]] || return 0
   # Asking for the manifest runs the script: one that does not know --manifest would do
   # what it does by default, which is to install
   grep -q -- '--manifest' "${dir}/${name}.sh" || return 0
   manifest="$("$LOADER_SELF" ${DEVELOPER_PATH:+--developer "$DEVELOPER_PATH"} "$name" -- --manifest 2>/dev/null)" || return 0
   [[ "$manifest" == *"FOLDERS="* ]] || return 0
+  printf '%s\n' "$manifest"
+}
+
+installed_state() {
+  local name="$1"
+  local manifest bins shellrc folders hook item found="" version=""
+  manifest="$(script_manifest "$name")"
+  [[ -n "$manifest" ]] || return 0
 
   bins="$(sed -n 's/^BIN_FILES=//p' <<<"$manifest")"
   shellrc="$(sed -n 's/^SHELLRC_FILE=//p' <<<"$manifest")"
@@ -316,6 +333,62 @@ update_all() {
   done
 }
 
+# Where the loader keeps the arguments each script was last installed with
+saved_arguments_file() { echo "$HOME/.shellscript/downloads/$1.args"; }
+
+# 'load.sh --upgrade [script]': installs again what is installed, each script with the
+# arguments it was last installed with. A script says in its manifest when that is not
+# something to do to it (UPGRADE=no): its arguments are commands, not what to install.
+upgrade_installed() {
+  local only="$1" dir="${DEVELOPER_PATH:-$HOME/.shellscript/downloads}"
+  local file name manifest saved upgraded="" failed="" left="" any=""
+  local -a arguments
+
+  for file in "$dir"/*.sh; do
+    [[ -f "$file" ]] || continue
+    name="$(basename "$file" .sh)"
+    [[ -z "$only" || "$only" == "$name" ]] || continue
+    manifest="$(script_manifest "$name")"
+    if grep -qx 'UPGRADE=no' <<<"$manifest"; then
+      [[ -z "$only" ]] || { echo "${name} cannot be upgraded this way: run it with what you want it to do." >&2; return 1; }
+      continue
+    fi
+    if [[ -z "$(installed_state "$name")" ]]; then
+      [[ -z "$only" ]] || { echo "${name} is not installed: install it with 'load.sh ${name}'." >&2; return 1; }
+      continue
+    fi
+
+    any=yes
+    arguments=()
+    saved="$(saved_arguments_file "$name")"
+    if [[ -f "$saved" ]]; then
+      mapfile -t arguments < "$saved"
+      echo "== ${name}: ${arguments[*]:-(no arguments)}"
+    else
+      echo "== ${name}: installed before the arguments were kept, with the defaults"
+    fi
+    if "$LOADER_SELF" ${DEVELOPER_PATH:+--developer "$DEVELOPER_PATH"} "$name" -- ${arguments[@]+"${arguments[@]}"}; then
+      upgraded+=" ${name}"
+    else
+      failed+=" ${name}"
+    fi
+  done
+
+  if [[ -z "$any" ]]; then
+    [[ -z "$only" ]] || { echo "No such script on this machine: ${only}" >&2; return 1; }
+    echo "Nothing installed with load.sh on this machine." >&2
+    return 0
+  fi
+  echo
+  echo "Upgraded:${upgraded:- none}"
+  [[ -z "$failed" ]] || { echo "Failed:${failed}" >&2; return 1; }
+}
+
+if [[ "${UPGRADE}" == true ]]; then
+  upgrade_installed "${SCRIPT_NAME}"
+  exit $?
+fi
+
 if [[ "${UPDATE}" == true && -z "${SCRIPT_NAME}" ]]; then
   if [[ -n "${DEVELOPER_PATH}" ]]; then
     echo "Error: --update without a script downloads what is published: not with --developer." >&2
@@ -443,6 +516,34 @@ final_url() {
     printf '%s\n' "${location:-$1}"
   fi
 }
+# remote_stamp <url>: what tells one file a URL serves from the next one, without
+# downloading it: the URL with the ETag of the server, or with the date the file changed.
+# Nothing when the server gives neither, or with Wget2, which does not show the headers:
+# a script then has no way to know, and installs.
+remote_stamp() {
+  local headers stamp
+  if command -v curl >/dev/null 2>&1; then
+    headers="$(curl -fsSIL "$1" 2>/dev/null)" || return 0
+  else
+    headers="$(wget -S --spider "$1" 2>&1)" || return 0
+  fi
+  headers="$(printf '%s\n' "$headers" | tr -d '\r')"
+  stamp="$(sed -n 's/^ *[Ee][Tt][Aa][Gg]: *//p' <<<"$headers" | tail -n 1)"
+  [[ -n "$stamp" ]] || stamp="$(sed -n 's/^ *[Ll]ast-[Mm]odified: *//p' <<<"$headers" | tail -n 1)"
+  [[ -z "$stamp" ]] || printf '%s %s\n' "$1" "$stamp"
+}
+# already_installed <url> <stamp file>: true when the file the URL serves now is the one
+# the script installed, which it wrote down with record_installed. For a script that has
+# to download to know the version: it can skip the download when nothing is newer.
+already_installed() {
+  local stamp
+  stamp="$(remote_stamp "$1")"
+  [[ -n "$stamp" && -f "$2" && "$stamp" == "$(cat "$2")" ]]
+}
+record_installed() {
+  mkdir -p "$(dirname "$2")"
+  remote_stamp "$1" > "$2"
+}
 # github_latest_tag <owner/repo>: the tag of the latest release of a repository. Read from
 # where github.com/<owner>/<repo>/releases/latest redirects to, which costs no request of
 # the GitHub API and its hourly quota.
@@ -469,7 +570,7 @@ require_script() {
   "${loader[@]}" "$script" >&2 || { err "'load.sh ${script}' failed"; exit 1; }
   command -v "$cmd" >/dev/null 2>&1 || { err "'${cmd}' is still not available after 'load.sh ${script}'"; exit 1; }
 }
-export -f log err run require_cmd github_auth_header fetch download require_downloader final_url github_latest_tag require_script
+export -f log err run require_cmd github_auth_header fetch download require_downloader final_url remote_stamp already_installed record_installed github_latest_tag require_script
 
 # What the scripts install to ${SHELLSCRIPT_BIN} must be found by the ones that run next
 case ":${PATH}:" in
@@ -498,5 +599,22 @@ echo ">_ ${SCRIPT_NAME}.sh" >&2
 echo >&2
 
 # Execute the script with passed arguments
-exec "${DEST_PATH}" "${ARGS[@]}"
+status=0
+"${DEST_PATH}" ${ARGS[@]+"${ARGS[@]}"} || status=$?
+
+# Keep the arguments of an install that worked, for 'load.sh --upgrade' to install again
+# the same way. Not what only asks or tries (--help, --manifest, --dry-run), not 'remove',
+# and not a working copy run with --developer.
+if [[ "$status" == "0" && -z "${DEVELOPER_PATH}" && "${SCRIPT_NAME}" != "remove" ]]; then
+  keep=yes
+  for argument in ${ARGS[@]+"${ARGS[@]}"}; do
+    case "$argument" in -h|--help|--manifest|--dry-run|--post-load) keep="" ;; esac
+  done
+  if [[ -n "$keep" ]]; then
+    printf '%s\n' ${ARGS[@]+"${ARGS[@]}"} > "$(saved_arguments_file "${SCRIPT_NAME}")"
+    # printf with no argument still writes an empty line
+    [[ ${#ARGS[@]} -gt 0 ]] || : > "$(saved_arguments_file "${SCRIPT_NAME}")"
+  fi
+fi
+exit "$status"
 

@@ -222,6 +222,81 @@ echo "a-package" > "${SHELLSCRIPT_HOME}/system-e2e/installed-packages.conf"
 assert_output "${LOADER} --installed 2>/dev/null | grep '^system-e2e ' | awk '{print \$2}'" "yes"
 rm -rf "${SHELLSCRIPT_HOME}/system-e2e" "${SHELLSCRIPT_HOME}/shellrc/ssh-agent-e2e-init.sh"
 
+step "load: keeps the arguments of an install that worked, and only of that"
+saved="${SHELLSCRIPT_HOME}/downloads"
+load jq -- --version 1.7.1
+assert_output "tr '\n' ' ' < '${saved}/jq.args'" "--version 1.7.1"
+load yq
+assert_exists "${saved}/yq.args"
+assert_output "wc -c < '${saved}/yq.args' | tr -d ' '" "0"
+load_fails jq -- --version 0.0.0
+assert_exit 0 "${LOADER} jq -- --dry-run --version 1.8.0"
+assert_exit 0 "${LOADER} jq -- --manifest"
+assert_output "tr '\n' ' ' < '${saved}/jq.args'" "--version 1.7.1"
+
+step "load: --upgrade installs again with those arguments: a given version stays"
+assert_exit 0 "${LOADER} --upgrade"
+assert_log "== jq: --version 1.7.1"
+assert_log "== yq: (no arguments)"
+assert_log "Upgraded: jq yq"
+assert_output "jq --version" "jq-1.7.1"
+
+step "load: --upgrade brings what follows the latest to it"
+# As a yq installed with the defaults some time ago: an older one, and no version asked
+load yq -- --version 4.44.1
+: > "${saved}/yq.args"
+assert_output "yq --version" "4.44.1"
+assert_exit 0 "${LOADER} --upgrade yq"
+assert_log "Upgraded: yq"
+assert_no_output "yq --version" "4.44.1"
+assert_output "jq --version" "jq-1.7.1"
+
+step "load: --upgrade of what was installed before the arguments were kept"
+rm -f "${saved}/yq.args"
+assert_exit 0 "${LOADER} --upgrade yq"
+assert_log "installed before the arguments were kept, with the defaults"
+
+step "load: --upgrade leaves out what is not installed, and what cannot be upgraded"
+fixture commands-e2e <<'PROBE'
+#!/usr/bin/env bash
+# commands-e2e.sh: a script whose arguments are commands
+case "${1-}" in
+  --manifest) printf 'BIN_FILES=\nFOLDERS=\nSHELLRC_FILE=$HOME/.shellscript/shellrc/commands-e2e-init.sh\nUPGRADE=no\n' ;;
+  *) echo "# init" > "${SHELLSCRIPT_SHELLRC}/commands-e2e-init.sh"; touch "$HOME/e2e-commands-ran-$#" ;;
+esac
+PROBE
+load commands-e2e -- start something
+rm -f "${HOME}"/e2e-commands-ran-*
+assert_exit 1 "${LOADER} --upgrade commands-e2e"
+assert_log "cannot be upgraded this way"
+assert_exit 1 "${LOADER} --upgrade kubectl"
+assert_log "kubectl is not installed"
+assert_exit 1 "${LOADER} --upgrade no-such-script-e2e"
+assert_exit 0 "${LOADER} --upgrade"
+assert_log "Upgraded: jq yq"
+assert_output "ls ${HOME} | grep -c e2e-commands-ran || true" "0"
+
+step "load: --upgrade says what failed, and fails"
+fixture broken-e2e <<'PROBE'
+#!/usr/bin/env bash
+# broken-e2e.sh: a script that installed once, and fails since
+case "${1-}" in
+  --manifest) printf 'BIN_FILES=\nFOLDERS=\nSHELLRC_FILE=$HOME/.shellscript/shellrc/broken-e2e-init.sh\n' ;;
+  *) [[ ! -e "${SHELLSCRIPT_SHELLRC}/broken-e2e-init.sh" ]] || exit 1
+     echo "# init" > "${SHELLSCRIPT_SHELLRC}/broken-e2e-init.sh" ;;
+esac
+PROBE
+load broken-e2e
+assert_exit 1 "${LOADER} --upgrade"
+assert_log "Upgraded: jq yq"
+assert_log "Failed: broken-e2e"
+
+step "load: purge forgets the arguments"
+load remove -- jq --purge
+assert_missing "${saved}/jq.args"
+load remove -- yq --purge
+rm -f "${SHELLSCRIPT_HOME}"/shellrc/*-e2e-init.sh
+
 step "load: --completion"
 rm -f "${SHELLSCRIPT_HOME}/shellrc/01-load-completion.sh"
 assert_exit 0 "${LOADER} --completion"

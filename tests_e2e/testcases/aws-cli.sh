@@ -17,9 +17,12 @@ assert_output "aws --version" "aws-cli/2."
 assert_exists "${SHELLSCRIPT_HOME}/bin/aws_completer"
 assert_output ". /usr/share/bash-completion/bash_completion; . '${shellrc}'; complete -p aws" "aws_completer"
 
-step "aws-cli: install again changes nothing"
+step "aws-cli: install again downloads nothing, --force does"
 load aws-cli
-assert_output "cat '$LOG_FILE'" "Skipping install"
+assert_log "is already installed. Skipping download"
+load aws-cli -- --force
+assert_log "Downloading"
+assert_output "aws --version" "aws-cli/2."
 
 step "aws-cli: install an older version (--version 2.31.0)"
 load aws-cli -- --version 2.31.0

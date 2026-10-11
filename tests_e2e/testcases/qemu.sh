@@ -34,6 +34,10 @@ assert_command "qemu-system-$(uname -m)"
 assert_exists "${SHELLSCRIPT_HOME}/bin/qemu-vm"
 assert_exists "${tool_home}/installed-packages.conf"
 
+step "qemu: is not upgraded by installing it again: its arguments are commands"
+assert_exit 1 "${LOADER} --upgrade qemu"
+assert_log "cannot be upgraded this way"
+
 step "qemu: install again changes nothing"
 load qemu
 if grep -q "Installing missing packages" "$LOG_FILE"; then fail "installed packages again"; else pass "no package installed again"; fi

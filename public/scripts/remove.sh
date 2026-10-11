@@ -173,6 +173,8 @@ fi
 
 # Remove folders (only with --purge)
 if [[ "$PURGE" == "1" ]]; then
+  # What 'load.sh --upgrade' would install it again with
+  run "rm -f \"$BASE_DIR/downloads/${SCRIPT_NAME}.args\""
   if [[ -n "$FOLDERS" ]]; then
     for folder in $FOLDERS; do
       if [[ -d "$folder" ]] || [[ "$DRY_RUN" == "1" ]]; then
