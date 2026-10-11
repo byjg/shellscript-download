@@ -502,7 +502,9 @@ tests_e2e/run.sh --changed main          # the tests of what the branch changed 
 
 A pull request runs that last one by itself (`.github/workflows/e2e.yml`): the test of each
 script it changes, the tests of the scripts that use a `lib/` file it changes, and
-`all-scripts`.
+`all-scripts`. A change to `tests_e2e/shared/lib.sh` selects the tests that use the
+function or the variable that changed; a change to `tests_e2e/run.sh` alone, `all-scripts`
+as a smoke test.
 
 A test is short when a shared test of `tests_e2e/shared/lib.sh` fits the script:
 

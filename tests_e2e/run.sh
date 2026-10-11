@@ -14,7 +14,10 @@
 #   public/scripts/lib/<file>.sh   the tests of the scripts that use that file
 #   public/install/*               the test of the loader
 #   tests_e2e/testcases/<name>.sh  that test
-#   tests_e2e/run.sh, shared/*     every test
+#   tests_e2e/shared/lib.sh        the tests that use what changed in it: a function, a
+#                                  variable, or what calls them
+#   tests_e2e/shared/container.sh  every test: each one runs in what it prepares
+#   tests_e2e/run.sh               all-scripts alone, as a smoke test of the runner
 # and adds all-scripts, which checks what every script must do. With nothing of that
 # changed, there is nothing to run.
 #
@@ -49,9 +52,78 @@ changed=""
 list_only=""
 tests=()
 
+SHARED_LIB="${TESTS_DIR}/shared/lib.sh"
+
+# changed_shared_symbols <range>: the functions and variables of shared/lib.sh that the
+# range changed, one per line, or '*' for a change that is in none of them. A comment or
+# an empty line outside a function changes nothing.
+changed_shared_symbols() {
+  local lines end="${1##*..}"
+  # "@@ -a,b +c,d @@": d lines changed from line c of the new file (d is 1 when left
+  # out, and 0 for lines that were only taken out, just after line c)
+  lines="$(git -C "${TESTS_DIR}/.." diff -U0 "$1" -- tests_e2e/shared/lib.sh \
+    | sed -n 's/^@@ -[0-9,]* +\([0-9]*\),\{0,1\}\([0-9]*\) @@.*/\1 \2/p' \
+    | while read -r start count; do
+        count="${count:-1}"
+        if [[ "$count" == "0" ]]; then echo "$start"; else seq "$start" "$((start + count - 1))"; fi
+      done | tr '\n' ' ')"
+  [[ -n "$lines" ]] || return 0
+  # The line numbers are the ones of the file at the end of the range, which may not be
+  # the one of the working tree (the merge that a pull request is tested on)
+  git -C "${TESTS_DIR}/.." show "${end:-HEAD}:tests_e2e/shared/lib.sh" | awk -v lines=" ${lines}" '
+    function changed(symbol) { if (index(lines, " " NR " ")) print symbol }
+    /^[a-z_][a-z_0-9]*\(\) *\{/ {
+      name = $0; sub(/\(\).*/, "", name); changed(name)
+      # A function written on one line closes on it
+      inside = ($0 ~ /\}[ \t]*$/) ? "" : name
+      next
+    }
+    inside != "" { changed(inside); if ($0 ~ /^\}/) inside = ""; next }
+    /^[ \t]*(#|$)/ { next }
+    /^[A-Z_][A-Z_0-9]*=/ { name = $0; sub(/=.*/, "", name); changed(name); next }
+    { changed("*") }
+  ' | sort -u
+}
+
+# shared_function_body <name>: the lines of a function of shared/lib.sh
+shared_function_body() {
+  awk -v name="$1" '
+    index($0, name "() {") == 1 { inside = 1 }
+    inside { print; if ($0 ~ /^\}/ || $0 ~ /\}[ \t]*$/ && index($0, name "() {") == 1) exit }
+  ' "$SHARED_LIB"
+}
+
+# tests_using_shared <range>: the tests that use what the range changed in shared/lib.sh.
+# A function that calls a changed one has changed too, and so on.
+tests_using_shared() {
+  local symbols symbol function file grown=yes
+  symbols="$(changed_shared_symbols "$1")"
+  [[ -n "$symbols" ]] || return 0
+  if grep -qx '\*' <<<"$symbols"; then
+    for file in "${TESTS_DIR}"/testcases/*.sh; do basename "$file" .sh; done
+    return 0
+  fi
+  while [[ -n "$grown" ]]; do
+    grown=""
+    for function in $(sed -n 's/^\([a-z_][a-z_0-9]*\)() *{.*/\1/p' "$SHARED_LIB"); do
+      grep -qx "$function" <<<"$symbols" && continue
+      for symbol in $symbols; do
+        if shared_function_body "$function" | sed 1d | grep -qw -- "$symbol"; then
+          symbols+=$'\n'"$function"; grown=yes; break
+        fi
+      done
+    done
+  done
+  for file in "${TESTS_DIR}"/testcases/*.sh; do
+    for symbol in $symbols; do
+      if grep -qw -- "$symbol" "$file"; then basename "$file" .sh; break; fi
+    done
+  done
+}
+
 # tests_for_changes <ref or range>: prints the tests of what changed, one per line
 tests_for_changes() {
-  local range="$1" file name user all="" names=""
+  local range="$1" file name user names="" all=""
   [[ "$range" == *..* ]] || range="${range}...HEAD"
   while IFS= read -r file; do
     case "$file" in
@@ -63,7 +135,9 @@ tests_for_changes() {
       public/scripts/*.sh)       names+=" $(basename "$file" .sh)" ;;
       public/install/*)          names+=" load" ;;
       tests_e2e/testcases/*.sh)  names+=" $(basename "$file" .sh)" ;;
-      tests_e2e/*)               all=yes ;;
+      tests_e2e/shared/lib.sh)   names+=" $(tests_using_shared "$range" | tr '\n' ' ')" ;;
+      tests_e2e/shared/*)        all=yes ;;
+      tests_e2e/run.sh)          names+=" all-scripts" ;;
     esac
   done < <(git -C "${TESTS_DIR}/.." diff --name-only "$range")
 
@@ -71,7 +145,7 @@ tests_for_changes() {
     for file in "${TESTS_DIR}"/testcases/*.sh; do basename "$file" .sh; done
     return 0
   fi
-  [[ -n "$names" ]] || return 0
+  [[ -n "${names// /}" ]] || return 0
   # Only what has a test: a script that was deleted has none
   for name in $names all-scripts; do
     if [[ -f "${TESTS_DIR}/testcases/${name}.sh" ]]; then echo "$name"; fi
@@ -83,7 +157,7 @@ while [[ $# -gt 0 ]]; do
     --verbose) verbose=1 ;;
     --changed) changed="${2:?--changed requires a git ref or a range}"; shift ;;
     --list) list_only=1 ;;
-    -h|--help) sed -n '2,33p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,36p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) tests+=("$1") ;;
   esac
   shift
