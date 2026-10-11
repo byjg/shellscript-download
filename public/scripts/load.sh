@@ -437,7 +437,8 @@ final_url() {
     # Location header (GNU Wget, BusyBox), or as "HTTP response 200 [<url>]" (Wget2)
     local answers location
     answers="$(wget -S --spider "$1" 2>&1)" || true
-    location="$(printf '%s\n' "$answers" | sed -n 's/^ *[Ll]ocation: *//p' | tail -n 1 | tr -d '\r')"
+    # GNU Wget also reports each redirect as "Location: <url> [following]"
+    location="$(printf '%s\n' "$answers" | sed -n 's/^ *[Ll]ocation: *//p' | tail -n 1 | tr -d '\r' | sed 's/ \[following\]$//')"
     [[ -n "$location" ]] || location="$(printf '%s\n' "$answers" | sed -n 's/^HTTP response [0-9]* *\[\(.*\)\]$/\1/p' | tail -n 1)"
     printf '%s\n' "${location:-$1}"
   fi

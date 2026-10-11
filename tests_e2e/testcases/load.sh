@@ -91,6 +91,9 @@ assert_exists "${SHELLSCRIPT_HOME}/downloads/jq.sh"
 assert_exists "${SHELLSCRIPT_HOME}/downloads/lib/binary-install.sh"
 assert_no_output "${LOADER} --dont-run jq" "Fetching"
 assert_output "${LOADER} --update --dont-run jq" "Fetching"
+# Back to the working copy: the steps that follow test it, not what is published
+cp "${SCRIPTS_DIR}/jq.sh" "${SHELLSCRIPT_HOME}/downloads/jq.sh"
+cp "${SCRIPTS_DIR}/lib/binary-install.sh" "${SHELLSCRIPT_HOME}/downloads/lib/binary-install.sh"
 
 step "load: a script that is not published"
 assert_exit 3 "${LOADER} --dont-run no-such-script-e2e"
@@ -109,6 +112,8 @@ assert_exit 0 "${LOADER} latest-probe 2>/dev/null"
 assert_log "final=https://github.com/jqlang/jq/releases/tag/jq-"
 assert_log "same=https://shellscript.download/list.json"
 assert_log "tag=jq-"
+# The tag and nothing else: what follows it would end up in the version
+assert_output "grep -Ec '^tag=jq-[0-9.]+\$' '$LOG_FILE'" "1"
 assert_log "no-release"
 # An unknown token would make the API refuse: the lookup does not go through it
 assert_output "GITHUB_TOKEN=e2e-not-a-token ${LOADER} latest-probe 2>/dev/null" "tag=jq-"
@@ -145,6 +150,8 @@ assert_exit 0 "${LOADER} latest-probe 2>/dev/null"
 assert_log "final=https://github.com/jqlang/jq/releases/tag/jq-"
 assert_log "same=https://shellscript.download/list.json"
 assert_log "tag=jq-"
+# The tag and nothing else: what follows it would end up in the version
+assert_output "grep -Ec '^tag=jq-[0-9.]+\$' '$LOG_FILE'" "1"
 assert_log "no-release"
 assert_output "${LOADER} token-fetch -- https://shellscript.download/list.json 2>/dev/null" "fetched"
 assert_output "GITHUB_TOKEN=e2e-not-a-token ${LOADER} token-fetch -- https://shellscript.download/list.json 2>/dev/null" "fetched"
@@ -152,6 +159,8 @@ code=0
 GITHUB_TOKEN=e2e-not-a-token $LOADER token-fetch -- https://api.github.com/rate_limit >"$LOG_FILE" 2>&1 || code=$?
 if [[ "$code" != "0" ]]; then pass "the API refuses an unknown token sent by wget (exit ${code})"; else fail "wget did not send the token"; fi
 assert_output "${LOADER} --update --dont-run yq" "Fetching"
+cp "${SCRIPTS_DIR}/yq.sh" "${SHELLSCRIPT_HOME}/downloads/yq.sh"
+cp "${SCRIPTS_DIR}/lib/binary-install.sh" "${SHELLSCRIPT_HOME}/downloads/lib/binary-install.sh"
 load jq
 assert_output "jq --version" "jq-"
 load remove -- jq --purge
