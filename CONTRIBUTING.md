@@ -272,6 +272,9 @@ its own. `tests_e2e/run.sh <name>` runs it in a fresh container of each standard
 nothing installed on your machine: see
 [Run the end-to-end tests](docs/development.md#run-the-end-to-end-tests).
 
+A pull request runs, by itself, the test of each script it changes, and `all-scripts`.
+`tests_e2e/run.sh --changed main` runs the same tests on your machine.
+
 ### Checklist before opening a PR
 
 - [ ] File is executable: `chmod +x` and `git update-index --chmod=+x`

@@ -91,6 +91,9 @@ assert_exists "${SHELLSCRIPT_HOME}/downloads/jq.sh"
 assert_exists "${SHELLSCRIPT_HOME}/downloads/lib/binary-install.sh"
 assert_no_output "${LOADER} --dont-run jq" "Fetching"
 assert_output "${LOADER} --update --dont-run jq" "Fetching"
+# Back to the working copy: the steps that follow test it, not what is published
+cp "${SCRIPTS_DIR}/jq.sh" "${SHELLSCRIPT_HOME}/downloads/jq.sh"
+cp "${SCRIPTS_DIR}/lib/binary-install.sh" "${SHELLSCRIPT_HOME}/downloads/lib/binary-install.sh"
 
 step "load: a script that is not published"
 assert_exit 3 "${LOADER} --dont-run no-such-script-e2e"
@@ -109,6 +112,8 @@ assert_exit 0 "${LOADER} latest-probe 2>/dev/null"
 assert_log "final=https://github.com/jqlang/jq/releases/tag/jq-"
 assert_log "same=https://shellscript.download/list.json"
 assert_log "tag=jq-"
+# The tag and nothing else: what follows it would end up in the version
+assert_output "grep -Ec '^tag=jq-[0-9.]+\$' '$LOG_FILE'" "1"
 assert_log "no-release"
 # An unknown token would make the API refuse: the lookup does not go through it
 assert_output "GITHUB_TOKEN=e2e-not-a-token ${LOADER} latest-probe 2>/dev/null" "tag=jq-"
@@ -145,6 +150,8 @@ assert_exit 0 "${LOADER} latest-probe 2>/dev/null"
 assert_log "final=https://github.com/jqlang/jq/releases/tag/jq-"
 assert_log "same=https://shellscript.download/list.json"
 assert_log "tag=jq-"
+# The tag and nothing else: what follows it would end up in the version
+assert_output "grep -Ec '^tag=jq-[0-9.]+\$' '$LOG_FILE'" "1"
 assert_log "no-release"
 assert_output "${LOADER} token-fetch -- https://shellscript.download/list.json 2>/dev/null" "fetched"
 assert_output "GITHUB_TOKEN=e2e-not-a-token ${LOADER} token-fetch -- https://shellscript.download/list.json 2>/dev/null" "fetched"
@@ -152,6 +159,8 @@ code=0
 GITHUB_TOKEN=e2e-not-a-token $LOADER token-fetch -- https://api.github.com/rate_limit >"$LOG_FILE" 2>&1 || code=$?
 if [[ "$code" != "0" ]]; then pass "the API refuses an unknown token sent by wget (exit ${code})"; else fail "wget did not send the token"; fi
 assert_output "${LOADER} --update --dont-run yq" "Fetching"
+cp "${SCRIPTS_DIR}/yq.sh" "${SHELLSCRIPT_HOME}/downloads/yq.sh"
+cp "${SCRIPTS_DIR}/lib/binary-install.sh" "${SHELLSCRIPT_HOME}/downloads/lib/binary-install.sh"
 load jq
 assert_output "jq --version" "jq-"
 load remove -- jq --purge
@@ -183,6 +192,16 @@ assert_output "${LOADER} --installed 2>/dev/null | grep '^ssh-agent-e2e ' | awk 
 assert_no_output "${LOADER} --installed 2>/dev/null" "yq"
 assert_output "${LOADER} --installed 2>/dev/null | grep -c ." "4"
 
+step "load: listing does not run a script that has no manifest"
+fixture no-manifest-e2e <<'PROBE'
+#!/usr/bin/env bash
+# no-manifest-e2e.sh: a script that takes any option as a reason to run
+touch "$HOME/e2e-listing-ran-a-script"
+PROBE
+assert_exit 0 "${LOADER} --installed"
+assert_exit 0 "${LOADER} --list"
+assert_missing "${HOME}/e2e-listing-ran-a-script"
+
 step "load: what was removed is not listed, even with its folder kept"
 load remove -- jq
 assert_exists "${SHELLSCRIPT_HOME}/jq"
@@ -207,5 +226,55 @@ step "load: --completion"
 rm -f "${SHELLSCRIPT_HOME}/shellrc/01-load-completion.sh"
 assert_exit 0 "${LOADER} --completion"
 assert_exists "${SHELLSCRIPT_HOME}/shellrc/01-load-completion.sh"
+
+# The last step: it downloads what is published, and after it this machine no longer has
+# the working copy of the loader and of the scripts
+step "load: --update alone updates the loader, its completion and the scripts, and runs nothing"
+installed="${SHELLSCRIPT_HOME}/bin/load.sh"
+cached="${SHELLSCRIPT_HOME}/downloads"
+working_copy="/tmp/e2e-load.sh"
+cp "$installed" "$working_copy"
+echo "# stale-e2e" >> "$installed"
+echo "# stale-e2e" >> "${cached}/jq.sh"
+echo "# stale-e2e" >> "${cached}/lib/binary-install.sh"
+rm -f "${SHELLSCRIPT_HOME}/shellrc/01-load-completion.sh"
+fixture only-here-e2e <<'PROBE'
+#!/usr/bin/env bash
+touch "$HOME/e2e-update-ran-a-script"
+PROBE
+# The installed loader replaces itself while it runs
+assert_exit 0 "${LOADER} --update 2>/dev/null"
+cp "$LOG_FILE" /tmp/e2e-update.log
+assert_output "grep '^load.sh ' /tmp/e2e-update.log" "updated"
+assert_output "grep '^completion ' /tmp/e2e-update.log" "updated"
+assert_output "grep '^jq.sh ' /tmp/e2e-update.log" "updated"
+assert_output "grep '^only-here-e2e.sh ' /tmp/e2e-update.log" "could not be downloaded, kept as it is"
+assert_no_output "cat '${installed}' '${cached}/jq.sh' '${cached}/lib/binary-install.sh'" "stale-e2e"
+assert_output "head -c 2 '${installed}'; test -x '${installed}' && echo ' executable'" "#! executable"
+assert_exists "${SHELLSCRIPT_HOME}/shellrc/01-load-completion.sh"
+assert_exists "${cached}/only-here-e2e.sh"
+assert_missing "${SHELLSCRIPT_HOME}/bin/jq"
+assert_missing "${HOME}/e2e-update-ran-a-script"
+
+step "load: --update again finds everything up to date"
+assert_exit 0 "bash ${working_copy} --update 2>/dev/null"
+cp "$LOG_FILE" /tmp/e2e-update.log
+assert_output "grep '^load.sh ' /tmp/e2e-update.log" "up to date"
+assert_output "grep '^completion ' /tmp/e2e-update.log" "up to date"
+assert_output "grep '^jq.sh ' /tmp/e2e-update.log" "up to date"
+assert_no_output "grep -v 'only-here-e2e' /tmp/e2e-update.log" "updated"
+
+step "load: a download that fails leaves what was there"
+echo "# kept-on-failure-e2e" >> "$installed"
+assert_exit 0 "https_proxy=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 bash ${working_copy} --update 2>/dev/null"
+cp "$LOG_FILE" /tmp/e2e-update.log
+assert_output "grep '^load.sh ' /tmp/e2e-update.log" "could not be downloaded, kept as it is"
+assert_output "grep '^jq.sh ' /tmp/e2e-update.log" "could not be downloaded, kept as it is"
+assert_output "cat '${installed}'" "kept-on-failure-e2e"
+assert_missing "${SHELLSCRIPT_HOME}/bin/.tmp.load.sh"
+
+step "load: --update alone is refused with --developer"
+assert_exit 2 "bash ${working_copy} --developer ${SCRIPTS_DIR} --update"
+assert_log "not with --developer"
 
 finish

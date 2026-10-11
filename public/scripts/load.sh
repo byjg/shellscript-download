@@ -5,21 +5,10 @@
 # Cache location used by this script:
 #   $HOME/.shellscript/downloads/<script>.sh
 #
-# Usage:
-#   load.sh [--update] [--dont-run] <script> [optional args...]
+# Usage and options: load.sh --help
 #
-# Options:
-#   --update           Force re-download/update of the script even if it exists locally
-#   --dont-run         Do not execute the script after ensuring it is downloaded
-#   --developer <path> Use a local directory instead of downloading (for development)
-#   -h, --help         Show this help message
-#
-# Arguments:
-#   <script>      The script name (without .sh) to fetch from shellscript.download
-#   [args...]     Optional arguments to pass through to the downloaded script
-#
-# To update the loader to a new version, reinstall it via the installer:
-#   /bin/bash -c "$(curl -fsSL https://shellscript.download/install/loader)"
+# To update the loader, its completion and the scripts this machine has downloaded:
+#   load.sh --update
 #
 # Notes about environment setup:
 #   The installer (install/loader) may create and manage additional directories such as
@@ -54,7 +43,8 @@ print_usage() {
 load.sh [--update] [--dont-run] [--list] [--installed] [--completion] [--developer <path>] <script> [optional args...]
 
 Options:
-  --update           Force re-download/update of the script even if it exists locally
+  --update           Update the loader and the local cached copies of the scripts.
+                     With a script: update only that script, then run it
   --dont-run         Do not execute the script after ensuring it is downloaded
   --list             List all available scripts from shellscript.download, with the
                      version of the ones installed on this machine
@@ -158,6 +148,9 @@ installed_state() {
   local name="$1" dir="${DEVELOPER_PATH:-$HOME/.shellscript/downloads}"
   local manifest bins shellrc folders hook item found="" version=""
   [[ -f "${dir}/${name}.sh" ]] || return 0
+  # Asking for the manifest runs the script: one that does not know --manifest would do
+  # what it does by default, which is to install
+  grep -q -- '--manifest' "${dir}/${name}.sh" || return 0
   manifest="$("$LOADER_SELF" ${DEVELOPER_PATH:+--developer "$DEVELOPER_PATH"} "$name" -- --manifest 2>/dev/null)" || return 0
   [[ "$manifest" == *"FOLDERS="* ]] || return 0
 
@@ -238,17 +231,39 @@ list_installed() {
   [[ -n "$any" ]] || echo "Nothing installed with load.sh on this machine." >&2
 }
 
+# replace_file <url> <dest>: downloads to a temporary file and moves it into place, so
+# that a download that fails leaves what was there, and a file in use (this loader) is
+# replaced in one step. Prints "updated" or "up to date"; returns 1 when it could not.
+replace_file() {
+  local url="$1" dest="$2" tmp
+  tmp="$(dirname "$dest")/.tmp.$(basename "$dest")"
+  mkdir -p "$(dirname "$dest")"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$url" -o "$tmp" 2>/dev/null || { rm -f "$tmp"; return 1; }
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO "$tmp" "$url" 2>/dev/null || { rm -f "$tmp"; return 1; }
+  else
+    echo "Error: Neither curl nor wget is installed." >&2
+    exit 3
+  fi
+  # What the site answers for a file it does not have is a page, not a script
+  if [[ "$(head -c 2 "$tmp")" != "#!" ]]; then rm -f "$tmp"; return 1; fi
+  # cksum, not cmp: a minimal system has no diffutils
+  if [[ -f "$dest" && "$(cksum < "$tmp")" == "$(cksum < "$dest")" ]]; then
+    rm -f "$tmp"
+    echo "up to date"
+  else
+    mv "$tmp" "$dest"
+    echo "updated"
+  fi
+}
+
 install_completion() {
   local dest="$HOME/.shellscript/shellrc/01-load-completion.sh"
   local url="https://shellscript.download/install/load-completion.sh"
-  mkdir -p "$(dirname "$dest")"
   echo "Downloading bash completion from ${url}" >&2
-  if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "${url}" -o "${dest}"
-  elif command -v wget >/dev/null 2>&1; then
-    wget -qO "${dest}" "${url}"
-  else
-    echo "Error: Neither curl nor wget is installed." >&2
+  if ! replace_file "$url" "$dest" >/dev/null; then
+    echo "Error: Failed to download ${url}" >&2
     exit 3
   fi
   echo "Installed: ${dest}"
@@ -261,6 +276,52 @@ fi
 
 if [[ "${INSTALLED}" == true ]]; then
   list_installed
+  exit 0
+fi
+
+# 'load.sh --update' without a script: the loader, its completion and every script this
+# machine has downloaded, with the files they share. Nothing is run: a tool is brought to
+# a newer version by running its script, which this does not do.
+update_all() {
+  local base="https://shellscript.download" home="$HOME/.shellscript"
+  local loader="${home}/bin/load.sh" file name before state
+  local format="%-22s %s\n"
+
+  # shellcheck disable=SC2059  # the format is a constant
+  if state="$(replace_file "${base}/scripts/load.sh" "$loader")"; then
+    chmod +x "$loader"
+    printf "$format" "load.sh" "$state"
+  else
+    printf "$format" "load.sh" "could not be downloaded, kept as it is"
+  fi
+  if state="$(replace_file "${base}/install/load-completion.sh" "${home}/shellrc/01-load-completion.sh")"; then
+    printf "$format" "completion" "$state"
+  else
+    printf "$format" "completion" "could not be downloaded, kept as it is"
+  fi
+
+  # Each script goes through the loader just updated, which also calls its post-load
+  # hook: that is what downloads the file it shares with other scripts
+  for file in "${home}/downloads"/*.sh; do
+    [[ -f "$file" ]] || continue
+    name="$(basename "$file" .sh)"
+    before="$(cksum < "$file")"
+    if "$loader" --update --dont-run "$name" >/dev/null 2>&1; then
+      if [[ "$(cksum < "$file")" == "$before" ]]; then state="up to date"; else state="updated"; fi
+    else
+      # A script that left the catalog, or a download that failed: the same answer
+      state="could not be downloaded, kept as it is"
+    fi
+    printf "$format" "${name}.sh" "$state"
+  done
+}
+
+if [[ "${UPDATE}" == true && -z "${SCRIPT_NAME}" ]]; then
+  if [[ -n "${DEVELOPER_PATH}" ]]; then
+    echo "Error: --update without a script downloads what is published: not with --developer." >&2
+    exit 2
+  fi
+  update_all
   exit 0
 fi
 
@@ -376,7 +437,8 @@ final_url() {
     # Location header (GNU Wget, BusyBox), or as "HTTP response 200 [<url>]" (Wget2)
     local answers location
     answers="$(wget -S --spider "$1" 2>&1)" || true
-    location="$(printf '%s\n' "$answers" | sed -n 's/^ *[Ll]ocation: *//p' | tail -n 1 | tr -d '\r')"
+    # GNU Wget also reports each redirect as "Location: <url> [following]"
+    location="$(printf '%s\n' "$answers" | sed -n 's/^ *[Ll]ocation: *//p' | tail -n 1 | tr -d '\r' | sed 's/ \[following\]$//')"
     [[ -n "$location" ]] || location="$(printf '%s\n' "$answers" | sed -n 's/^HTTP response [0-9]* *\[\(.*\)\]$/\1/p' | tail -n 1)"
     printf '%s\n' "${location:-$1}"
   fi

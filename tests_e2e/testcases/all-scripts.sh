@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# all-scripts.sh: what every script of the catalog must do: --help, --manifest, refuse an
-# option it does not know, and change nothing with --dry-run
+# all-scripts.sh: what every script of the catalog must have and do: a test of its own,
+# --help, --manifest, refuse an option it does not know, and change nothing with --dry-run
 source "$(dirname "${BASH_SOURCE[0]}")/../shared/lib.sh"
 
 # The loader and 'remove' install nothing. byjg-gluo needs its arguments first.
@@ -15,6 +15,12 @@ if sys_install unzip; then pass "installed unzip"; else fail "could not install 
 for file in "${SCRIPTS_DIR}"/*.sh; do
   name="$(basename "$file" .sh)"
   step "${name}"
+
+  if [[ -f "${TESTCASES_DIR}/${name}.sh" ]]; then
+    pass "has a test: tests_e2e/testcases/${name}.sh"
+  else
+    fail "has no test: write tests_e2e/testcases/${name}.sh"
+  fi
 
   assert_exit 0 "${LOADER} ${name} -- --help"
   assert_log "$name"

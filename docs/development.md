@@ -80,7 +80,12 @@ tests_e2e/run.sh maven                  # one test, on every image
 tests_e2e/run.sh --image alpine maven   # on one image
 tests_e2e/run.sh --verbose maven        # also show the output of every load.sh
 tests_e2e/run.sh                        # every test: about 40 minutes
+tests_e2e/run.sh --changed main         # the tests of what your branch changed since main
 ```
+
+A pull request runs that last one by itself: for each script of `public/scripts` it changes,
+the test of that script, and `all-scripts`, which checks what every script must do
+(`.github/workflows/e2e.yml`).
 
 A new script comes with its test. `tests_e2e/shared/lib.sh` has the assertions and the tests
 that scripts of the same kind share, so that most tests are a few lines: see

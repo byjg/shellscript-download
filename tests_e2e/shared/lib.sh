@@ -8,6 +8,7 @@
 set -euo pipefail
 
 SCRIPTS_DIR="/repo/scripts"
+TESTCASES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../testcases" && pwd)"
 SHELLSCRIPT_HOME="${HOME}/.shellscript"
 export PATH="${SHELLSCRIPT_HOME}/bin:${PATH}"
 
