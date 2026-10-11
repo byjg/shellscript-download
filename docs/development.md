@@ -66,12 +66,37 @@ bash -n public/scripts/<name>.sh     # syntax
 npm run build                        # regenerates the script pages, docs/scripts and completion
 ```
 
-Then test the script in a clean environment.
+Then run its test.
 
-## Test in a clean environment
+## Run the end-to-end tests
 
-Test scripts in a clean, non-root Linux before submitting them. The simplest is a Docker
-container with the working tree mounted:
+Every script has a test in `tests_e2e/testcases/`. `tests_e2e/run.sh` runs each one in a fresh
+Docker container of each standard image (Ubuntu, Fedora, Alpine), as a regular user, on a
+machine where the loader is installed from your working copy. The tests call
+`load.sh <script> -- <options>`, as a user does, and nothing is installed on your machine.
+
+```bash
+tests_e2e/run.sh maven                  # one test, on every image
+tests_e2e/run.sh --image alpine maven   # on one image
+tests_e2e/run.sh --verbose maven        # also show the output of every load.sh
+tests_e2e/run.sh                        # every test: about 40 minutes
+```
+
+A new script comes with its test. `tests_e2e/shared/lib.sh` has the assertions and the tests
+that scripts of the same kind share, so that most tests are a few lines: see
+`tests_e2e/testcases/jq.sh`.
+
+The scripts look up the latest version of some tools in the GitHub API, which answers 60
+requests an hour to who does not identify itself. If a run is refused, give it a token:
+
+```bash
+GITHUB_TOKEN=$(gh auth token) tests_e2e/run.sh
+```
+
+## Test by hand in a clean environment
+
+To try a script by hand, use a clean, non-root Linux. The simplest is a Docker container with
+the working tree mounted:
 
 ```bash
 docker run -it --rm \

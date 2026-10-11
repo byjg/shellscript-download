@@ -189,7 +189,7 @@ WRAP
 
 `load.sh --developer ./public/scripts <name>` runs your working copy instead of downloading it,
 with the same helpers a published script gets. How to use it, how to test a change to `load.sh`
-itself, and how to test in a clean container are in
+itself, and how to run the end-to-end tests are in
 [Testing scripts before publishing](docs/development.md), which is also published with the
 documentation.
 
@@ -265,10 +265,12 @@ The website is a static Vite build (`npm run build` writes `dist/`), hosted on C
 
 ---
 
-## Testing in a clean environment
+## Testing
 
-Test scripts in a clean, non-root Linux environment before submitting: see
-[Test in a clean environment](docs/development.md#test-in-a-clean-environment).
+Every script has an end-to-end test in `tests_e2e/testcases/`, and a new script comes with
+its own. `tests_e2e/run.sh <name>` runs it in a fresh container of each standard image, with
+nothing installed on your machine: see
+[Run the end-to-end tests](docs/development.md#run-the-end-to-end-tests).
 
 ### Checklist before opening a PR
 
@@ -278,8 +280,8 @@ Test scripts in a clean, non-root Linux environment before submitting: see
 - [ ] `--manifest` output is correct (verified with `load.sh remove -- --dry-run <name>`)
 - [ ] `--dry-run` prints all actions without side-effects
 - [ ] Paths use `$SHELLSCRIPT_*` variables, not hardcoded `$HOME/.shellscript/…`
-- [ ] No `log`, `err`, `run`, or `require_cmd` defined locally (they are injected)
-- [ ] Tested in a clean Docker container
+- [ ] No injected helper (`log`, `err`, `run`, `require_cmd`, `fetch`, `download`, ...) defined locally
+- [ ] `tests_e2e/testcases/<name>.sh` exists and passes: `tests_e2e/run.sh <name> all-scripts`
 - [ ] `npm run build` completes without errors
 - [ ] Generated files (`src/pages/scripts/`, `src/generated/`, `docs/scripts/`) are included in the commit
 

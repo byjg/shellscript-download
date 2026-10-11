@@ -485,22 +485,68 @@ bash public/scripts/load.sh --developer ./public/scripts <name> -- --manifest
 npm run build
 ```
 
-Then run it for real, in a throwaway container and never on the user's machine. `load.sh`
-refuses to run as root, so create a user (with passwordless sudo when the script needs it):
+## Write its test
+
+Every script has an end-to-end test, `tests_e2e/testcases/<name>.sh`. `tests_e2e/run.sh`
+runs it in a fresh container of each standard image (Ubuntu, Fedora, Alpine), as a regular
+user, on a machine where the loader is installed from the working copy. The test calls
+`load.sh <script> -- <options>`, as a user does. Nothing runs on the machine of the user.
 
 ```bash
-docker run --rm -v "$PWD/public/scripts:/repo:ro" ubuntu:24.04 bash -c '
-  apt-get update -qq && apt-get install -y -qq curl ca-certificates sudo >/dev/null
-  useradd -m tester && echo "tester ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/tester
-  su tester -c "bash /repo/load.sh --developer /repo <name> && \$HOME/.shellscript/bin/<cmd> --version"'
+tests_e2e/run.sh <name>                  # this test, on every image
+tests_e2e/run.sh --image alpine <name>   # on one image
+tests_e2e/run.sh --verbose <name>        # also show the output of every load.sh
+tests_e2e/run.sh                         # every test: about 40 minutes
 ```
 
-Check what applies: the tool runs, a rerun changes nothing, `--version` switches, a wrong
-version stops without damage, and the removal takes out what was installed and nothing
-else. `load.sh remove` reads the script from `~/.shellscript/downloads`, so copy the script
-and `lib/` there before testing it in `--developer` mode. A script that installs packages
-is tested on each package manager it claims (`fedora`, `alpine` images). Say what was not
-tested.
+A test is short when a shared test of `tests_e2e/shared/lib.sh` fits the script:
+
+| Script | Shared test | Example |
+|---|---|---|
+| Single binary | `test_single_binary <name> <older version> "<version command>" [check]` | `testcases/jq.sh` |
+| System package | `test_system_package <name> <command> [check]` | `testcases/buildah.sh` |
+| Java vendor | `test_java_vendor <vendor>` | `testcases/java-temurin.sh` |
+| Needs Java to run | `test_java_build_tool ...` | `testcases/maven.sh` |
+| Docker-backed wrapper | `test_docker_wrapper ...` | `testcases/php-docker.sh` |
+
+`[check]` is a function of the test that proves the tool really works (it processes a
+sample, builds something), not only that it prints its version. This is the whole of
+`testcases/jq.sh`:
+
+```bash
+#!/usr/bin/env bash
+# jq.sh: the latest jq by default, one older version, remove and purge
+source "$(dirname "${BASH_SOURCE[0]}")/../shared/lib.sh"
+
+jq_works() {
+  assert_output "echo '{\"a\":[1,2]}' | jq -c '.a | add'" "3"
+}
+
+test_single_binary jq 1.7.1 "jq --version" jq_works
+
+finish
+```
+
+When no shared test fits, write the steps with the helpers of `lib.sh` (`step`, `load`,
+`load_fails`, `assert_output`, `assert_exit`, `assert_log`, `assert_exists`,
+`assert_missing`, `assert_command`, `assert_removed`): see `testcases/aws-cli.sh`. The
+sequence is always: install with the defaults, install one other version when there is
+one, prove the tool works, `load remove -- <name>`, `load remove -- <name> --purge`, and
+check what is left after each.
+
+Two header lines change where a test runs:
+
+- `# images: ubuntu fedora`, when the tool does not apply to every image (a binary built
+  for glibc does not run on Alpine).
+- `# privileged: yes`, when the test runs containers or a VM inside its own. `need_docker`
+  then gives it a working Docker.
+
+A test that fails on one image has found something: a tool that behaves differently there
+(BusyBox, Wget2), or a bug of the script. Fix the script, or say why the image is left
+out. Do not weaken the check.
+
+`all-scripts` checks every script, the new one included, without anything to write:
+`--help`, `--manifest`, an unknown option refused, and `--dry-run` changing nothing.
 
 If `npm run build` fails, check:
 - The second line of the script must be `# <name>.sh: description text`
@@ -516,7 +562,8 @@ If `npm run build` fails, check:
 - [ ] No `log`, `err`, `run`, `require_cmd`, `fetch`, `download` or `require_script` defined locally
 - [ ] Nothing copied from another script: shared code is in `public/scripts/lib/`
 - [ ] Wrappers hold the absolute path, not `$HOME`
-- [ ] A real install was run in a container, and what was not tested is stated
+- [ ] `tests_e2e/testcases/<name>.sh` exists and passes: `tests_e2e/run.sh <name> all-scripts`
+- [ ] What the test does not cover is stated
 - [ ] No direct `curl`/`wget` calls — uses injected `fetch`/`download` helpers
 - [ ] File is executable in git (`git update-index --chmod=+x`)
 - [ ] `npm run build` completes without errors
@@ -526,11 +573,11 @@ If `npm run build` fails, check:
 ## Commit
 
 Work on a branch, never on `main`, and show the diff before committing. Stage the script,
-any `lib/` file it touched and the generated files together:
+its test, any `lib/` file it touched and the generated files together:
 
 ```bash
-git add public/scripts/<name>.sh public/scripts/lib src/pages/scripts/<name>.tsx \
-  src/generated/scriptRoutes.tsx src/components/List.tsx docs/scripts \
-  public/install/load-completion.sh
+git add public/scripts/<name>.sh tests_e2e/testcases/<name>.sh public/scripts/lib \
+  src/pages/scripts/<name>.tsx src/generated/scriptRoutes.tsx src/components/List.tsx \
+  docs/scripts public/install/load-completion.sh
 git commit -m "Add <name>.sh: <one-line description>"
 ```
