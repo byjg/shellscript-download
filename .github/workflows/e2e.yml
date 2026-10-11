@@ -1,16 +1,20 @@
-name: End-to-end tests
+name: Build and test
 
-# Runs the tests of what a pull request changed: for a script of public/scripts, its own
-# test and all-scripts, which checks what every script must do. tests_e2e/run.sh decides
-# (--changed), so that the same choice can be made on a developer's machine.
+# One workflow for a pull request:
+#   1. Check Build Artifacts: 'npm run build' leaves nothing to commit
+#   2. the end-to-end tests of what the pull request changed, once the build is right: for
+#      a script of public/scripts, its own test and all-scripts, which checks what every
+#      script must do. tests_e2e/run.sh decides (--changed), so that the same choice can
+#      be made on a developer's machine.
+# On main, the build is checked again and the documentation is published.
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
-    paths:
-      - 'public/scripts/**'
-      - 'public/install/**'
-      - 'tests_e2e/**'
-      - '.github/workflows/e2e.yml'
+    branches:
+      - '**'
   workflow_dispatch:
     inputs:
       tests:
@@ -18,17 +22,56 @@ on:
         required: false
         default: ''
 
-permissions:
-  contents: read
-
 concurrency:
-  group: e2e-${{ github.ref }}
-  cancel-in-progress: true
+  group: build-and-test-${{ github.ref }}
+  # A new push to a pull request replaces its run; a run on main is left to finish
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  check-build-artifacts:
+    name: Check Build Artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run build
+        run: npm run build
+
+      - name: Check for uncommitted changes
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "❌ Error: Build created uncommitted changes!"
+            echo ""
+            echo "The following files were modified by the build:"
+            git status --porcelain
+            echo ""
+            echo "Please run 'npm run build' locally and commit the generated files."
+            exit 1
+          else
+            echo "✅ Success: No uncommitted changes after build"
+          fi
+
   select:
     name: Select the tests
+    needs: check-build-artifacts
+    # The tests of a change ran on its pull request: not again when it reaches main
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       tests: ${{ steps.select.outputs.tests }}
     steps:
@@ -61,6 +104,8 @@ jobs:
     needs: select
     if: needs.select.outputs.tests != '[]'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -76,26 +121,32 @@ jobs:
           # an address that does not identify itself, and a runner shares its address
           GITHUB_TOKEN: ${{ github.token }}
           TEST: ${{ matrix.test }}
-        run: |
-          # Once more when it fails: the tests download from the internet, and a name
-          # that did not resolve is not a bug of the script
-          tests_e2e/run.sh "$TEST" || {
-            echo "::warning::${TEST} failed, running it once more"
-            tests_e2e/run.sh "$TEST"
-          }
+        run: tests_e2e/run.sh "$TEST"
 
   # One check to require in the branch protection, whatever tests were selected
   result:
     name: End-to-end tests
-    needs: [select, test]
+    needs: [check-build-artifacts, select, test]
     if: always()
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
-      - name: Check the result of the tests
+      - name: Check the result of the build and of the tests
         env:
+          BUILD: ${{ needs.check-build-artifacts.result }}
           SELECT: ${{ needs.select.result }}
           TEST: ${{ needs.test.result }}
         run: |
-          echo "select: ${SELECT}, tests: ${TEST}"
-          [[ "$SELECT" == "success" ]]
+          echo "build: ${BUILD}, select: ${SELECT}, tests: ${TEST}"
+          [[ "$BUILD" == "success" ]]
+          [[ "$SELECT" == "success" || "$SELECT" == "skipped" ]]
           [[ "$TEST" == "success" || "$TEST" == "skipped" ]]
+
+  Documentation:
+    if: github.ref == 'refs/heads/main'
+    needs: check-build-artifacts
+    uses: byjg/byjg.github.io/.github/workflows/add-doc.yaml@master
+    with:
+      folder: devops
+      project: ${{ github.event.repository.name }}
+    secrets: inherit
