@@ -145,6 +145,19 @@ when it runs breaks for another user or another HOME, which is how CI systems ru
 
 **DO NOT add tool-specific code to `load.sh`.**
 
+**Installing again is how a tool is upgraded.** `load.sh --upgrade` runs each installed
+script again with the arguments it was last installed with, which the loader keeps. So a
+script that runs a second time must:
+- install the newer version when there is one, and keep a version it was given;
+- skip the download when nothing is newer, say so, and take `--force` to install anyway.
+  `lib/binary-install.sh` does it. A script that only knows the version by downloading
+  (an archive named "latest") uses the helpers of the loader, as `aws-cli.sh` does:
+  `already_installed "$URL" "$STAMP_FILE"` before the download, and
+  `record_installed "$URL" "$STAMP_FILE"` after the install, each behind
+  `declare -F <helper> >/dev/null`, since a loader older than them does not have them;
+- add `UPGRADE=no` to its manifest when installing it again is not an upgrade: its
+  arguments are commands (`qemu.sh`), or it installs nothing on the machine (`byjg-gluo.sh`).
+
 ## Shared code: `public/scripts/lib/` and the post-load hook
 
 Code used by more than one script lives in `public/scripts/lib/` (not listed on the site).
@@ -565,6 +578,7 @@ If `npm run build` fails, check:
 - [ ] `-h/--help`, `--dry-run`, `--manifest` all work
 - [ ] `--manifest` lists exactly what gets installed (for `remove.sh` compatibility)
 - [ ] `--dry-run` prints all actions without side effects
+- [ ] Run a second time, it skips what is already there (or has `UPGRADE=no` in its manifest)
 - [ ] Paths use `$SHELLSCRIPT_*` variables, not hardcoded `$HOME/.shellscript/…`
 - [ ] No `log`, `err`, `run`, `require_cmd`, `fetch`, `download` or `require_script` defined locally
 - [ ] Nothing copied from another script: shared code is in `public/scripts/lib/`

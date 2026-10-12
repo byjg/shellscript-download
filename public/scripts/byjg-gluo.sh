@@ -217,6 +217,13 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Without a folder, the manifest of the script itself: it installs nothing on this
+# machine, and a project is not something 'load.sh --upgrade' can install again
+if [[ $SHOW_MANIFEST -eq 1 && -z "${FOLDER}" ]]; then
+  printf 'BIN_FILES=\nFOLDERS=\nSHELLRC_FILE=\nUPGRADE=no\n'
+  exit 0
+fi
+
 # Validate required arguments
 if [[ -z "${FOLDER}" ]]; then
   err "<folder> is required."

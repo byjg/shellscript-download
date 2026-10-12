@@ -14,6 +14,7 @@ $HOME/.shellscript/bin. Nothing needs root. Run it again to update.
 Options:
   -h, --help           Show this help and exit
   --version <version>  Version to install (default: latest), e.g. 2.31.0
+  --force              Re-download even if already installed
   --dry-run            Print actions without executing them
   --manifest           Print installation manifest and exit
 
@@ -35,11 +36,13 @@ MANIFEST
 # Parse flags
 DRY_RUN=0
 AWS_VERSION=""
+FORCE=0
 while [[ ${1-} ]]; do
   case "$1" in
     -h|--help) print_usage; exit 0 ;;
     --manifest) print_manifest; exit 0 ;;
     --dry-run) DRY_RUN=1 ;;
+    --force) FORCE=1 ;;
     --version)
       shift || { err "--version requires a value"; exit 2; }
       AWS_VERSION="$1"
@@ -63,6 +66,17 @@ esac
 AWS_HOME="${SHELLSCRIPT_HOME}/aws-cli"
 SHELLRC_FILE="${SHELLSCRIPT_SHELLRC}/aws-cli-init.sh"
 DOWNLOAD_URL="https://awscli.amazonaws.com/awscli-exe-linux-${AWS_ARCH}${AWS_VERSION:+-${AWS_VERSION}}.zip"
+STAMP_FILE="${AWS_HOME}/installed-stamp"
+
+# The version of the latest is inside the archive: what tells that there is a newer one
+# is that the archive changed. A loader older than already_installed does not have it,
+# and downloads every time.
+if [[ "$FORCE" != "1" && -x "${SHELLSCRIPT_BIN}/aws" ]] \
+    && declare -F already_installed >/dev/null && already_installed "$DOWNLOAD_URL" "$STAMP_FILE"; then
+  log "The AWS CLI ${AWS_VERSION:-(latest)} is already installed. Skipping download (use --force to re-download)."
+  exit 0
+fi
+
 TEMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
@@ -77,6 +91,10 @@ run "download \"${DOWNLOAD_URL}\" \"${TEMP_DIR}/awscli.zip\"" || {
 run "unzip -q \"${TEMP_DIR}/awscli.zip\" -d \"${TEMP_DIR}\""
 run "mkdir -p \"${SHELLSCRIPT_BIN}\""
 run "\"${TEMP_DIR}/aws/install\" --install-dir \"${AWS_HOME}\" --bin-dir \"${SHELLSCRIPT_BIN}\" --update"
+
+if [[ "$DRY_RUN" != "1" ]] && declare -F record_installed >/dev/null; then
+  record_installed "$DOWNLOAD_URL" "$STAMP_FILE"
+fi
 
 # Write shell init snippet: command completion
 run "mkdir -p \"${SHELLSCRIPT_SHELLRC}\""

@@ -21,6 +21,7 @@ Downloads and installs Apache Ant binary distribution.
 Options:
   -h, --help           Show this help and exit
   --version <version>  Ant version to install (default: latest)
+  --force              Re-download even if already installed
   --dry-run            Print actions without executing them
   --manifest           Print installation manifest and exit
 

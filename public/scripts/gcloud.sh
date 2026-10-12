@@ -14,6 +14,7 @@ Nothing needs root. Run it again to replace it with the latest version.
 Options:
   -h, --help           Show this help and exit
   --version <version>  Version to install (default: latest), e.g. 540.0.0
+  --force              Re-download even if already installed
   --dry-run            Print actions without executing them
   --manifest           Print installation manifest and exit
 
@@ -35,11 +36,13 @@ MANIFEST
 # Parse flags
 DRY_RUN=0
 GCLOUD_VERSION=""
+FORCE=0
 while [[ ${1-} ]]; do
   case "$1" in
     -h|--help) print_usage; exit 0 ;;
     --manifest) print_manifest; exit 0 ;;
     --dry-run) DRY_RUN=1 ;;
+    --force) FORCE=1 ;;
     --version)
       shift || { err "--version requires a value"; exit 2; }
       GCLOUD_VERSION="$1"
@@ -63,6 +66,17 @@ esac
 GCLOUD_HOME="${SHELLSCRIPT_HOME}/gcloud"
 SHELLRC_FILE="${SHELLSCRIPT_SHELLRC}/gcloud-init.sh"
 DOWNLOAD_URL="https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-${GCLOUD_VERSION:+${GCLOUD_VERSION}-}linux-${GCLOUD_ARCH}.tar.gz"
+STAMP_FILE="${GCLOUD_HOME}/installed-stamp"
+
+# The version of the latest is inside the archive: what tells that there is a newer one
+# is that the archive changed. A loader older than already_installed does not have it,
+# and downloads every time.
+if [[ "$FORCE" != "1" && -x "${GCLOUD_HOME}/google-cloud-sdk/bin/gcloud" ]] \
+    && declare -F already_installed >/dev/null && already_installed "$DOWNLOAD_URL" "$STAMP_FILE"; then
+  log "The Google Cloud CLI ${GCLOUD_VERSION:-(latest)} is already installed. Skipping download (use --force to re-download)."
+  exit 0
+fi
+
 TEMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
@@ -79,6 +93,10 @@ run "tar -xzf \"${TEMP_DIR}/gcloud.tar.gz\" -C \"${TEMP_DIR}\""
 run "mkdir -p \"${GCLOUD_HOME}\" \"${SHELLSCRIPT_BIN}\""
 run "rm -rf \"${GCLOUD_HOME}/google-cloud-sdk\""
 run "mv \"${TEMP_DIR}/google-cloud-sdk\" \"${GCLOUD_HOME}/google-cloud-sdk\""
+
+if [[ "$DRY_RUN" != "1" ]] && declare -F record_installed >/dev/null; then
+  record_installed "$DOWNLOAD_URL" "$STAMP_FILE"
+fi
 
 for cmd in gcloud gsutil bq; do
   if [[ "$DRY_RUN" == "1" ]]; then

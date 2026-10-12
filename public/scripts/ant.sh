@@ -13,6 +13,7 @@ Downloads and installs Apache Ant binary distribution.
 Options:
   -h, --help           Show this help and exit
   --version <version>  Ant version to install (default: latest)
+  --force              Re-download even if already installed
   --dry-run            Print actions without executing them
   --manifest           Print installation manifest and exit
 
@@ -34,12 +35,14 @@ MANIFEST
 # Parse flags
 DRY_RUN=0
 ANT_VERSION=""
+FORCE=0
 
 while [[ ${1-} ]]; do
   case "$1" in
     -h|--help) print_usage; exit 0 ;;
     --manifest) print_manifest; exit 0 ;;
     --dry-run) DRY_RUN=1 ;;
+    --force) FORCE=1 ;;
     --version)
       shift || { err "--version requires a value"; exit 2; }
       ANT_VERSION="$1"
@@ -68,6 +71,14 @@ BIN_DIR="${SHELLSCRIPT_BIN}"
 SHELLRC_DIR="${SHELLSCRIPT_SHELLRC}"
 ANT_ARCHIVE="apache-ant-${ANT_VERSION}-bin.tar.gz"
 DOWNLOAD_URL="https://archive.apache.org/dist/ant/binaries/${ANT_ARCHIVE}"
+STAMP_FILE="${ANT_HOME}/installed-stamp"
+
+# A loader older than already_installed does not have it: it installs every time
+if [[ "$FORCE" != "1" && -x "${ANT_HOME}/current/bin/ant" ]] \
+    && declare -F already_installed >/dev/null && already_installed "$DOWNLOAD_URL" "$STAMP_FILE"; then
+  log "Apache Ant ${ANT_VERSION} is already installed. Skipping download (use --force to re-download)."
+  exit 0
+fi
 TEMP_DIR=$(mktemp -d)
 
 cleanup() {
@@ -89,6 +100,10 @@ run "mkdir -p \"${ANT_HOME}\""
 run "tar -xzf \"${TEMP_DIR}/${ANT_ARCHIVE}\" -C \"${TEMP_DIR}\""
 run "rm -rf \"${ANT_HOME}/current\""
 run "mv \"${TEMP_DIR}/apache-ant-${ANT_VERSION}\" \"${ANT_HOME}/current\""
+
+if [[ "$DRY_RUN" != "1" ]] && declare -F record_installed >/dev/null; then
+  record_installed "$DOWNLOAD_URL" "$STAMP_FILE"
+fi
 
 # Create bin directory
 run "mkdir -p \"${BIN_DIR}\""

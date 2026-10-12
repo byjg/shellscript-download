@@ -23,6 +23,7 @@ Nothing needs root. Run it again to replace it with the latest version.
 Options:
   -h, --help           Show this help and exit
   --version <version>  Version to install (default: latest), e.g. 540.0.0
+  --force              Re-download even if already installed
   --dry-run            Print actions without executing them
   --manifest           Print installation manifest and exit
 

@@ -22,6 +22,8 @@ download "<url>" "<dest>"      # URL to file (curl, falls back to wget)
 require_downloader             # exit 1 unless curl or wget is available
 final_url "<url>"              # where a URL leads after its redirects, without downloading it
 github_latest_tag <owner/repo> # tag of the latest release, without the GitHub API and its quota
+already_installed "<url>" <file>  # true when what the URL serves is what record_installed wrote down
+record_installed "<url>" <file>   # after an install: remember what the URL served
 require_script <script> [cmd]  # run 'load.sh <script>' unless <cmd> (default: <script>) exists
 ```
 Never call `curl` or `wget` directly in scripts — use `fetch`/`download` so both tools work.
@@ -39,6 +41,16 @@ Each script defines only its own `print_usage() { cat <<'USAGE' ... USAGE }` (an
   See `jq.sh`.
 - A script that needs a tool another script installs calls `require_script <script>`. Loaders
   older than that helper do not have it: fall back to `require_cmd`. See `java-temurin.sh`.
+
+### Installing again is how a tool is upgraded
+`load.sh --upgrade` runs each installed script again, with the arguments it was last installed
+with (the loader keeps them). So a script, run again:
+- installs the newer version when there is one, and keeps a version it was given;
+- skips the download when nothing is newer, and says so (`--force` installs anyway). When the
+  version is only known by downloading, use `already_installed`/`record_installed`: see
+  `aws-cli.sh`;
+- says `UPGRADE=no` in its manifest when its arguments are commands and not what to install
+  (`qemu.sh`), or when it installs nothing on the machine (`byjg-gluo.sh`).
 
 ### 3. Standard Flags Support
 All scripts should support:

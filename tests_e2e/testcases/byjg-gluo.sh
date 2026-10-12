@@ -30,6 +30,13 @@ assert_log "Invalid --mysql-uri format"
 assert_exit 2 "${LOADER} byjg-gluo -- myproject ${required} --no-such-option"
 assert_exit 2 "${LOADER} byjg-gluo -- myproject another ${required}"
 
+step "byjg-gluo: installs nothing on the machine: nothing to remove, nothing to upgrade"
+assert_output "${LOADER} byjg-gluo -- --manifest 2>/dev/null" "UPGRADE=no"
+load remove -- byjg-gluo
+assert_log "Nothing to remove for byjg-gluo"
+assert_exit 1 "${LOADER} --upgrade byjg-gluo"
+assert_log "cannot be upgraded this way"
+
 step "byjg-gluo: the manifest names the folder of the project"
 assert_output "${LOADER} byjg-gluo -- myproject ${required} --manifest 2>/dev/null" "FOLDERS=${project}"
 

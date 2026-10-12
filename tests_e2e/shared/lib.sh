@@ -356,6 +356,13 @@ test_java_build_tool() {
   assert_exists "$shellrc"
   assert_output ". '${java_rc}'; ${version_cmd}" "$latest_text"
 
+  step "${name}: install again downloads nothing, --force does"
+  load "$name"
+  assert_log "is already installed. Skipping download"
+  load "$name" -- --force
+  assert_log "Downloading"
+  assert_output ". '${java_rc}'; ${version_cmd}" "$latest_text"
+
   step "${name}: install an older version (--version ${old_version})"
   load "$name" -- --version "$old_version"
   assert_output ". '${java_rc}'; ${version_cmd}" "$old_text"
