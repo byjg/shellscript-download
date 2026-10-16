@@ -12,8 +12,6 @@
 #   --version         Composer version constraint (default: ^7.0)
 #   --php-version     PHP version for Docker (8.3, 8.4, 8.5, 8.6, default: current PHP version)
 #   --timezone        Server timezone (default: UTC)
-#   --git-name        Git user name for the project (default: from git config or "Your Name")
-#   --git-email       Git user email for the project (default: from git config or "your.email@example.com")
 #   -h, --help        Show this help and exit
 #
 # Notes:
@@ -47,8 +45,6 @@ Optional Arguments:
   --version=<constraint>    Composer version constraint (default: ^7.0)
   --php-version=<version>   PHP version for Docker (8.3-8.6, default: current)
   --timezone=<tz>           Server timezone (default: UTC)
-  --git-name=<name>         Git user name (default: from git config)
-  --git-email=<email>       Git user email (default: from git config)
   --manifest                Print installation manifest and exit
   -h, --help                Show this help and exit
 
@@ -89,8 +85,6 @@ INSTALL_EXAMPLES="true"
 VERSION="^7.0"
 PHP_VERSION=""
 TIMEZONE="UTC"
-GIT_NAME=""
-GIT_EMAIL=""
 DB_SCHEMA="mysql"
 DB_HOST="mysql-container"
 DB_USER="root"
@@ -185,12 +179,9 @@ while [[ $# -gt 0 ]]; do
       TIMEZONE="${1#*=}"
       shift
       ;;
-    --git-name=*)
-      GIT_NAME="${1#*=}"
-      shift
-      ;;
-    --git-email=*)
-      GIT_EMAIL="${1#*=}"
+    --git-name=*|--git-email=*)
+      # Gluo 7 no longer creates a git repository: accepted so existing calls keep working
+      log "Ignoring ${1%%=*}: the project is created without a git repository"
       shift
       ;;
     --manifest)
@@ -284,15 +275,6 @@ fi
 # Check if composer is available
 require_cmd composer
 
-# Get git config defaults if not provided
-if [[ -z "${GIT_NAME}" ]]; then
-  GIT_NAME=$(git config --global user.name 2>/dev/null || echo "Your Name")
-fi
-
-if [[ -z "${GIT_EMAIL}" ]]; then
-  GIT_EMAIL=$(git config --global user.email 2>/dev/null || echo "your.email@example.com")
-fi
-
 # Get current PHP version if not provided
 if [[ -z "${PHP_VERSION}" ]]; then
   if command -v php >/dev/null 2>&1; then
@@ -330,8 +312,6 @@ log "Creating setup.json in parent directory: ${SETUP_JSON}"
 
 cat > "${SETUP_JSON}" <<EOF
 {
-  "git_user_name": "${GIT_NAME}",
-  "git_user_email": "${GIT_EMAIL}",
   "php_version": "${PHP_VERSION}",
   "namespace": "${NAMESPACE}",
   "composer_name": "${COMPOSER_NAME}",

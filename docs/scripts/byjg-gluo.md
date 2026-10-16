@@ -33,8 +33,6 @@ Optional Arguments:
   --version=<constraint>    Composer version constraint (default: ^7.0)
   --php-version=<version>   PHP version for Docker (8.3-8.6, default: current)
   --timezone=<tz>           Server timezone (default: UTC)
-  --git-name=<name>         Git user name (default: from git config)
-  --git-email=<email>       Git user email (default: from git config)
   --manifest                Print installation manifest and exit
   -h, --help                Show this help and exit
 

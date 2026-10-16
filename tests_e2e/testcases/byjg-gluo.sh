@@ -40,6 +40,9 @@ assert_log "cannot be upgraded this way"
 step "byjg-gluo: the manifest names the folder of the project"
 assert_output "${LOADER} byjg-gluo -- myproject ${required} --manifest 2>/dev/null" "FOLDERS=${project}"
 
+step "byjg-gluo: --git-name and --git-email are still accepted, and ignored"
+assert_output "${LOADER} byjg-gluo -- myproject ${required} --git-name=E2E --git-email=e2e@example.com --manifest 2>/dev/null" "FOLDERS=${project}"
+
 step "byjg-gluo: needs composer, and says so"
 assert_exit 1 "${LOADER} byjg-gluo -- myproject ${required}"
 assert_log "Required command 'composer' not found"
@@ -52,7 +55,7 @@ assert_output "composer --version" "Composer version"
 
 step "byjg-gluo: creates the project"
 load byjg-gluo -- myproject ${required} --install-examples=n --php-version=8.4 \
-  --mysql-uri=mysql://e2euser:e2epass@e2e-db/e2edb --git-name=E2E --git-email=e2e@example.com
+  --mysql-uri=mysql://e2euser:e2epass@e2e-db/e2edb
 assert_log "Project successfully created in: ${project}"
 assert_exists "${project}/composer.json"
 assert_exists "${project}/vendor/autoload.php"
@@ -61,6 +64,8 @@ assert_output "cat ${project}/composer.json" '"name": "e2e/app"'
 own_files="find ${project} -path ${project}/vendor -prune -o -type f -print"
 assert_output "${own_files} | xargs grep -l 'E2eApp' | sed -n 1p" "$project"
 assert_output "${own_files} | xargs grep -h 'e2e-db' | sed -n 1p" "e2e-db"
+# Gluo 7 does not create a git repository inside the project
+assert_missing "${project}/.git"
 
 step "byjg-gluo: the answers file does not stay behind"
 assert_missing "${workdir}/setup.json"
