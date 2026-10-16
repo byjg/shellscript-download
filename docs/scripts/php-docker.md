@@ -59,6 +59,12 @@ Options:
                         covers every installed version and the saved configuration,
                         which is what "load.sh remove -- php-docker" uses.
 
+Notes:
+  The wrappers mount only the current directory (and the --volume paths), so php and
+  composer do not see a file outside it: a SETUP_JSON or an absolute config path, or
+  a path repository. Run from a directory that contains it, or add its directory with
+  --volume (or to $HOME/.shellscript/php/volumes.conf).
+
 Examples:
   load.sh php-docker -- 8.3
   load.sh php-docker -- 7.4
