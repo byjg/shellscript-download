@@ -19,7 +19,7 @@ _load_sh_completion() {
     ant) mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --help --manifest --version -h" -- "$cur") ;;
     aws-cli) mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --help --manifest --version -h" -- "$cur") ;;
     buildah) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --manifest -h" -- "$cur") ;;
-    byjg-gluo) mapfile -t COMPREPLY < <(compgen -W "--git-email --git-name --help --install-examples --manifest --mysql-uri --name --namespace --php-version --timezone --version -h" -- "$cur") ;;
+    byjg-gluo) mapfile -t COMPREPLY < <(compgen -W "--help --install-examples --manifest --mysql-uri --name --namespace --php-version --timezone --version -h" -- "$cur") ;;
     byjg-repo) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --install --list --manifest -h" -- "$cur") ;;
     docker) mapfile -t COMPREPLY < <(compgen -W "--channel --dry-run --help --manifest --no-group -h" -- "$cur") ;;
     doctl) mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --help --manifest --version -h" -- "$cur") ;;
