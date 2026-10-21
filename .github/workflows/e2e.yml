@@ -6,7 +6,8 @@ name: Build and test
 #      a script of public/scripts, its own test and all-scripts, which checks what every
 #      script must do. tests_e2e/run.sh decides (--changed), so that the same choice can
 #      be made on a developer's machine.
-# On main, the build is checked again and the documentation is published.
+# On main, the build is checked again, the site is signed and deployed, and the
+# documentation is published.
 
 on:
   push:
@@ -141,6 +142,48 @@ jobs:
           [[ "$BUILD" == "success" ]]
           [[ "$SELECT" == "success" || "$SELECT" == "skipped" ]]
           [[ "$TEST" == "success" || "$TEST" == "skipped" ]]
+
+  # The site is deployed from here, and not by Cloudflare from git: the signatures that
+  # load.sh checks are made with a secret of this repository, in dist/, and never
+  # committed. Only main gets here: a pull request is not deployed.
+  deploy:
+    name: Deploy
+    needs: check-build-artifacts
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    concurrency:
+      group: deploy
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run build
+        run: npm run build
+
+      - name: Sign what the loader downloads
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: scripts/sign-dist.sh dist
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=loader-launch --branch=main
 
   Documentation:
     if: github.ref == 'refs/heads/main'
