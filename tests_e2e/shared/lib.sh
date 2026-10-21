@@ -119,6 +119,16 @@ sys_install() {
 # '# privileged: yes'.
 start_docker_daemon() {
   local i
+  # Docker on Fedora comes with legacy iptables, which needs the kernel module ip_tables.
+  # The kernel of a GitHub runner on Ubuntu 26.04 no longer has it: Docker gets the
+  # nftables one, as in the Ubuntu and Alpine containers.
+  if on_image fedora; then
+    if sys_install iptables-nft && sudo alternatives --set iptables /usr/bin/iptables-nft; then
+      pass "iptables uses nftables"
+    else
+      fail "could not switch iptables to nftables"
+    fi
+  fi
   sudo sh -c 'dockerd >/tmp/dockerd.log 2>&1 &'
   for i in $(seq 1 60); do
     if sudo docker info >/dev/null 2>&1; then pass "the Docker daemon is running"; return 0; fi
@@ -291,34 +301,35 @@ test_system_package() {
   assert_command "$cmd"
 }
 
-# test_java_vendor <vendor>
-# For the java-<vendor> installers of lib/java-install.sh: Java 21 by default, then
-# Java 25, the active Java and java-use, remove and purge.
+# test_java_vendor <vendor> [<default> <other>]
+# For the java-<vendor> installers of lib/java-install.sh: the Java installed by
+# default (21), then another one (25), the active Java and java-use, remove and purge.
 test_java_vendor() {
-  local vendor="$1" name="java-$1"
+  # The version installed by default, and another one (21 and 25 when left out)
+  local vendor="$1" name="java-$1" default="${2:-21}" other="${3:-25}"
   local vendor_home="${SHELLSCRIPT_HOME}/java-$1" java_home="${SHELLSCRIPT_HOME}/java"
   local shellrc="${SHELLSCRIPT_HOME}/shellrc/java-init.sh"
   local java="${java_home}/current/bin/java"
 
-  step "${name}: install with the defaults (Java 21)"
+  step "${name}: install with the defaults (Java ${default})"
   load "$name"
-  assert_exists "${vendor_home}/21/bin/java"
-  assert_output "${java} -version" 'version "21.'
-  assert_output ". '${shellrc}'; echo \$JAVA_HOME; java -version" 'version "21.'
+  assert_exists "${vendor_home}/${default}/bin/java"
+  assert_output "${java} -version" "version \"${default}."
+  assert_output ". '${shellrc}'; echo \$JAVA_HOME; java -version" "version \"${default}."
   assert_output ". '${shellrc}'; echo \$JAVA_HOME" "${java_home}/current"
 
   step "${name}: install again changes nothing"
   load "$name"
   assert_output "cat '$LOG_FILE'" "already installed"
 
-  step "${name}: install another version (--version 25), which becomes the active Java"
-  load "$name" -- --version 25
-  assert_output "${java} -version" 'version "25.'
-  assert_exists "${vendor_home}/21/bin/java"
+  step "${name}: install another version (--version ${other}), which becomes the active Java"
+  load "$name" -- --version "${other}"
+  assert_output "${java} -version" "version \"${other}."
+  assert_exists "${vendor_home}/${default}/bin/java"
 
   step "${name}: java-use picks another installed Java in one shell"
-  assert_output ". '${shellrc}'; java-use ${vendor} 21; java -version" 'version "21.'
-  assert_output "${java} -version" 'version "25.'
+  assert_output ". '${shellrc}'; java-use ${vendor} ${default}; java -version" "version \"${default}."
+  assert_output "${java} -version" "version \"${other}."
 
   step "${name}: a version that is not LTS asks first, and installs nothing on 'n'"
   assert_output "echo n | ${LOADER} ${name} -- --version 22" "Aborted."
@@ -327,10 +338,10 @@ test_java_vendor() {
   step "${name}: remove keeps the folders"
   load remove -- "$name"
   assert_missing "$shellrc"
-  assert_exists "${vendor_home}/21/bin/java"
+  assert_exists "${vendor_home}/${default}/bin/java"
 
   step "${name}: purge removes the versions and the active Java"
-  load "$name" -- --version 25
+  load "$name" -- --version "${other}"
   load remove -- "$name" --purge
   assert_purged "$vendor_home" "$java_home"
   assert_missing "$shellrc"
