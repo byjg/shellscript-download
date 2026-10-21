@@ -69,33 +69,20 @@ MANIFEST
 }
 
 # Help flag handling
-# Code shared with the other Docker-backed wrappers. load.sh calls postLoad once,
-# right after it downloads or updates this script; a loader older than that hook
-# never does, so the file is also fetched here when it is missing.
+# Code shared with the other Docker-backed wrappers.
+# load.sh downloads it with this script, from the name in the line below; a loader
+# older than that leaves it missing.
 SHARED_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/docker-wrapper.sh"
-
-postLoad() {
-  mkdir -p "$(dirname "$SHARED_LIB")"
-  # The signature is checked by download_signed, which a loader older than it does not have
-  local get=download_signed
-  declare -F download_signed >/dev/null || get=download
-  if ! "$get" "https://shellscript.download/scripts/lib/docker-wrapper.sh" "$SHARED_LIB"; then
-    echo "Error: could not download lib/docker-wrapper.sh, which this script needs" >&2
-    exit 3
-  fi
-}
-
-if [[ "${1-}" == "--post-load" ]]; then
-  postLoad
-  exit 0
-fi
 
 if [[ "${1-}" == "-h" || "${1-}" == "--help" ]]; then
   print_usage
   exit 0
 fi
 
-[[ -f "$SHARED_LIB" ]] || postLoad
+if [[ ! -f "$SHARED_LIB" ]]; then
+  echo "Error: lib/docker-wrapper.sh, which this script needs, is missing: run 'load.sh --update'" >&2
+  exit 3
+fi
 # shellcheck source=lib/docker-wrapper.sh
 source "$SHARED_LIB"
 

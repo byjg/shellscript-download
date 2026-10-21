@@ -120,9 +120,6 @@ done
   whenever "latest" is the latest release of the repository. Loaders older than it do
   not have it: `lib/binary-install.sh` falls back to the API by itself; a script that
   does not use that file does it as `maven.sh` does.
-- `download_signed "<url>" "<dest>"` — for a file of shellscript.download (a `lib/` file): saves
-  it only when `<url>.sig` is its signature by the key of `load.sh`. Loaders older than it do not
-  have it: fall back to `download`, as the `postLoad` block below does.
 - `require_script <script> [cmd]` — runs `load.sh <script>` unless `<cmd>` (default: the script
   name) is already available. For a tool another script of the catalog installs (e.g. jq).
   Loaders older than it do not have it: `if declare -F require_script >/dev/null; then
@@ -161,7 +158,7 @@ script that runs a second time must:
 - add `UPGRADE=no` to its manifest when installing it again is not an upgrade: its
   arguments are commands (`qemu.sh`), or it installs nothing on the machine (`byjg-gluo.sh`).
 
-## Shared code: `public/scripts/lib/` and the post-load hook
+## Shared code: `public/scripts/lib/`
 
 Code used by more than one script lives in `public/scripts/lib/` (not listed on the site).
 Before writing install logic, check whether one of these already does it:
@@ -174,37 +171,24 @@ Before writing install logic, check whether one of these already does it:
 | `lib/docker-wrapper.sh` | The `--add/--volume/--env/--postinstall` options of the Docker-backed wrappers |
 
 A script that uses one carries this block, right after `print_usage`/`print_manifest` and
-before it parses its flags (replace the file name in the three places):
+before it parses its flags (replace the file name in the four places):
 
 ```bash
-# Code shared with the other <kind of> scripts. load.sh calls postLoad once, right
-# after it downloads or updates this script; a loader older than that hook never
-# does, so the file is also fetched here when it is missing.
+# Code shared with the other <kind of> scripts.
+# load.sh downloads it with this script, from the name in the line below; a loader
+# older than that leaves it missing.
 SHARED_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/<file>.sh"
-
-postLoad() {
-  mkdir -p "$(dirname "$SHARED_LIB")"
-  # The signature is checked by download_signed, which a loader older than it does not have
-  local get=download_signed
-  declare -F download_signed >/dev/null || get=download
-  if ! "$get" "https://shellscript.download/scripts/lib/<file>.sh" "$SHARED_LIB"; then
-    echo "Error: could not download lib/<file>.sh, which this script needs" >&2
-    exit 3
-  fi
-}
-
-if [[ "${1-}" == "--post-load" ]]; then
-  postLoad
-  exit 0
+if [[ ! -f "$SHARED_LIB" ]]; then
+  echo "Error: lib/<file>.sh, which this script needs, is missing: run 'load.sh --update'" >&2
+  exit 3
 fi
-
-[[ -f "$SHARED_LIB" ]] || postLoad
 # shellcheck source=lib/<file>.sh
 source "$SHARED_LIB"
 ```
 
-`postLoad()` must start at the beginning of a line: that is how `load.sh` finds it. When a
-second script needs what one script has, move it to `lib/` instead of copying it.
+The `SHARED_LIB=` line must start at the beginning of a line and be written as above: that is
+how `load.sh` finds the file to download, and checks its signature. When a second script needs
+what one script has, move it to `lib/` instead of copying it.
 
 ## Installation patterns
 

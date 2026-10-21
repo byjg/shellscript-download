@@ -19,7 +19,6 @@ run "command"                  # honors --dry-run
 require_cmd <cmd>              # exit 1 if command missing
 fetch "<url>"                  # URL to stdout (curl, falls back to wget)
 download "<url>" "<dest>"      # URL to file (curl, falls back to wget)
-download_signed "<url>" "<dest>"  # a file of shellscript.download, only when <url>.sig is its signature
 require_downloader             # exit 1 unless curl or wget is available
 final_url "<url>"              # where a URL leads after its redirects, without downloading it
 github_latest_tag <owner/repo> # tag of the latest release, without the GitHub API and its quota
@@ -30,15 +29,13 @@ require_script <script> [cmd]  # run 'load.sh <script>' unless <cmd> (default: <
 Never call `curl` or `wget` directly in scripts — use `fetch`/`download` so both tools work.
 Each script defines only its own `print_usage() { cat <<'USAGE' ... USAGE }` (and `print_manifest`).
 
-### Shared code and the post-load hook
+### Shared code
 - Code used by more than one script lives in `public/scripts/lib/` (not listed on the site, since
   only files directly in `public/scripts/` are). Do NOT add tool-specific code to `load.sh`.
-- A script that needs such a file defines `postLoad()` at the start of a line and handles
-  `--post-load` by calling it. `load.sh` runs `<script> --post-load` once after downloading or
-  updating the script. The script must also call `postLoad` itself when the file is missing,
-  because loaders older than the hook never do. See `php-docker.sh`.
-- The file is downloaded with `download_signed`, which checks its signature; loaders older than
-  it do not have it: fall back to `download` (`declare -F download_signed`). See `jq.sh`.
+- A script that needs such a file names it in a line that starts with
+  `SHARED_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/<file>.sh"`. `load.sh` reads that
+  line and downloads the file, checking its signature, with the script and whenever it is
+  missing. The script only stops when the file is not there (a loader older than that). See `jq.sh`.
 - Everything published is signed by the deploy job (`scripts/sign-dist.sh`), never in the
   repository: a file that is not under `public/scripts/` or `public/install/` is not signed.
 - A tool released as one binary (or a .tar.gz that holds it) is installed through

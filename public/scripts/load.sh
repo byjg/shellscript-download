@@ -311,7 +311,6 @@ SpdK0SBa5HsCY74pr7cYhIDIcFzmWR9QFro2KTNDTUv9pR4bL9sp+Rk1G3T1XplnxnQiwwSMuSza
 DEeZYI79yGNVZsv0eSYObsZge9FfWLO/wZqGS30sr1dCMholrL0L5TnJ5IUUjodOOVTpL0BWLteq
 rIukeE0W62W5LFMMXCidKexY0wSET/J8SV1OhQucwA==
 "
-export SHELLSCRIPT_SIGNING_KEY
 # download_signed <url> <dest>: for a file of shellscript.download, which is published with
 # <url>.sig, its signature. The file goes to <dest> only when the signature is the one of
 # the key above: otherwise, or when a download fails, <dest> stays as it was.
@@ -339,7 +338,7 @@ download_signed() {
   rm -f "$tmp" "$tmp.sig" "$tmp.key"
   return "$status"
 }
-export -f log err run require_cmd github_auth_header fetch download download_signed require_downloader final_url remote_stamp already_installed record_installed github_latest_tag require_script
+export -f log err run require_cmd github_auth_header fetch download require_downloader final_url remote_stamp already_installed record_installed github_latest_tag require_script
 
 # installed_state <script>: prints the installed version of what a script installs, or
 # "yes" when it has no version to show, and nothing when it is not on this machine.
@@ -498,8 +497,8 @@ update_all() {
     printf "$format" "completion" "could not be downloaded, kept as it is"
   fi
 
-  # Each script goes through the loader just updated, which also calls its post-load
-  # hook: that is what downloads the file it shares with other scripts
+  # Each script goes through the loader just updated, which also downloads the file it
+  # shares with other scripts
   for file in "${home}/downloads"/*.sh; do
     [[ -f "$file" ]] || continue
     name="$(basename "$file" .sh)"
@@ -614,6 +613,13 @@ else
   }
 
   ensure_downloaded
+
+  # The file the script shares with other scripts (public/scripts/lib), named by its
+  # SHARED_LIB line: downloaded with the script, and again when it is missing
+  shared_lib="$(sed -n 's|^SHARED_LIB=.*/\(lib/[a-z0-9-]*\.sh\)"$|\1|p' "${DEST_PATH}")"
+  if [[ -n "${shared_lib}" && ( "${DOWNLOADED}" == true || ! -f "${DEST_DIR}/${shared_lib}" ) ]]; then
+    download_signed "https://shellscript.download/scripts/${shared_lib}" "${DEST_DIR}/${shared_lib}" || exit 3
+  fi
 fi
 
 # What the scripts install to ${SHELLSCRIPT_BIN} must be found by the ones that run next
@@ -622,17 +628,6 @@ case ":${PATH}:" in
   *) PATH="${SHELLSCRIPT_BIN}:${PATH}" ;;
 esac
 export PATH
-
-# Post-load hook: a script that defines postLoad() has it called once, right
-# after it was downloaded or updated, to fetch what it depends on (for example a
-# file it shares with other scripts). It is not called when the cached copy is
-# used, nor in --developer mode, where nothing is downloaded.
-if [[ "${DOWNLOADED}" == true ]] && grep -q '^postLoad()' "${DEST_PATH}"; then
-  if ! "${DEST_PATH}" --post-load; then
-    echo "Error: post-load step of ${SCRIPT_NAME}.sh failed" >&2
-    exit 3
-  fi
-fi
 
 if [[ "${DONT_RUN}" == true ]]; then
   echo "Script ensured at: ${DEST_PATH}" >&2
@@ -652,7 +647,7 @@ status=0
 if [[ "$status" == "0" && -z "${DEVELOPER_PATH}" && "${SCRIPT_NAME}" != "remove" ]]; then
   keep=yes
   for argument in ${ARGS[@]+"${ARGS[@]}"}; do
-    case "$argument" in -h|--help|--manifest|--dry-run|--post-load) keep="" ;; esac
+    case "$argument" in -h|--help|--manifest|--dry-run) keep="" ;; esac
   done
   if [[ -n "$keep" ]]; then
     printf '%s\n' ${ARGS[@]+"${ARGS[@]}"} > "$(saved_arguments_file "${SCRIPT_NAME}")"

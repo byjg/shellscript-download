@@ -31,28 +31,14 @@ UNINSTALL_CMD=uninstall
 MANIFEST
 }
 
-# Code shared with the other scripts that install distro packages. load.sh calls
-# postLoad once, right after it downloads or updates this script; a loader older than
-# that hook never does, so the file is also fetched here when it is missing.
+# Code shared with the other scripts that install distro packages.
+# load.sh downloads it with this script, from the name in the line below; a loader
+# older than that leaves it missing.
 SHARED_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/system-packages.sh"
-
-postLoad() {
-  mkdir -p "$(dirname "$SHARED_LIB")"
-  # The signature is checked by download_signed, which a loader older than it does not have
-  local get=download_signed
-  declare -F download_signed >/dev/null || get=download
-  if ! "$get" "https://shellscript.download/scripts/lib/system-packages.sh" "$SHARED_LIB"; then
-    echo "Error: could not download lib/system-packages.sh, which this script needs" >&2
-    exit 3
-  fi
-}
-
-if [[ "${1-}" == "--post-load" ]]; then
-  postLoad
-  exit 0
+if [[ ! -f "$SHARED_LIB" ]]; then
+  echo "Error: lib/system-packages.sh, which this script needs, is missing: run 'load.sh --update'" >&2
+  exit 3
 fi
-
-[[ -f "$SHARED_LIB" ]] || postLoad
 # shellcheck source=lib/system-packages.sh
 source "$SHARED_LIB"
 

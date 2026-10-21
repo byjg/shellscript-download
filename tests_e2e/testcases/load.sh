@@ -334,7 +334,7 @@ test_key="$(gpg --export | base64 | tr -d '\n')"
 to_site() { sed -e "s#https://shellscript.download#${url}#g" -e "s#https://opensource.byjg.com/byjg.gpg#${url}/byjg.gpg#g" "$1"; }
 sign() { gpg --batch --yes --quiet --detach-sign -o "$1.sig" "$1"; }
 mkdir -p "${site}/scripts/lib" "${site}/install"
-to_site "${SCRIPTS_DIR}/jq.sh" > "${site}/scripts/jq.sh"
+cp "${SCRIPTS_DIR}/jq.sh" "${site}/scripts/"
 cp "${SCRIPTS_DIR}/lib/binary-install.sh" "${site}/scripts/lib/"
 cp "${SCRIPTS_DIR}/yq.sh" "${site}/scripts/unsigned-e2e.sh"
 cp "${SCRIPTS_DIR}/yq.sh" "${site}/scripts/other-key-e2e.sh"
@@ -379,13 +379,20 @@ assert_exit 3 "${signed_loader} --dont-run other-key-e2e"
 assert_log "is not signed by the key of shellscript.download"
 assert_missing "${cached}/other-key-e2e.sh"
 
-# The file a script shares, which the script downloads itself
+# The file a script shares, which the loader downloads with it
 echo "# tampered-e2e" >> "${site}/scripts/lib/binary-install.sh"
 rm -f "${cached}/lib/binary-install.sh"
 assert_exit 3 "${signed_loader} --update --dont-run jq"
-assert_log "post-load step of jq.sh failed"
+assert_log "${url}/scripts/lib/binary-install.sh is not signed by the key of shellscript.download"
 assert_missing "${cached}/lib/binary-install.sh"
 sign "${site}/scripts/lib/binary-install.sh"
+# Missing, with the script in the cache: downloaded again
+assert_exit 0 "${signed_loader} --dont-run jq"
+assert_output "cmp '${site}/scripts/lib/binary-install.sh' '${cached}/lib/binary-install.sh' && echo same" "same"
+# The script says so when it runs without it, under a loader older than that
+rm -f "${cached}/lib/binary-install.sh"
+assert_exit 3 "bash ${cached}/jq.sh --help"
+assert_log "lib/binary-install.sh, which this script needs, is missing: run 'load.sh --update'"
 
 # The completion, as the loader replaces its own files
 echo "# tampered-e2e" >> "${site}/install/load-completion.sh"
