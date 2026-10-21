@@ -6,7 +6,8 @@ name: Build and test
 #      a script of public/scripts, its own test and all-scripts, which checks what every
 #      script must do. tests_e2e/run.sh decides (--changed), so that the same choice can
 #      be made on a developer's machine.
-# On main, the build is checked again, the site is signed and deployed, and the
+# On main, the same again, for what the merge brought (--changed before..after): only
+# when the build and those tests pass is the site signed and deployed. The
 # documentation is published.
 
 on:
@@ -68,8 +69,6 @@ jobs:
   select:
     name: Select the tests
     needs: check-build-artifacts
-    # The tests of a change ran on its pull request: not again when it reaches main
-    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -87,10 +86,15 @@ jobs:
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
           TESTS: ${{ github.event.inputs.tests }}
         run: |
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             names="$(tests_e2e/run.sh --changed "${BASE}...${HEAD}" --list)"
+          elif [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            # What the merge brought to main, tested again before it is deployed
+            names="$(tests_e2e/run.sh --changed "${BEFORE}..${AFTER}" --list)"
           elif [[ -n "$TESTS" ]]; then
             names="$(tests_e2e/run.sh --list $TESTS)"
           else
@@ -145,10 +149,11 @@ jobs:
 
   # The site is deployed from here, and not by Cloudflare from git: the signatures that
   # load.sh checks are made with a secret of this repository, in dist/, and never
-  # committed. Only main gets here: a pull request is not deployed.
+  # committed. Only main gets here: a pull request is not deployed. After the end-to-end
+  # tests: nothing is deployed when they failed.
   deploy:
     name: Deploy
-    needs: check-build-artifacts
+    needs: result
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
