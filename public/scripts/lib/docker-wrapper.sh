@@ -1,6 +1,6 @@
 # docker-wrapper.sh: code shared by the scripts that create Docker-backed wrappers
 # (php-docker, node-docker). It is not a script to run: they source it, after
-# their postLoad() downloaded it next to them.
+# load.sh downloaded it next to them.
 #
 # What is shared: the --add/--volume/--env/--postinstall/--no-postinstall/--skip
 # options, the files they are saved to, the steps that apply them to the image,

@@ -225,12 +225,19 @@ npm run preview  # production build preview
 
 ## Scripts that depend on another file
 
-A script that defines a `postLoad()` function has it called by the loader once, right after the
-script is downloaded or updated (`load.sh` runs `<script> --post-load`). It is the place to fetch
-what the script depends on, such as a file it shares with other scripts. `php-docker` and
-`node-docker` use it to download `lib/docker-wrapper.sh` next to themselves in
-`$HOME/.shellscript/downloads`. The hook is not called when the cached copy of the script is used,
-nor with `--developer`, where the shared file is read from the local folder.
+A script that uses a file it shares with other scripts (`public/scripts/lib/`) names it in its
+`SHARED_LIB` line:
+
+```bash
+SHARED_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/docker-wrapper.sh"
+```
+
+The loader reads that line and downloads the file next to the script, in
+`$HOME/.shellscript/downloads/lib`, with the script and whenever it is missing. It checks its
+signature like the one of the script: everything the loader downloads from shellscript.download is
+signed when the site is deployed (see [Deployment](#deployment)). With `--developer`, the file is
+read from the local folder. The script itself only stops, saying to run `load.sh --update`, when
+the file is not there: a loader older than that does not download it.
 
 ## Scripts that depend on another script
 

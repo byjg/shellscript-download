@@ -51,17 +51,18 @@ echo 'echo "the shared file of the developer folder" >&2' >> "${dev}/lib/binary-
 assert_output "${LOADER} --developer ${dev} jq -- --manifest" "the shared file of the developer folder"
 assert_no_output "${LOADER} jq -- --manifest" "the shared file of the developer folder"
 
-step "developer: the post-load hook is not called, nothing was downloaded"
-local_script hooked <<'PROBE'
+step "developer: a file the scripts share is not downloaded, not even when it is missing"
+local_script shares <<'PROBE'
 #!/usr/bin/env bash
-postLoad() {
-  touch "$HOME/e2e-developer-post-load"
-}
-if [[ "${1-}" == "--post-load" ]]; then postLoad; exit 0; fi
-echo "hooked ran"
+SHARED_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/binary-install.sh"
+[[ -f "$SHARED_LIB" ]] || { echo "lib is missing"; exit 3; }
+echo "shares ran"
 PROBE
-assert_output "${LOADER} --developer ${dev} hooked 2>/dev/null" "hooked ran"
-assert_missing "${HOME}/e2e-developer-post-load"
+mv "${dev}/lib/binary-install.sh" "${dev}/lib/binary-install.sh.e2e-off"
+assert_exit 3 "${LOADER} --developer ${dev} shares"
+assert_log "lib is missing"
+assert_missing "${dev}/lib/binary-install.sh"
+mv "${dev}/lib/binary-install.sh.e2e-off" "${dev}/lib/binary-install.sh"
 
 step "developer: what a script needs is installed from the folder too"
 rm -f "${SHELLSCRIPT_HOME}/bin/e2e-local-tool"

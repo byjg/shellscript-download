@@ -26,25 +26,14 @@ Examples:
 USAGE
 }
 
-# Code shared with the other single-binary installers. load.sh calls postLoad once,
-# right after it downloads or updates this script; a loader older than that hook
-# never does, so the file is also fetched here when it is missing.
+# Code shared with the other single-binary installers.
+# load.sh downloads it with this script, from the name in the line below; a loader
+# older than that leaves it missing.
 SHARED_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/binary-install.sh"
-
-postLoad() {
-  mkdir -p "$(dirname "$SHARED_LIB")"
-  if ! download "https://shellscript.download/scripts/lib/binary-install.sh" "$SHARED_LIB"; then
-    echo "Error: could not download lib/binary-install.sh, which this script needs" >&2
-    exit 3
-  fi
-}
-
-if [[ "${1-}" == "--post-load" ]]; then
-  postLoad
-  exit 0
+if [[ ! -f "$SHARED_LIB" ]]; then
+  echo "Error: lib/binary-install.sh, which this script needs, is missing: run 'load.sh --update'" >&2
+  exit 3
 fi
-
-[[ -f "$SHARED_LIB" ]] || postLoad
 # shellcheck source=lib/binary-install.sh
 source "$SHARED_LIB"
 

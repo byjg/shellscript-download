@@ -31,6 +31,11 @@ Arguments:
   <script>      The script name (without .sh) to fetch from shellscript.download
   [args...]     Optional arguments to pass through to the downloaded script
 
+Signatures:
+  What is downloaded from shellscript.download is used only when it is signed by the
+  key of opensource.byjg.com/byjg.gpg. Checking that needs gpgv (apt install gpgv,
+  dnf install gnupg2, apk add gpgv).
+
 Environment:
   GITHUB_TOKEN  Sent to the GitHub API, where the scripts look up the latest version of
                 a tool. Without it GitHub answers 60 requests an hour per address.

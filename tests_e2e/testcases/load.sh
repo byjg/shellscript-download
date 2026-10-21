@@ -82,6 +82,24 @@ assert_output "${LOADER} needs-jq 2>/dev/null" "jq-"
 assert_no_output "${LOADER} needs-jq" "is required"
 load remove -- jq --purge
 
+step "load: without gpgv, it downloads nothing"
+# Ubuntu has gpgv, as apt needs it; Fedora and Alpine images do not
+gpgv_path="$(command -v gpgv || true)"
+[[ -z "$gpgv_path" ]] || sudo mv "$gpgv_path" "${gpgv_path}.e2e-off"
+hash -r
+before="$(cksum < "${SHELLSCRIPT_HOME}/downloads/jq.sh")"
+assert_exit 3 "${LOADER} --update --dont-run jq"
+assert_log "gpgv is needed"
+assert_output "cksum < '${SHELLSCRIPT_HOME}/downloads/jq.sh'" "$before"
+if [[ -n "$gpgv_path" ]]; then
+  sudo mv "${gpgv_path}.e2e-off" "$gpgv_path"
+elif on_image fedora; then
+  sys_install gnupg2
+else
+  sys_install gpgv
+fi
+assert_command gpgv
+
 step "load: downloads a published script, with what it depends on"
 # Out of the cache, the loader has to fetch it, and the script the file it shares
 rm -f "${SHELLSCRIPT_HOME}/downloads/jq.sh" "${SHELLSCRIPT_HOME}/downloads/lib/binary-install.sh"
@@ -302,6 +320,108 @@ rm -f "${SHELLSCRIPT_HOME}/shellrc/01-load-completion.sh"
 assert_exit 0 "${LOADER} --completion"
 assert_exists "${SHELLSCRIPT_HOME}/shellrc/01-load-completion.sh"
 
+step "load: uses only what is signed by the key it has"
+# A site of the test: the working copy, signed by a key of the test, served from here.
+# The loader and the installer are the working copy too, with that site and that key.
+if on_image fedora; then sys_install gnupg2; else sys_install gnupg; fi
+sys_install python3
+site="$(mktemp -d)"
+url="http://127.0.0.1:8765"
+GNUPGHOME="$(mktemp -d)"
+export GNUPGHOME
+gpg --batch --quiet --passphrase '' --quick-gen-key "e2e <e2e@example.org>" ed25519 sign never 2>/dev/null
+test_key="$(gpg --export | base64 | tr -d '\n')"
+to_site() { sed -e "s#https://shellscript.download#${url}#g" -e "s#https://opensource.byjg.com/byjg.gpg#${url}/byjg.gpg#g" "$1"; }
+sign() { gpg --batch --yes --quiet --detach-sign -o "$1.sig" "$1"; }
+mkdir -p "${site}/scripts/lib" "${site}/install"
+cp "${SCRIPTS_DIR}/jq.sh" "${site}/scripts/"
+cp "${SCRIPTS_DIR}/lib/binary-install.sh" "${site}/scripts/lib/"
+cp "${SCRIPTS_DIR}/yq.sh" "${site}/scripts/unsigned-e2e.sh"
+cp "${SCRIPTS_DIR}/yq.sh" "${site}/scripts/other-key-e2e.sh"
+cp /repo/install/load-completion.sh "${site}/install/"
+to_site /repo/install/loader > "${site}/install/loader"
+# The key of the loader, in place of the one of shellscript.download
+to_site "${SCRIPTS_DIR}/load.sh" | awk -v key="$test_key" '
+  /^SHELLSCRIPT_SIGNING_KEY="$/ { print "SHELLSCRIPT_SIGNING_KEY=\"" key "\""; skip = 1; next }
+  skip && /^"$/ { skip = 0; next }
+  !skip' > "${site}/scripts/load.sh"
+gpg --export > "${site}/byjg.gpg"
+for file in "${site}"/scripts/jq.sh "${site}"/scripts/lib/*.sh "${site}"/scripts/load.sh "${site}"/install/*; do sign "$file"; done
+# Signed, by a key that is not the one of the loader
+GNUPGHOME="$(mktemp -d)" bash -c 'gpg --batch --quiet --passphrase "" --quick-gen-key "other <other@example.org>" ed25519 sign never 2>/dev/null
+  gpg --batch --quiet --detach-sign -o "$1.sig" "$1"' _ "${site}/scripts/other-key-e2e.sh"
+python3 -m http.server 8765 --bind 127.0.0.1 --directory "$site" >/dev/null 2>&1 &
+server=$!
+for _ in $(seq 50); do curl -fs "${url}/byjg.gpg" >/dev/null && break; sleep 0.2; done
+signed_loader="/tmp/e2e-signed-load.sh"
+cp "${site}/scripts/load.sh" "$signed_loader"
+chmod +x "$signed_loader"
+cached="${SHELLSCRIPT_HOME}/downloads"
+
+rm -f "${cached}/jq.sh" "${cached}/lib/binary-install.sh"
+assert_exit 0 "${signed_loader} --dont-run jq"
+assert_output "cmp '${site}/scripts/jq.sh' '${cached}/jq.sh' && echo same" "same"
+assert_output "cmp '${site}/scripts/lib/binary-install.sh' '${cached}/lib/binary-install.sh' && echo same" "same"
+assert_missing "${cached}/.jq.sh.download.sig"
+
+# Changed after it was signed: refused, and what was there stays
+echo "# tampered-e2e" >> "${site}/scripts/jq.sh"
+assert_exit 3 "${signed_loader} --update --dont-run jq"
+assert_log "is not signed by the key of shellscript.download"
+assert_no_output "cat '${cached}/jq.sh'" "tampered-e2e"
+assert_missing "${cached}/.jq.sh.download"
+sign "${site}/scripts/jq.sh"
+
+assert_exit 3 "${signed_loader} --dont-run unsigned-e2e"
+assert_log "Failed to download ${url}/scripts/unsigned-e2e.sh"
+assert_missing "${cached}/unsigned-e2e.sh"
+assert_exit 3 "${signed_loader} --dont-run other-key-e2e"
+assert_log "is not signed by the key of shellscript.download"
+assert_missing "${cached}/other-key-e2e.sh"
+
+# The file a script shares, which the loader downloads with it
+echo "# tampered-e2e" >> "${site}/scripts/lib/binary-install.sh"
+rm -f "${cached}/lib/binary-install.sh"
+assert_exit 3 "${signed_loader} --update --dont-run jq"
+assert_log "${url}/scripts/lib/binary-install.sh is not signed by the key of shellscript.download"
+assert_missing "${cached}/lib/binary-install.sh"
+sign "${site}/scripts/lib/binary-install.sh"
+# Missing, with the script in the cache: downloaded again
+assert_exit 0 "${signed_loader} --dont-run jq"
+assert_output "cmp '${site}/scripts/lib/binary-install.sh' '${cached}/lib/binary-install.sh' && echo same" "same"
+# The script says so when it runs without it, under a loader older than that
+rm -f "${cached}/lib/binary-install.sh"
+assert_exit 3 "bash ${cached}/jq.sh --help"
+assert_log "lib/binary-install.sh, which this script needs, is missing: run 'load.sh --update'"
+
+# The completion, as the loader replaces its own files
+echo "# tampered-e2e" >> "${site}/install/load-completion.sh"
+assert_exit 3 "${signed_loader} --completion"
+assert_no_output "cat '${SHELLSCRIPT_HOME}/shellrc/01-load-completion.sh'" "tampered-e2e"
+sign "${site}/install/load-completion.sh"
+assert_exit 0 "${signed_loader} --completion"
+
+# The installer, with the key of its site
+installed="${SHELLSCRIPT_HOME}/bin/load.sh"
+cp "$installed" /tmp/e2e-installed-load.sh
+echo "# tampered-e2e" >> "${site}/scripts/load.sh"
+assert_exit 3 "sh ${site}/install/loader"
+assert_log "is not signed by ${url}/byjg.gpg"
+assert_output "cmp '${installed}' /tmp/e2e-installed-load.sh && echo kept" "kept"
+sign "${site}/scripts/load.sh"
+assert_exit 0 "sh ${site}/install/loader"
+assert_output "cmp '${site}/scripts/load.sh' '${installed}' && echo installed" "installed"
+assert_missing "${installed}.new"
+assert_missing "${installed}.sig"
+
+kill "$server"
+unset GNUPGHOME
+cp /tmp/e2e-installed-load.sh "$installed"
+rm -f "${cached}/unsigned-e2e.sh" "${cached}/other-key-e2e.sh"
+cp "${SCRIPTS_DIR}/jq.sh" "${cached}/jq.sh"
+cp "${SCRIPTS_DIR}/lib/binary-install.sh" "${cached}/lib/binary-install.sh"
+cp /repo/install/load-completion.sh "${SHELLSCRIPT_HOME}/shellrc/01-load-completion.sh"
+
 # The last step: it downloads what is published, and after it this machine no longer has
 # the working copy of the loader and of the scripts
 step "load: --update alone updates the loader, its completion and the scripts, and runs nothing"
@@ -346,7 +466,7 @@ cp "$LOG_FILE" /tmp/e2e-update.log
 assert_output "grep '^load.sh ' /tmp/e2e-update.log" "could not be downloaded, kept as it is"
 assert_output "grep '^jq.sh ' /tmp/e2e-update.log" "could not be downloaded, kept as it is"
 assert_output "cat '${installed}'" "kept-on-failure-e2e"
-assert_missing "${SHELLSCRIPT_HOME}/bin/.tmp.load.sh"
+assert_missing "${SHELLSCRIPT_HOME}/bin/.load.sh.download"
 
 step "load: --update alone is refused with --developer"
 assert_exit 2 "bash ${working_copy} --developer ${SCRIPTS_DIR} --update"
