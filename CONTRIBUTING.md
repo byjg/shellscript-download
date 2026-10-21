@@ -262,7 +262,19 @@ The documentation is published on [opensource.byjg.com](https://opensource.byjg.
 ## Deployment
 
 The website is a static Vite build (`npm run build` writes `dist/`), hosted on Cloudflare Pages
-(`wrangler.toml`).
+(`wrangler.toml`). It is deployed by the `deploy` job of `.github/workflows/e2e.yml`, on every
+push to `main`, and not by Cloudflare from git:
+
+1. `npm run build`
+2. `scripts/sign-dist.sh dist` writes `<file>.sig` next to each script, `lib/` file, `install/loader`
+   and `install/load-completion.sh`: a detached GPG signature by the key that also signs the
+   [APT and RPM repositories](https://opensource.byjg.com/docs/opensource/guidelines/linux-packages),
+   checked against `https://opensource.byjg.com/byjg.gpg` before anything is deployed
+3. `wrangler pages deploy dist`
+
+The signatures are made in the job and exist only on the site, never in the repository. The
+secrets (`GPG_PRIVATE_KEY`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`) are declared in
+`inhouse/infra-automation` (`config.yml`), like the other secrets of the ByJG repositories.
 
 ---
 
