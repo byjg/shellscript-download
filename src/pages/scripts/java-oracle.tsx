@@ -18,7 +18,7 @@ export default function Script_java_oracle() {
         </header>
         <Link to="/" className="text-accent hover:text-accent/80 transition-colors">← Home</Link>
         <h1 className="text-foreground" style={{fontSize: "1.5rem", margin: "1rem 0"}}>java-oracle.sh</h1>
-        <InstallCommand command="load.sh java-oracle" spec={{"prefix":"load.sh java-oracle","dashes":true,"items":[{"kind":"option","name":"--version","value":"version","equals":false,"required":false,"description":"Java major version to install (default: 21)"},{"kind":"option","name":"--yes","value":null,"equals":false,"required":false,"description":"Skip confirmation for non-LTS versions"},{"kind":"option","name":"--force","value":null,"equals":false,"required":false,"description":"Re-download even if already installed"},{"kind":"option","name":"--dry-run","value":null,"equals":false,"required":false,"description":"Print actions without executing them"},{"kind":"option","name":"--manifest","value":null,"equals":false,"required":false,"description":"Print installation manifest and exit"}]}} />
+        <InstallCommand command="load.sh java-oracle" spec={{"prefix":"load.sh java-oracle","dashes":true,"items":[{"kind":"option","name":"--version","value":"version","equals":false,"required":false,"description":"Java major version to install (default: 25)"},{"kind":"option","name":"--yes","value":null,"equals":false,"required":false,"description":"Skip confirmation for non-LTS versions"},{"kind":"option","name":"--force","value":null,"equals":false,"required":false,"description":"Re-download even if already installed"},{"kind":"option","name":"--dry-run","value":null,"equals":false,"required":false,"description":"Print actions without executing them"},{"kind":"option","name":"--manifest","value":null,"equals":false,"required":false,"description":"Print installation manifest and exit"}]}} />
         <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem', marginTop: '1rem'}}>{`load.sh java-oracle -- [options]
 
 Downloads and installs Oracle JDK binary distribution for x86_64 and aarch64 Linux.
@@ -30,10 +30,11 @@ current shell only: java-use <vendor> <version>, e.g. java-use temurin 17.
 
 Options:
   -h, --help           Show this help and exit
-  --version <version>  Java major version to install (default: 21)
-                       LTS versions: 21, 25 (publicly available)
+  --version <version>  Java major version to install (default: 25)
+                       LTS versions: 25, and 17 and 21 as their last public build
+                       (17.0.12, 21.0.12), which gets no more updates: later updates
+                       need an Oracle account. For updates of 17 or 21: java-temurin
                        Non-LTS versions require confirmation (or --yes)
-                       Note: Oracle only provides public downloads for recent LTS versions
   --yes, -y            Skip confirmation for non-LTS versions
   --force              Re-download even if already installed
   --dry-run            Print actions without executing them
@@ -44,8 +45,8 @@ Options:
 
 Examples:
   load.sh java-oracle
-  load.sh java-oracle -- --version 25
-  load.sh java-oracle -- --version 24 --yes
+  load.sh java-oracle -- --version 21
+  load.sh java-oracle -- --version 27 --yes
   load.sh java-oracle -- --dry-run
   load.sh java-oracle -- --manifest --version 21
 

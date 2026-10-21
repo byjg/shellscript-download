@@ -25,10 +25,11 @@ current shell only: java-use <vendor> <version>, e.g. java-use temurin 17.
 
 Options:
   -h, --help           Show this help and exit
-  --version <version>  Java major version to install (default: 21)
-                       LTS versions: 21, 25 (publicly available)
+  --version <version>  Java major version to install (default: 25)
+                       LTS versions: 25, and 17 and 21 as their last public build
+                       (17.0.12, 21.0.12), which gets no more updates: later updates
+                       need an Oracle account. For updates of 17 or 21: java-temurin
                        Non-LTS versions require confirmation (or --yes)
-                       Note: Oracle only provides public downloads for recent LTS versions
   --yes, -y            Skip confirmation for non-LTS versions
   --force              Re-download even if already installed
   --dry-run            Print actions without executing them
@@ -39,8 +40,8 @@ Options:
 
 Examples:
   load.sh java-oracle
-  load.sh java-oracle -- --version 25
-  load.sh java-oracle -- --version 24 --yes
+  load.sh java-oracle -- --version 21
+  load.sh java-oracle -- --version 27 --yes
   load.sh java-oracle -- --dry-run
   load.sh java-oracle -- --manifest --version 21
 

@@ -6,6 +6,7 @@
 #                      and points $HOME/.shellscript/java/current at it
 #   JAVA_LABEL         name used in the messages ("Eclipse Temurin Java")
 #   JAVA_LTS_VERSIONS  versions installed without asking ("8 11 17 21 25")
+#   JAVA_DEFAULT_VERSION  optional: the version installed without --version (21)
 #   JAVA_NON_LTS_NOTE  optional extra line of the non-LTS warning
 # defines
 #   java_download_url  prints the archive URL for JAVA_VERSION and JAVA_ARCH (x64 or
@@ -42,7 +43,7 @@ java_install() {
 
   # Parse flags
   DRY_RUN=0
-  JAVA_VERSION="21"
+  JAVA_VERSION="${JAVA_DEFAULT_VERSION:-21}"
   local manifest_mode=0 manifest_version="all" yes=0 force=0
 
   while [[ ${1-} ]]; do
