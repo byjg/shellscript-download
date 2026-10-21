@@ -279,7 +279,8 @@ push to `main`, and not by Cloudflare from git:
    checked against `https://opensource.byjg.com/byjg.gpg` before anything is deployed
 3. `wrangler pages deploy dist`
 
-The signatures are made in the job and exist only on the site, never in the repository. The
+The signatures are made in the job and exist only on the site, never in the repository. How the
+loader checks them is in [Signed downloads](docs/signatures.md). The
 secrets (`GPG_PRIVATE_KEY`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`) are declared in
 `inhouse/infra-automation` (`config.yml`), like the other secrets of the ByJG repositories.
 
