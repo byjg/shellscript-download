@@ -30,6 +30,20 @@ Or with `wget`:
 /bin/bash -c "$(wget -qO- https://shellscript.download/install/loader)"
 ```
 
+The loader needs `gpgv`, to check what it downloads (see below). Ubuntu and Debian have it; on
+Fedora run `sudo dnf install gnupg2`, on Alpine `sudo apk add gpgv`.
+
+To check the installer itself before running it, with the key of the
+[ByJG APT and RPM repositories](https://opensource.byjg.com/docs/opensource/guidelines/linux-packages)
+(fingerprint `DB84 6CC3 C109 29D3 43B6 B6DC 4BCC 9780 596C 4BCF`):
+
+```bash
+curl -fsSLO https://shellscript.download/install/loader
+curl -fsSLO https://shellscript.download/install/loader.sig
+curl -fsSL https://opensource.byjg.com/byjg.gpg -o byjg.gpg
+gpgv --keyring ./byjg.gpg loader.sig loader && sh loader
+```
+
 ## Run a script
 
 ```bash
@@ -54,6 +68,10 @@ load.sh php-docker -- --help
   `https://shellscript.download/scripts/<script>.sh` and cached in
   `$HOME/.shellscript/downloads`.
 - The cached copy is used on the next runs. `load.sh --update <script>` downloads it again.
+- What is downloaded from shellscript.download (a script, the files the scripts share, the
+  loader and its completion) is published with a signature, `<file>.sig`. The loader uses it only
+  when that is the signature of the key written in `load.sh`, the one of
+  `https://opensource.byjg.com/byjg.gpg`; otherwise it stops and keeps what it had.
 - The script is executed unless `--dont-run` is given, and `load.sh` exits with its status code.
 - Commands a script installs go to `$HOME/.shellscript/bin`, which the loader adds to your `PATH`.
 

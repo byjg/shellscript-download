@@ -120,6 +120,9 @@ done
   whenever "latest" is the latest release of the repository. Loaders older than it do
   not have it: `lib/binary-install.sh` falls back to the API by itself; a script that
   does not use that file does it as `maven.sh` does.
+- `download_signed "<url>" "<dest>"` — for a file of shellscript.download (a `lib/` file): saves
+  it only when `<url>.sig` is its signature by the key of `load.sh`. Loaders older than it do not
+  have it: fall back to `download`, as the `postLoad` block below does.
 - `require_script <script> [cmd]` — runs `load.sh <script>` unless `<cmd>` (default: the script
   name) is already available. For a tool another script of the catalog installs (e.g. jq).
   Loaders older than it do not have it: `if declare -F require_script >/dev/null; then
@@ -181,7 +184,10 @@ SHARED_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/<file>.sh"
 
 postLoad() {
   mkdir -p "$(dirname "$SHARED_LIB")"
-  if ! download "https://shellscript.download/scripts/lib/<file>.sh" "$SHARED_LIB"; then
+  # The signature is checked by download_signed, which a loader older than it does not have
+  local get=download_signed
+  declare -F download_signed >/dev/null || get=download
+  if ! "$get" "https://shellscript.download/scripts/lib/<file>.sh" "$SHARED_LIB"; then
     echo "Error: could not download lib/<file>.sh, which this script needs" >&2
     exit 3
   fi

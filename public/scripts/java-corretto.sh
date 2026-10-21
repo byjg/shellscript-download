@@ -44,7 +44,10 @@ SHARED_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/java-install.sh"
 
 postLoad() {
   mkdir -p "$(dirname "$SHARED_LIB")"
-  if ! download "https://shellscript.download/scripts/lib/java-install.sh" "$SHARED_LIB"; then
+  # The signature is checked by download_signed, which a loader older than it does not have
+  local get=download_signed
+  declare -F download_signed >/dev/null || get=download
+  if ! "$get" "https://shellscript.download/scripts/lib/java-install.sh" "$SHARED_LIB"; then
     echo "Error: could not download lib/java-install.sh, which this script needs" >&2
     exit 3
   fi

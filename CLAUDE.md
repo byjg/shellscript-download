@@ -19,6 +19,7 @@ run "command"                  # honors --dry-run
 require_cmd <cmd>              # exit 1 if command missing
 fetch "<url>"                  # URL to stdout (curl, falls back to wget)
 download "<url>" "<dest>"      # URL to file (curl, falls back to wget)
+download_signed "<url>" "<dest>"  # a file of shellscript.download, only when <url>.sig is its signature
 require_downloader             # exit 1 unless curl or wget is available
 final_url "<url>"              # where a URL leads after its redirects, without downloading it
 github_latest_tag <owner/repo> # tag of the latest release, without the GitHub API and its quota
@@ -36,6 +37,10 @@ Each script defines only its own `print_usage() { cat <<'USAGE' ... USAGE }` (an
   `--post-load` by calling it. `load.sh` runs `<script> --post-load` once after downloading or
   updating the script. The script must also call `postLoad` itself when the file is missing,
   because loaders older than the hook never do. See `php-docker.sh`.
+- The file is downloaded with `download_signed`, which checks its signature; loaders older than
+  it do not have it: fall back to `download` (`declare -F download_signed`). See `jq.sh`.
+- Everything published is signed by the deploy job (`scripts/sign-dist.sh`), never in the
+  repository: a file that is not under `public/scripts/` or `public/install/` is not signed.
 - A tool released as one binary (or a .tar.gz that holds it) is installed through
   `lib/binary-install.sh`: the script only says where the latest version and the download are.
   See `jq.sh`.

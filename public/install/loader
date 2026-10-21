@@ -27,6 +27,37 @@ while [ $# -gt 0 ]; do
   shift
 done
 
+# load.sh and its completion are used only when they are signed by the key of the ByJG
+# APT and RPM repositories. The key comes from opensource.byjg.com (GitHub Pages), not
+# from shellscript.download (Cloudflare): whoever changes one cannot change the other.
+# Checked before anything is changed. Not with --developer, which downloads nothing.
+KEYRING=""
+if [ "$DEVELOPER" != "1" ]; then
+  if ! command -v gpgv >/dev/null 2>&1; then
+    echo "Error: gpgv is needed to check the signature of what is downloaded: install it (apt install gpgv, dnf install gnupg2, apk add gpgv)" >&2
+    exit 3
+  fi
+  KEYRING=$(mktemp "${TMPDIR:-/tmp}/loader-keyring.XXXXXXXX")
+  trap 'rm -f "$KEYRING"' EXIT
+  if ! download "https://opensource.byjg.com/byjg.gpg" "$KEYRING"; then
+    echo "Error: Failed to download https://opensource.byjg.com/byjg.gpg" >&2
+    exit 3
+  fi
+fi
+
+# download_signed <url> <dest>: <dest> only when <url>.sig is its signature by that key
+download_signed() {
+  if download "$1" "$2.new" && download "$1.sig" "$2.sig" \
+      && gpgv --keyring "$KEYRING" "$2.sig" "$2.new" >/dev/null 2>&1; then
+    mv "$2.new" "$2"
+    rm -f "$2.sig"
+  else
+    rm -f "$2.new" "$2.sig"
+    echo "Error: Failed to download $1, or it is not signed by https://opensource.byjg.com/byjg.gpg" >&2
+    return 3
+  fi
+}
+
 # Resolve the directory this script lives in (for --developer relative paths)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
@@ -122,10 +153,7 @@ mkdir -p "$HOME/.shellscript/bin"
 if [ "$DEVELOPER" = "1" ]; then
   cp "${SCRIPT_DIR}/../scripts/load.sh" "$HOME/.shellscript/bin/load.sh"
 else
-  if ! download "https://shellscript.download/scripts/load.sh" "$HOME/.shellscript/bin/load.sh"; then
-    echo "Error: Failed to download 'load.sh'" >&2
-    exit 3
-  fi
+  download_signed "https://shellscript.download/scripts/load.sh" "$HOME/.shellscript/bin/load.sh" || exit 3
 fi
 chmod a+x "$HOME/.shellscript/bin/load.sh"
 echo "✓ Shell script download loader successfully installed!"
@@ -134,7 +162,7 @@ COMPLETION_DEST="$HOME/.shellscript/shellrc/01-load-completion.sh"
 if [ "$DEVELOPER" = "1" ]; then
   cp "${SCRIPT_DIR}/load-completion.sh" "$COMPLETION_DEST"
 else
-  download "https://shellscript.download/install/load-completion.sh" "$COMPLETION_DEST"
+  download_signed "https://shellscript.download/install/load-completion.sh" "$COMPLETION_DEST" || exit 3
 fi
 echo "✓ Bash completion installed!"
 
