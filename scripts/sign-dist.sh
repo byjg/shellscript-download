@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # sign-dist.sh: signs, in the build, every file the loader downloads from the site, before
-# it is deployed. Run by the deploy job of .github/workflows/e2e.yml.
+# it is deployed. Run by the deploy job of .github/workflows/build.yml.
 #
 # Usage: GPG_PRIVATE_KEY=<key> scripts/sign-dist.sh [dist]
 #

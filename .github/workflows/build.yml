@@ -1,7 +1,8 @@
 name: Build and test
 
 # One workflow for a pull request:
-#   1. Check Build Artifacts: 'npm run build' leaves nothing to commit
+#   1. Check Build Artifacts: 'npm run build' leaves nothing to commit (what it generates
+#      for the site, src/generated/, is not committed; docs/scripts and the completion are)
 #   2. the end-to-end tests of what the pull request changed, once the build is right: for
 #      a script of public/scripts, its own test and all-scripts, which checks what every
 #      script must do. tests_e2e/run.sh decides (--changed), so that the same choice can
