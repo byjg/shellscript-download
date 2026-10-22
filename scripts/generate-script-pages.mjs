@@ -308,15 +308,13 @@ export default function ${compName}() {
 async function generate() {
   const repoRoot = path.resolve(__dirname, '..')
   const publicScriptsDir = path.join(repoRoot, 'public', 'scripts')
-  const srcPagesDir = path.join(repoRoot, 'src', 'pages')
-  const srcPagesScriptsDir = path.join(srcPagesDir, 'scripts')
   const srcGeneratedDir = path.join(repoRoot, 'src', 'generated')
-  const srcComponentsDir = path.join(repoRoot, 'src', 'components')
+  const srcPagesScriptsDir = path.join(srcGeneratedDir, 'scripts')
   const docsScriptsDir = path.join(repoRoot, 'docs', 'scripts')
 
+  // src/generated holds generated files only, and is not committed: start clean as well
+  await fs.rm(srcGeneratedDir, { recursive: true, force: true })
   await ensureDir(srcPagesScriptsDir)
-  await ensureDir(srcGeneratedDir)
-  await ensureDir(srcComponentsDir)
 
   // docs/scripts holds generated files only: start clean so a removed script leaves no page behind
   await fs.rm(docsScriptsDir, { recursive: true, force: true })
@@ -382,7 +380,7 @@ async function generate() {
 
   // Generate routes file
   const imports = routeItems
-    .map(({ base, importName , source}) => `import ${importName} from "../pages${source}/${base}";`)
+    .map(({ base, importName , source}) => `import ${importName} from ".${source}/${base}";`)
     .join('\n')
 
   const routesArray = `export const scriptRoutes = [\n${routeItems
@@ -467,7 +465,7 @@ export default function List() {
   );
 }
 `
-  await fs.writeFile(path.join(srcComponentsDir, 'List.tsx'), listComponent, 'utf8')
+  await fs.writeFile(path.join(srcGeneratedDir, 'List.tsx'), listComponent, 'utf8')
 
   return { count, routes: routeItems.length }
 }

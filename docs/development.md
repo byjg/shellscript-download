@@ -85,7 +85,7 @@ tests_e2e/run.sh --changed main         # the tests of what your branch changed 
 
 A pull request runs that last one by itself: for each script of `public/scripts` it changes,
 the test of that script, and `all-scripts`, which checks what every script must do
-(`.github/workflows/e2e.yml`).
+(`.github/workflows/build.yml`).
 
 A new script comes with its test. `tests_e2e/shared/lib.sh` has the assertions and the tests
 that scripts of the same kind share, so that most tests are a few lines: see

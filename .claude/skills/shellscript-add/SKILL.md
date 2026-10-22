@@ -503,7 +503,7 @@ tests_e2e/run.sh                         # every test: about 40 minutes
 tests_e2e/run.sh --changed main          # the tests of what the branch changed since main
 ```
 
-A pull request runs that last one by itself (`.github/workflows/e2e.yml`): the test of each
+A pull request runs that last one by itself (`.github/workflows/build.yml`): the test of each
 script it changes, the tests of the scripts that use a `lib/` file it changes, and
 `all-scripts`. A change to `tests_e2e/shared/lib.sh` selects the tests that use the
 function or the variable that changed; a change to `tests_e2e/run.sh` alone, `all-scripts`
@@ -578,8 +578,8 @@ If `npm run build` fails, check:
 - [ ] No direct `curl`/`wget` calls — uses injected `fetch`/`download` helpers
 - [ ] File is executable in git (`git update-index --chmod=+x`)
 - [ ] `npm run build` completes without errors
-- [ ] Generated files are staged: `src/pages/scripts/`, `src/generated/`, `src/components/List.tsx`,
-      `docs/scripts/` and `public/install/load-completion.sh`
+- [ ] Generated files are staged: `docs/scripts/` and `public/install/load-completion.sh`
+      (`src/generated/` is not committed)
 
 ## Commit
 
@@ -588,7 +588,6 @@ its test, any `lib/` file it touched and the generated files together:
 
 ```bash
 git add public/scripts/<name>.sh tests_e2e/testcases/<name>.sh public/scripts/lib \
-  src/pages/scripts/<name>.tsx src/generated/scriptRoutes.tsx src/components/List.tsx \
   docs/scripts public/install/load-completion.sh
 git commit -m "Add <name>.sh: <one-line description>"
 ```
