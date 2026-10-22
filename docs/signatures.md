@@ -33,10 +33,14 @@ It is the key that also signs the [ByJG APT and RPM repositories](https://openso
 - Fingerprint `DB84 6CC3 C109 29D3 43B6 B6DC 4BCC 9780 596C 4BCF`
 - Published at `https://opensource.byjg.com/byjg.gpg` (binary) and `byjg.asc` (armored)
 
-The files come from shellscript.download, hosted on Cloudflare. The key comes from
-opensource.byjg.com, hosted on GitHub, and is written inside `load.sh` itself. Whoever changes
-the files on the site cannot change the key with them: what they put there would not be signed
-by it.
+The key is written inside `load.sh` itself, so an installed loader never downloads it: whoever
+changes the files on shellscript.download cannot change the key with them, and what they put
+there would not be signed by it. The private key is never on the site: only the deploy job has
+it.
+
+The installer, and you when you check by hand, download the key from opensource.byjg.com. That
+is served by Cloudflare, as shellscript.download is, so what makes a downloaded key the right
+one is its fingerprint, above, not where it came from.
 
 ## How the loader checks
 
@@ -52,7 +56,9 @@ downloads from `https://opensource.byjg.com/byjg.gpg`. It checks that `gpgv` is 
 changes anything on the machine.
 
 Nothing is checked, and nothing is downloaded, for a script already in the cache
-(`$HOME/.shellscript/downloads`), or with `--developer`, which runs a local folder.
+(`$HOME/.shellscript/downloads`), or with `--developer`, which runs a local folder. A cached
+script was checked when it was downloaded, and is not checked again: `load.sh --update`
+downloads everything again, and checks it.
 
 ### gpgv
 
@@ -78,6 +84,7 @@ it first, with the key from opensource.byjg.com:
 curl -fsSLO https://shellscript.download/install/loader
 curl -fsSLO https://shellscript.download/install/loader.sig
 curl -fsSL https://opensource.byjg.com/byjg.gpg -o byjg.gpg
+gpg --show-keys byjg.gpg    # the fingerprint must be DB84 6CC3 C109 29D3 43B6  B6DC 4BCC 9780 596C 4BCF
 gpgv --keyring ./byjg.gpg loader.sig loader && sh loader
 ```
 
