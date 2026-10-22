@@ -69,7 +69,7 @@ while [[ ${1-} ]]; do
 done
 PACKAGES="${PACKAGES# }"
 
-REPO_URL="https://opensource.byjg.com"
+REPO_URL="https://packages.byjg.com"
 STATE_DIR="${SHELLSCRIPT_HOME}/byjg-repo"
 PACKAGES_STATE="${STATE_DIR}/installed-packages.conf"
 # Present when this script added the repository: only then does the removal take it out
@@ -85,7 +85,7 @@ case "$PM" in
   dnf)     REPO_FILE="$RPM_REPO" ;;
   *)
     err "The ByJG repository has APT (Debian, Ubuntu) and RPM (Fedora, RHEL) packages only."
-    err "See ${REPO_URL}/docs/packages"
+    err "See https://opensource.byjg.com/docs/packages"
     exit 3
     ;;
 esac

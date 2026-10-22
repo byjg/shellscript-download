@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ArrowDown, ChevronDown, Terminal } from "lucide-react";
 import { CompatibilityModal } from "@/components/CompatibilityModal";
 import { InstallCommand } from "@/components/InstallCommand";
-import List from "@/components/List.tsx";
+import List from "@/generated/List.tsx";
 
 const Index = () => {
   const [showSetup, setShowSetup] = useState(false);

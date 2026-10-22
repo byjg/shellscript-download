@@ -28,8 +28,8 @@ while [ $# -gt 0 ]; do
 done
 
 # load.sh and its completion are used only when they are signed by the key of the ByJG
-# APT and RPM repositories. The key comes from opensource.byjg.com (GitHub Pages), not
-# from shellscript.download (Cloudflare): whoever changes one cannot change the other.
+# APT and RPM repositories. The key comes from packages.byjg.com (Cloudflare R2), not
+# from shellscript.download (Cloudflare Pages): whoever changes one cannot change the other.
 # Checked before anything is changed. Not with --developer, which downloads nothing.
 KEYRING=""
 if [ "$DEVELOPER" != "1" ]; then
@@ -39,8 +39,8 @@ if [ "$DEVELOPER" != "1" ]; then
   fi
   KEYRING=$(mktemp "${TMPDIR:-/tmp}/loader-keyring.XXXXXXXX")
   trap 'rm -f "$KEYRING"' EXIT
-  if ! download "https://opensource.byjg.com/byjg.gpg" "$KEYRING"; then
-    echo "Error: Failed to download https://opensource.byjg.com/byjg.gpg" >&2
+  if ! download "https://packages.byjg.com/byjg.gpg" "$KEYRING"; then
+    echo "Error: Failed to download https://packages.byjg.com/byjg.gpg" >&2
     exit 3
   fi
 fi
@@ -53,7 +53,7 @@ download_signed() {
     rm -f "$2.sig"
   else
     rm -f "$2.new" "$2.sig"
-    echo "Error: Failed to download $1, or it is not signed by https://opensource.byjg.com/byjg.gpg" >&2
+    echo "Error: Failed to download $1, or it is not signed by https://packages.byjg.com/byjg.gpg" >&2
     return 3
   fi
 }

@@ -66,7 +66,7 @@ Arguments:
 
 Signatures:
   What is downloaded from shellscript.download is used only when it is signed by the
-  key of opensource.byjg.com/byjg.gpg. Checking that needs gpgv (apt install gpgv,
+  key of packages.byjg.com/byjg.gpg. Checking that needs gpgv (apt install gpgv,
   dnf install gnupg2, apk add gpgv).
 
 Environment:
@@ -256,7 +256,7 @@ require_script() {
 }
 # The key everything published on shellscript.download is signed with, base64 of the
 # binary key (gpgv does not read an armored one). It is the key of the ByJG APT and RPM
-# repositories, https://opensource.byjg.com/byjg.gpg: ByJG Opensource <info@byjg.com.br>,
+# repositories, https://packages.byjg.com/byjg.gpg: ByJG Opensource <info@byjg.com.br>,
 # fingerprint DB84 6CC3 C109 29D3 43B6 B6DC 4BCC 9780 596C 4BCF. Written here, and not
 # downloaded, so that whoever changes the site cannot change the key with it.
 SHELLSCRIPT_SIGNING_KEY="

@@ -31,14 +31,14 @@ It is the key that also signs the [ByJG APT and RPM repositories](https://openso
 
 - **ByJG Opensource &lt;info@byjg.com.br&gt;**
 - Fingerprint `DB84 6CC3 C109 29D3 43B6 B6DC 4BCC 9780 596C 4BCF`
-- Published at `https://opensource.byjg.com/byjg.gpg` (binary) and `byjg.asc` (armored)
+- Published at `https://packages.byjg.com/byjg.gpg` (binary) and `byjg.asc` (armored)
 
 The key is written inside `load.sh` itself, so an installed loader never downloads it: whoever
 changes the files on shellscript.download cannot change the key with them, and what they put
 there would not be signed by it. The private key is never on the site: only the deploy job has
 it.
 
-The installer, and you when you check by hand, download the key from opensource.byjg.com. That
+The installer, and you when you check by hand, download the key from packages.byjg.com. That
 is served by Cloudflare, as shellscript.download is, so what makes a downloaded key the right
 one is its fingerprint, above, not where it came from.
 
@@ -52,7 +52,7 @@ and runs `gpgv` with the key written in `load.sh`:
   before stays as it was.
 
 The installer (`install/loader`) does the same for `load.sh` and its completion, with the key it
-downloads from `https://opensource.byjg.com/byjg.gpg`. It checks that `gpgv` is there before it
+downloads from `https://packages.byjg.com/byjg.gpg`. It checks that `gpgv` is there before it
 changes anything on the machine.
 
 Nothing is checked, and nothing is downloaded, for a script already in the cache
@@ -78,12 +78,12 @@ The one-line install runs what the site serves:
 ```
 
 The installer then checks what it downloads, but nothing checked the installer itself. To check
-it first, with the key from opensource.byjg.com:
+it first, with the key from packages.byjg.com:
 
 ```bash
 curl -fsSLO https://shellscript.download/install/loader
 curl -fsSLO https://shellscript.download/install/loader.sig
-curl -fsSL https://opensource.byjg.com/byjg.gpg -o byjg.gpg
+curl -fsSL https://packages.byjg.com/byjg.gpg -o byjg.gpg
 gpg --show-keys byjg.gpg    # the fingerprint must be DB84 6CC3 C109 29D3 43B6  B6DC 4BCC 9780 596C 4BCF
 gpgv --keyring ./byjg.gpg loader.sig loader && sh loader
 ```
@@ -105,7 +105,7 @@ gpgv --keyring ./byjg.gpg jq.sh.sig jq.sh
 | `gpgv is needed to check the signature of what comes from shellscript.download` | `gpgv` is not installed | install it ([above](#gpgv)) |
 | `<url> is not signed by the key of shellscript.download: not used` | the file is not the one that was signed: changed on the site or on its way | do not work around it: try again later, and if it stays, [open an issue](https://github.com/byjg/shellscript-download/issues) |
 | `Failed to download <url>` | the file or its `.sig` could not be downloaded: no network, or no such script | check the name with `load.sh --list`, and the network |
-| `Failed to download <url>, or it is not signed by https://opensource.byjg.com/byjg.gpg` | the installer could not download, or check, `load.sh` or its completion | as the two lines above |
+| `Failed to download <url>, or it is not signed by https://packages.byjg.com/byjg.gpg` | the installer could not download, or check, `load.sh` or its completion | as the two lines above |
 | `lib/<file>.sh, which this script needs, is missing: run 'load.sh --update'` | the loader that downloaded the script is older than signed downloads | `load.sh --update`, which replaces the loader first |
 
 In each case the loader stops with exit code 3, and what was installed before is left as it was.
@@ -121,7 +121,7 @@ In each case the loader stops with exit code 3, and what was installed before is
 A loader knows the key written in it, and refuses what is signed by another one. After the key
 is replaced, the site is signed with the new key, and an installed loader refuses its updates.
 Install the loader again, with the one-line install (or checking it first, as above): the
-installer takes the new key from opensource.byjg.com, and the new `load.sh` carries it.
+installer takes the new key from packages.byjg.com, and the new `load.sh` carries it.
 
 ## For contributors
 

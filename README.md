@@ -9,7 +9,7 @@ tags: [devops, cli, docker]
 [![Opensource ByJG](https://img.shields.io/badge/opensource-byjg-success.svg)](https://opensource.byjg.com)
 [![Install MCP Server](https://img.shields.io/badge/Install-MCP_Server-8A2BE2?logo=modelcontextprotocol&logoColor=white)](https://opensource.byjg.com/docs/ai/mcpserver-byjg-docs/)
 [![GitHub source](https://img.shields.io/badge/Github-source-informational?logo=github)](https://github.com/byjg/shellscript-download/)
-[![Build Status](https://github.com/byjg/shellscript-download/actions/workflows/e2e.yml/badge.svg?branch=main)](https://github.com/byjg/shellscript-download/actions/workflows/e2e.yml)
+[![Build Status](https://github.com/byjg/shellscript-download/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/byjg/shellscript-download/actions/workflows/build.yml)
 
 Install development tools on Linux with a single command. A small loader, `load.sh`, downloads a
 curated script from [shellscript.download](https://shellscript.download) and runs it: Docker, PHP
@@ -61,7 +61,7 @@ load.sh php-docker -- --help
 - What is downloaded from shellscript.download (a script, the files the scripts share, the
   loader and its completion) is published with a signature, `<file>.sig`. The loader uses it only
   when that is the signature of the key written in `load.sh`, the one of
-  `https://opensource.byjg.com/byjg.gpg`; otherwise it stops and keeps what it had. See
+  `https://packages.byjg.com/byjg.gpg`; otherwise it stops and keeps what it had. See
   [Signed downloads](docs/signatures.md).
 - The script is executed unless `--dont-run` is given, and `load.sh` exits with its status code.
 - Commands a script installs go to `$HOME/.shellscript/bin`, which the loader adds to your `PATH`.

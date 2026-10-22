@@ -209,9 +209,9 @@ npm run build
 ```
 
 This runs the generator automatically (`prebuild` hook) and produces:
-- `src/pages/scripts/<name>.tsx` — detail page (do not edit manually)
-- `src/generated/scriptRoutes.tsx` — route registry (do not edit manually)
-- `docs/scripts/<name>.md` — documentation page (do not edit manually)
+- `src/generated/` — detail pages, route registry and list (not committed)
+- `docs/scripts/<name>.md` — documentation page (do not edit manually, committed)
+- `public/install/load-completion.sh` — bash completion (do not edit manually, committed)
 - `dist/scripts/<name>.html` — static HTML
 
 ### Preview the site locally
@@ -269,14 +269,14 @@ The documentation is published on [opensource.byjg.com](https://opensource.byjg.
 ## Deployment
 
 The website is a static Vite build (`npm run build` writes `dist/`), hosted on Cloudflare Pages
-(`wrangler.toml`). It is deployed by the `deploy` job of `.github/workflows/e2e.yml`, on every
+(`wrangler.toml`). It is deployed by the `deploy` job of `.github/workflows/build.yml`, on every
 push to `main`, and not by Cloudflare from git:
 
 1. `npm run build`
 2. `scripts/sign-dist.sh dist` writes `<file>.sig` next to each script, `lib/` file, `install/loader`
    and `install/load-completion.sh`: a detached GPG signature by the key that also signs the
    [APT and RPM repositories](https://opensource.byjg.com/docs/opensource/guidelines/linux-packages),
-   checked against `https://opensource.byjg.com/byjg.gpg` before anything is deployed
+   checked against `https://packages.byjg.com/byjg.gpg` before anything is deployed
 3. `wrangler pages deploy dist`
 
 The signatures are made in the job and exist only on the site, never in the repository. How the
@@ -307,7 +307,7 @@ A pull request runs, by itself, the test of each script it changes, and `all-scr
 - [ ] No injected helper (`log`, `err`, `run`, `require_cmd`, `fetch`, `download`, ...) defined locally
 - [ ] `tests_e2e/testcases/<name>.sh` exists and passes: `tests_e2e/run.sh <name> all-scripts`
 - [ ] `npm run build` completes without errors
-- [ ] Generated files (`src/pages/scripts/`, `src/generated/`, `docs/scripts/`) are included in the commit
+- [ ] Generated files (`docs/scripts/`, `public/install/load-completion.sh`) are included in the commit
 
 ---
 

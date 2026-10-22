@@ -71,9 +71,9 @@ All scripts should support:
 
 ### 5. After Creating the Script
 - Run `npm run build` to auto-generate:
-  - React page in `src/pages/scripts/<name>.tsx`
-  - Route in `src/generated/scriptRoutes.tsx`
-  - Documentation page in `docs/scripts/<name>.md` (published on opensource.byjg.com)
+  - React page in `src/generated/scripts/<name>.tsx`, routes and list in `src/generated/` (not committed)
+  - Documentation page in `docs/scripts/<name>.md` (published on opensource.byjg.com, committed)
+  - Bash completion in `public/install/load-completion.sh` (committed)
   - Static HTML in `dist/scripts/<name>.html`
 - The generated files should NOT be edited manually
 

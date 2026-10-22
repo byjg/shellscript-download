@@ -331,7 +331,7 @@ GNUPGHOME="$(mktemp -d)"
 export GNUPGHOME
 gpg --batch --quiet --passphrase '' --quick-gen-key "e2e <e2e@example.org>" ed25519 sign never 2>/dev/null
 test_key="$(gpg --export | base64 | tr -d '\n')"
-to_site() { sed -e "s#https://shellscript.download#${url}#g" -e "s#https://opensource.byjg.com/byjg.gpg#${url}/byjg.gpg#g" "$1"; }
+to_site() { sed -e "s#https://shellscript.download#${url}#g" -e "s#https://packages.byjg.com/byjg.gpg#${url}/byjg.gpg#g" "$1"; }
 sign() { gpg --batch --yes --quiet --detach-sign -o "$1.sig" "$1"; }
 mkdir -p "${site}/scripts/lib" "${site}/install"
 cp "${SCRIPTS_DIR}/jq.sh" "${site}/scripts/"

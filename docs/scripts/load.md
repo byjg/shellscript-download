@@ -33,7 +33,7 @@ Arguments:
 
 Signatures:
   What is downloaded from shellscript.download is used only when it is signed by the
-  key of opensource.byjg.com/byjg.gpg. Checking that needs gpgv (apt install gpgv,
+  key of packages.byjg.com/byjg.gpg. Checking that needs gpgv (apt install gpgv,
   dnf install gnupg2, apk add gpgv).
 
 Environment:
