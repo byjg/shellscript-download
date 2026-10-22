@@ -61,7 +61,7 @@ load.sh php-docker -- --help
 - What is downloaded from shellscript.download (a script, the files the scripts share, the
   loader and its completion) is published with a signature, `<file>.sig`. The loader uses it only
   when that is the signature of the key written in `load.sh`, the one of
-  `https://opensource.byjg.com/byjg.gpg`; otherwise it stops and keeps what it had. See
+  `https://packages.byjg.com/byjg.gpg`; otherwise it stops and keeps what it had. See
   [Signed downloads](docs/signatures.md).
 - The script is executed unless `--dont-run` is given, and `load.sh` exits with its status code.
 - Commands a script installs go to `$HOME/.shellscript/bin`, which the loader adds to your `PATH`.

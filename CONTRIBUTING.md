@@ -276,7 +276,7 @@ push to `main`, and not by Cloudflare from git:
 2. `scripts/sign-dist.sh dist` writes `<file>.sig` next to each script, `lib/` file, `install/loader`
    and `install/load-completion.sh`: a detached GPG signature by the key that also signs the
    [APT and RPM repositories](https://opensource.byjg.com/docs/opensource/guidelines/linux-packages),
-   checked against `https://opensource.byjg.com/byjg.gpg` before anything is deployed
+   checked against `https://packages.byjg.com/byjg.gpg` before anything is deployed
 3. `wrangler pages deploy dist`
 
 The signatures are made in the job and exist only on the site, never in the repository. How the
