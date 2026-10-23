@@ -544,12 +544,16 @@ sequence is always: install with the defaults, install one other version when th
 one, prove the tool works, `load remove -- <name>`, `load remove -- <name> --purge`, and
 check what is left after each.
 
-Two header lines change where a test runs:
+Header lines change where a test runs:
 
 - `# images: ubuntu fedora`, when the tool does not apply to every image (a binary built
   for glibc does not run on Alpine).
-- `# privileged: yes`, when the test runs containers or a VM inside its own. `need_docker`
-  then gives it a working Docker.
+- `# vm: yes`, when the script needs what a container does not have: systemd and its
+  services, user namespaces, AppArmor, a login (docker, podman, buildah, nerdctl). The test
+  then runs in a QEMU VM of each image, in an SSH login of its user.
+- `# needs: docker`, with `# vm: yes`, when the test needs a running Docker its user may
+  use (php-docker, node-docker, byjg-gluo).
+- `# privileged: yes`, when the test runs a VM inside its container (qemu).
 
 A test that fails on one image has found something: a tool that behaves differently there
 (BusyBox, Wget2), or a bug of the script. Fix the script, or say why the image is left

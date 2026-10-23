@@ -121,6 +121,29 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
+      # A test with '# vm: yes' runs in QEMU VMs, which need KVM and the cloud images
+      - name: Does the test run in VMs
+        id: vm
+        env:
+          TEST: ${{ matrix.test }}
+        run: |
+          if grep -q '^# vm: yes' "tests_e2e/testcases/${TEST}.sh"; then echo "vm=yes" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Let the user use KVM
+        if: steps.vm.outputs.vm == 'yes'
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Cache the cloud images of the VMs
+        if: steps.vm.outputs.vm == 'yes'
+        uses: actions/cache@v6
+        with:
+          path: ~/.shellscript/qemu/images
+          key: qemu-images-${{ hashFiles('tests_e2e/run.sh') }}
+          restore-keys: qemu-images-
+
       - name: Run the test on every image it applies to
         env:
           # For the scripts that ask the GitHub API, which allows 60 requests an hour to

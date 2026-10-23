@@ -83,6 +83,14 @@ tests_e2e/run.sh                        # every test: about 40 minutes
 tests_e2e/run.sh --changed main         # the tests of what your branch changed since main
 ```
 
+A test that needs what a container does not have (systemd and its services, user
+namespaces, AppArmor, a login) says `# vm: yes`, and runs in a QEMU VM of the same systems
+instead (`ubuntu-24.04`, `fedora-42`, `alpine-3.22`), booted with the `qemu.sh` of your
+working copy: docker, podman, buildah, nerdctl, and the Docker-backed wrappers, which also
+say `# needs: docker`. It needs `/dev/kvm`. The VMs are reached with a key made for the
+run, in an ssh-agent of the run alone, and removed after; the cloud images stay cached in
+`~/.shellscript/qemu/images`.
+
 A pull request runs that last one by itself: for each script of `public/scripts` it changes,
 the test of that script, and `all-scripts`, which checks what every script must do
 (`.github/workflows/build.yml`).

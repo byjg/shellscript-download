@@ -115,27 +115,16 @@ sys_install() {
   fi
 }
 
-# start_docker_daemon: a container has no init system to start it. For the tests with
-# '# privileged: yes'.
-start_docker_daemon() {
-  local i
-  # Docker on Fedora comes with legacy iptables, which needs the kernel module ip_tables.
-  # The kernel of a GitHub runner on Ubuntu 26.04 no longer has it: Docker gets the
-  # nftables one, as in the Ubuntu and Alpine containers.
-  if on_image fedora; then
-    if sys_install iptables-nft && sudo alternatives --set iptables /usr/bin/iptables-nft; then
-      pass "iptables uses nftables"
-    else
-      fail "could not switch iptables to nftables"
-    fi
+# sys_remove <package>: removes it with the package manager of the image, for a package
+# the image comes with and a test must start without
+sys_remove() {
+  if command -v apt-get >/dev/null 2>&1; then
+    sudo env DEBIAN_FRONTEND=noninteractive apt-get remove -y -qq "$1" >"$LOG_FILE" 2>&1
+  elif command -v dnf >/dev/null 2>&1; then
+    sudo dnf remove -y -q "$1" >"$LOG_FILE" 2>&1
+  else
+    sudo apk del -q "$1" >"$LOG_FILE" 2>&1
   fi
-  sudo sh -c 'dockerd >/tmp/dockerd.log 2>&1 &'
-  for i in $(seq 1 60); do
-    if sudo docker info >/dev/null 2>&1; then pass "the Docker daemon is running"; return 0; fi
-    sleep 1
-  done
-  fail "the Docker daemon did not start"
-  sudo tail -5 /tmp/dockerd.log | sed 's/^/        /'
 }
 
 # in_new_session "<command>": as the user does after logging in again, which is when a
@@ -151,26 +140,14 @@ manifest_value() {
   eval "printf '%s' \"${value}\""
 }
 
-# need_docker: for the tests of what runs on Docker. Installs it with our own script
-# (with the package manager on Alpine, which the installer of Docker does not cover),
-# starts the daemon, and starts the test again in a new session, where the user is in
-# the 'docker' group. Needs '# privileged: yes'.
-need_docker() {
-  if docker info >/dev/null 2>&1; then return 0; fi
-  if [[ -n "${E2E_DOCKER_READY:-}" ]]; then
-    fail "the user cannot use Docker in the new session"
-    finish
-  fi
-
-  step "prepare: Docker"
-  if on_image alpine; then
-    if sys_install docker && sudo addgroup "$(id -un)" docker >/dev/null; then pass "installed docker"; else fail "could not install docker"; fi
-  else
-    load docker
-  fi
-  start_docker_daemon
-  [[ "$FAILURES" == "0" ]] || finish
-  exec sudo --preserve-env=GITHUB_TOKEN,E2E_VERBOSE -u "$(id -un)" -H env E2E_DOCKER_READY=1 bash "$0"
+# assert_subuid_hint: a user without subordinate ids got the hint to add them
+# (subuid_hint of lib/system-packages.sh), from the last load; then does what it says,
+# as the user would
+assert_subuid_hint() {
+  grep -q "^$(id -un):" /etc/subuid 2>/dev/null && return 0
+  assert_log "sudo tee -a /etc/subuid /etc/subgid"
+  echo "$(id -un):100000:65536" | sudo tee -a /etc/subuid /etc/subgid >/dev/null
+  pass "added the subordinate ids of the hint"
 }
 
 # finish: the last line of every test
