@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # byjg-gluo.sh: create a Gluo project, with the composer of php-docker, and the
 # arguments it refuses
-# privileged: yes
+# vm: yes
+# needs: docker
 source "$(dirname "${BASH_SOURCE[0]}")/../shared/lib.sh"
-
-need_docker
 
 workdir="/tmp/e2e-gluo"
 project="${workdir}/myproject"

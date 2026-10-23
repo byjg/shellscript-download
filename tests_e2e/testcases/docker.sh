@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # docker.sh: install the Docker Engine, with and without the 'docker' group, and check
 # that the user can run a container
-# privileged: yes
+# vm: yes
 source "$(dirname "${BASH_SOURCE[0]}")/../shared/lib.sh"
 
 user="$(id -un)"
@@ -19,7 +19,10 @@ step "docker: --no-group installs Docker and leaves the user out of the 'docker'
 load docker -- --no-group
 assert_output "docker --version" "Docker version"
 assert_no_output "id -nG ${user}" "docker"
-start_docker_daemon
+
+step "docker: the service runs, and starts at boot"
+assert_exit 0 "systemctl is-active --quiet docker"
+assert_exit 0 "systemctl is-enabled --quiet docker"
 
 step "docker: out of the group, the user needs sudo"
 assert_exit 1 "docker ps"

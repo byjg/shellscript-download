@@ -644,6 +644,9 @@ users:
   - name: ${DEFAULT_VM_USER}
     shell: /bin/sh
     sudo: ALL=(ALL) NOPASSWD:ALL
+    # Alpine has doas, not sudo
+    doas:
+      - permit nopass ${DEFAULT_VM_USER}
     lock_passwd: false
 ${keys_block}chpasswd:
   expire: false

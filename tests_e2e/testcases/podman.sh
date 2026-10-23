@@ -1,27 +1,23 @@
 #!/usr/bin/env bash
 # podman.sh: install, run a container, remove and purge, and the 'docker' command
-# privileged: yes
+# vm: yes
 source "$(dirname "${BASH_SOURCE[0]}")/../shared/lib.sh"
 
-# Rootless Podman inside a Docker container runs a container as it is on Ubuntu only:
-# the Fedora image has no file capabilities on newuidmap, and the storage driver of
-# Alpine does not stack on the one of Docker.
 runs_a_container() {
-  if on_image ubuntu; then
-    assert_output "$1 run --rm quay.io/podman/hello" "Hello Podman World"
-  else
-    skip "$1 run: not in a container of this image"
-  fi
+  assert_output "$1 run --rm quay.io/podman/hello" "Hello Podman World"
 }
 
 podman_works() {
   assert_output "podman --version" "podman version"
-  # An image whose users have no subordinate ids gets the hint
-  if ! grep -q "^$(id -un):" /etc/subuid 2>/dev/null; then
-    assert_output "cat '$LOG_FILE'" "sudo tee -a /etc/subuid /etc/subgid"
-  fi
+  assert_subuid_hint
+  assert_exists /dev/net/tun
   runs_a_container podman
 }
+
+# The cloud image of Fedora comes with Podman: the test starts without it, as on the others
+if command -v podman >/dev/null 2>&1; then
+  if sys_remove podman; then pass "removed the Podman of the image"; else fail "could not remove the Podman of the image"; fi
+fi
 
 test_system_package podman podman podman_works
 
