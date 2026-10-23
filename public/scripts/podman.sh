@@ -71,6 +71,7 @@ PACKAGES_STATE="${SHELLSCRIPT_HOME}/podman/installed-packages.conf"
 # through the UNINSTALL_CMD manifest key.
 if [[ "$UNINSTALL" == "1" ]]; then
   remove_recorded_packages "Podman" "$PACKAGES_STATE"
+  rootless_host_undo podman
   exit 0
 fi
 
@@ -82,13 +83,10 @@ fi
 [[ "$DOCKER_ALIAS" != "1" ]] || docker_command_check Podman
 
 ensure_package podman "Podman" podman "$PACKAGES_STATE"
+rootless_host_setup podman
 
 [[ "$DOCKER_ALIAS" != "1" ]] || docker_command_write Podman podman
 
-# Rootless containers need a range of subordinate ids for the user
-if [[ "$(id -u)" != "0" ]] && ! grep -q "^$(id -un):" /etc/subuid 2>/dev/null; then
-  log "Rootless Podman needs subordinate ids for your user. If containers fail to start, run:"
-  log "  echo \"$(id -un):100000:65536\" | sudo tee -a /etc/subuid /etc/subgid && podman system migrate"
-fi
+subuid_hint Podman "podman system migrate"
 
 log "Done. Try: podman run --rm hello-world"

@@ -55,6 +55,8 @@ Options:
                         bridge, reachable from the host and from other VMs on it; there is
                         no port forwarding (--ssh-port/--port do not apply). See 'Bridged
                         VMs' below for the one-time host setup.
+  --ssh-key <file>      start: also let the VM user in with this public key, besides the
+                        ones of ~/.ssh and ssh-agent; can be repeated
   --no-cloud-init       start: skip the cloud-init seed (default user/SSH key injection)
   --force               stop: kill immediately; remove: remove even if running
   --purge-image         remove: also delete the cached base image if unused

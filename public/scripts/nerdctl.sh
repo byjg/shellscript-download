@@ -178,7 +178,13 @@ fi
 have_cmd() { PATH="${PATH}:/usr/sbin:/sbin" command -v "$1" >/dev/null 2>&1; }
 PM=$(detect_pm) || PM=""
 MISSING=""
-have_cmd iptables || MISSING="iptables"
+# The nftables one: the legacy one needs a kernel module a user namespace cannot load
+if ! have_cmd iptables; then
+  case "$PM" in
+    dnf) MISSING="iptables-nft" ;;
+    *)   MISSING="iptables" ;;
+  esac
+fi
 if [[ "$ROOTLESS" == "1" ]] && ! have_cmd newuidmap; then
   case "$PM" in
     apt-get) MISSING="${MISSING:+$MISSING }uidmap" ;;
@@ -195,6 +201,16 @@ if [[ -n "$MISSING" ]]; then
   fi
   [[ -z "$SUDO" ]] || require_cmd sudo
   install_packages "$PM" "$MISSING" "$PACKAGES_STATE"
+fi
+
+# Rootless containers cannot use the legacy iptables (the one of Fedora 42), which needs a
+# kernel module a user namespace cannot load. It stops before nerdctl is downloaded.
+if [[ "$ROOTLESS" == "1" && "$SERVICES" == "1" && "$DRY_RUN" != "1" ]] \
+    && PATH="${PATH}:/usr/sbin:/sbin" iptables --version 2>/dev/null | grep -q legacy; then
+  err "This system uses the legacy iptables, which rootless containers cannot use: it needs"
+  err "a kernel module a user namespace cannot load. Install system-wide, as root, instead:"
+  err "  load.sh nerdctl -- --no-rootless"
+  exit 3
 fi
 
 # Latest version from GitHub if none given. A loader older than github_latest_tag
@@ -239,13 +255,30 @@ else
   run "${AS_OWNER}mkdir -p \"$(dirname "$INSTALL_DIR")\""
   run "${AS_OWNER}rm -rf \"${INSTALL_DIR}\""
   run "${AS_OWNER}mv \"${TEMP_DIR}/nerdctl\" \"${INSTALL_DIR}\""
-  [[ "$ROOTLESS" == "1" ]] || run "${AS_OWNER}chown -R root:root \"${INSTALL_DIR}\""
+  if [[ "$ROOTLESS" != "1" ]]; then
+    run "${AS_OWNER}chown -R root:root \"${INSTALL_DIR}\""
+    # SELinux: moved from the home, the files keep its label, which systemd does not run
+    if command -v restorecon >/dev/null 2>&1; then run "${AS_OWNER}restorecon -R \"${INSTALL_DIR}\""; fi
+  fi
 
   if [[ "$DRY_RUN" != "1" ]] && declare -F record_installed >/dev/null; then
     record_installed "$DOWNLOAD_URL" "$STAMP_FILE"
   fi
   [[ ! -f "${UNIT_DIR}/containerd.service" ]] || RESTART=1
 fi
+
+# wait_for <label> <command...>: until the command succeeds, for 30 seconds at most
+wait_for() {
+  local label="$1"
+  shift
+  [[ "$DRY_RUN" != "1" ]] || return 0
+  for _ in $(seq 1 30); do
+    "$@" >/dev/null 2>&1 && return 0
+    sleep 1
+  done
+  err "${label} did not start: see journalctl --user -n 20"
+  exit 1
+}
 
 # Backend services: containerd, and BuildKit for 'nerdctl build'
 if [[ "$SERVICES" == "1" && "$ROOTLESS" == "1" ]]; then
@@ -276,7 +309,9 @@ PROFILE
   # BuildKit runs in the namespace of containerd: it restarts after it
   if [[ "$RESTART" == "1" ]]; then
     run "systemctl --user restart containerd.service"
+    wait_for "containerd" "${INSTALL_DIR}/bin/nerdctl" info
     run "systemctl --user restart buildkit.service"
+    wait_for "BuildKit" systemctl --user is-active --quiet buildkit.service
   fi
 elif [[ "$SERVICES" == "1" ]]; then
   for unit in $UNITS; do
@@ -312,11 +347,7 @@ fi
 [[ "$DOCKER_ALIAS" != "1" ]] || docker_command_write nerdctl "${SHELLSCRIPT_BIN}/nerdctl"
 
 if [[ "$ROOTLESS" == "1" ]]; then
-  # Rootless containers need a range of subordinate ids for the user
-  if ! grep -q "^$(id -un):" /etc/subuid 2>/dev/null; then
-    log "Rootless containerd needs subordinate ids for your user. If containers fail to start, run:"
-    log "  echo \"$(id -un):100000:65536\" | sudo tee -a /etc/subuid /etc/subgid && systemctl --user restart containerd.service"
-  fi
+  subuid_hint containerd "systemctl --user restart containerd.service"
   if [[ "$SERVICES" == "1" ]]; then
     log "To start the services at boot, without logging in: sudo loginctl enable-linger $(id -un)"
   fi

@@ -76,6 +76,45 @@ remove_recorded_packages() {
   [[ "$DRY_RUN" == "1" ]] || rm -f "$state"
 }
 
+# subuid_hint <label> [<command>]: rootless containers need a range of subordinate ids
+# for the user. Tells how to add one, and the command to run after, when it has none.
+subuid_hint() {
+  if [[ "$(id -u)" != "0" ]] && ! grep -q "^$(id -un):" /etc/subuid 2>/dev/null; then
+    log "Rootless $1 needs subordinate ids for your user. If containers fail to start, run:"
+    log "  echo \"$(id -un):100000:65536\" | sudo tee -a /etc/subuid /etc/subgid${2:+ && $2}"
+  fi
+}
+
+# rootless_host_setup <name>: what rootless containers (podman.sh, buildah.sh) need of the
+# system, where it does not set it up (Alpine): the tun device, and the cgroups that
+# OpenRC mounts only with its service. Now and at boot. What it changes is recorded, for
+# rootless_host_undo <name>.
+rootless_host_setup() {
+  local modules="/etc/modules-load.d/shellscript-$1.conf" marker="${SHELLSCRIPT_HOME}/$1/cgroups-service"
+  if [[ ! -e /dev/net/tun ]]; then
+    log "Loading the tun module, now and at boot: ${modules}"
+    run "${SUDO} modprobe tun"
+    run "echo tun | ${SUDO} tee \"${modules}\" >/dev/null"
+  fi
+  if command -v rc-service >/dev/null 2>&1 && ! rc-service cgroups status >/dev/null 2>&1; then
+    log "Starting the cgroups service of OpenRC, now and at boot"
+    run "${SUDO} rc-update add cgroups boot"
+    run "${SUDO} rc-service cgroups start"
+    if [[ "$DRY_RUN" != "1" ]]; then mkdir -p "$(dirname "$marker")"; touch "$marker"; fi
+  fi
+}
+
+# rootless_host_undo <name>: takes out what rootless_host_setup <name> changed. The
+# cgroups stay mounted until the next boot: a container may still use them.
+rootless_host_undo() {
+  local modules="/etc/modules-load.d/shellscript-$1.conf" marker="${SHELLSCRIPT_HOME}/$1/cgroups-service"
+  [[ ! -f "$modules" ]] || run "${SUDO} rm -f \"${modules}\""
+  if [[ -f "$marker" ]]; then
+    run "${SUDO} rc-update del cgroups boot"
+    [[ "$DRY_RUN" == "1" ]] || rm -f "$marker"
+  fi
+}
+
 # The 'docker' command of the scripts that install another container engine (podman.sh,
 # nerdctl.sh): a wrapper in $SHELLSCRIPT_BIN that runs it, for commands and scripts
 # written for Docker.

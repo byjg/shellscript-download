@@ -62,6 +62,7 @@ PACKAGES_STATE="${SHELLSCRIPT_HOME}/buildah/installed-packages.conf"
 # through the UNINSTALL_CMD manifest key.
 if [[ "$UNINSTALL" == "1" ]]; then
   remove_recorded_packages "Buildah" "$PACKAGES_STATE"
+  rootless_host_undo buildah
   exit 0
 fi
 
@@ -70,6 +71,12 @@ if [[ "${OSTYPE:-}" != linux* ]]; then
   exit 1
 fi
 
-ensure_package buildah "Buildah" buildah "$PACKAGES_STATE"
+# Alpine packages the network helpers apart, and Buildah needs them to build
+packages="buildah"
+[[ "$(detect_pm || true)" != "apk" ]] || packages="buildah netavark passt"
+ensure_package buildah "Buildah" "$packages" "$PACKAGES_STATE"
+rootless_host_setup buildah
+
+subuid_hint Buildah
 
 log "Done. Try: buildah --version"

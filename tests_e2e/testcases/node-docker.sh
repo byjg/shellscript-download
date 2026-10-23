@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # node-docker.sh: the node, npm, npx and yarn wrappers: a version, an older one, the
 # options, remove and purge
-# privileged: yes
+# vm: yes
+# needs: docker
 source "$(dirname "${BASH_SOURCE[0]}")/../shared/lib.sh"
-
-need_docker
 
 # in_container <command> "<shell command>": runs it inside the container of the wrapper
 in_container() {
