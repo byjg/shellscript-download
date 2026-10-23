@@ -39,7 +39,7 @@ _load_sh_completion() {
     nvm) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --manifest -h" -- "$cur") ;;
     php-docker) mapfile -t COMPREPLY < <(compgen -W "--add --env --manifest --no-postinstall --postinstall --skip --volume" -- "$cur") ;;
     podman) mapfile -t COMPREPLY < <(compgen -W "--docker --dry-run --help --manifest -h" -- "$cur") ;;
-    qemu) mapfile -t COMPREPLY < <(compgen -W "--arch --bridge --cpus --disk --dry-run --force --gpu --help --image --manifest --memory --name --no-cloud-init --port --purge-image --ssh-port -h" -- "$cur") ;;
+    qemu) mapfile -t COMPREPLY < <(compgen -W "--arch --bridge --cpus --disk --dry-run --force --gpu --help --image --manifest --memory --name --no-cloud-init --port --purge-image --ssh-key --ssh-port -h" -- "$cur") ;;
     ssh-agent) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --key --manifest -h" -- "$cur") ;;
     yq) mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --help --manifest --version -h" -- "$cur") ;;
     *) COMPREPLY=() ;;

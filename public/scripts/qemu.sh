@@ -46,6 +46,8 @@ Options:
                         bridge, reachable from the host and from other VMs on it; there is
                         no port forwarding (--ssh-port/--port do not apply). See 'Bridged
                         VMs' below for the one-time host setup.
+  --ssh-key <file>      start: also let the VM user in with this public key, besides the
+                        ones of ~/.ssh and ssh-agent; can be repeated
   --no-cloud-init       start: skip the cloud-init seed (default user/SSH key injection)
   --force               stop: kill immediately; remove: remove even if running
   --purge-image         remove: also delete the cached base image if unused
@@ -138,6 +140,7 @@ DISK="10G"
 CPUS="2"
 SSH_PORT=""
 EXTRA_PORTS=()
+SSH_KEYS=()
 BRIDGE=""
 GPU=""
 CLOUD_INIT=1
@@ -160,6 +163,9 @@ while [[ ${1-} ]]; do
     --port)          shift || { err "--port requires a value"; exit 2; }; EXTRA_PORTS+=("$1") ;;
     --bridge)        shift || { err "--bridge requires a value"; exit 2; }; BRIDGE="$1" ;;
     --gpu)           shift || { err "--gpu requires a value"; exit 2; }; GPU="$1" ;;
+    --ssh-key)       shift || { err "--ssh-key requires a file"; exit 2; }
+                     [[ -r "$1" ]] || { err "Cannot read the SSH key: $1"; exit 2; }
+                     SSH_KEYS+=("$1") ;;
     --no-cloud-init) CLOUD_INIT=0 ;;
     --force)         FORCE=1 ;;
     --purge-image)   PURGE_IMAGE=1 ;;
@@ -623,11 +629,11 @@ make_seed() {
 
   # Every public key in ~/.ssh and every key loaded in ssh-agent: keys are often
   # named after what they are for rather than id_*, and the agent holds the ones
-  # actually in use
+  # actually in use. And the ones given with --ssh-key.
   local keys="" key
   while IFS= read -r key; do
     keys+="      - ${key}"$'\n'
-  done < <( { cat "$HOME"/.ssh/*.pub 2>/dev/null; ssh-add -L 2>/dev/null; } \
+  done < <( { cat "$HOME"/.ssh/*.pub ${SSH_KEYS[@]+"${SSH_KEYS[@]}"} 2>/dev/null; ssh-add -L 2>/dev/null; } \
               | grep -E '^(ssh-|ecdsa-|sk-)' | sort -u )
 
   local keys_block=""

@@ -37,10 +37,9 @@
 #   # vm: yes
 # and, in that VM, with a running Docker its user may use when it also has
 #   # needs: docker
-# The VMs need /dev/kvm. They are reached with a key made for the run, held by an
-# ssh-agent of the run alone, whose keys qemu.sh puts in the VMs it creates: nothing is
-# written to ~/.ssh, and the ssh-agent of the user is left alone. Both go away with the
-# run. What the tests share is in tests_e2e/shared.
+# The VMs need /dev/kvm. They are reached with a key made for the run, which qemu.sh
+# puts in each VM (--ssh-key) and ssh uses (-i): nothing is written to ~/.ssh, and the
+# key goes away with the run. What the tests share is in tests_e2e/shared.
 set -euo pipefail
 
 # The images every test is run on. One place, so that all tests see the same systems.
@@ -72,20 +71,37 @@ SHARED_LIB="${TESTS_DIR}/shared/lib.sh"
 QEMU=(bash "${PUBLIC_DIR}/scripts/load.sh" --developer "${PUBLIC_DIR}/scripts" qemu --)
 VM_PORT=""
 
-# The user qemu.sh creates in the VM, and the key of the run (start_vm_agent)
+# The user qemu.sh creates in the VM, and the key of the run (make_vm_key)
 VM_USER="shellscript"
 VM_KEY_DIR=""
 VM_KEY=""
 
-# start_vm_agent: the key of the run, in an ssh-agent of its own that qemu.sh reads
-start_vm_agent() {
+# make_vm_key: the key of the run, made once, gone when the run ends
+make_vm_key() {
   [[ -z "$VM_KEY" ]] || return 0
   VM_KEY_DIR="$(mktemp -d)"
   VM_KEY="${VM_KEY_DIR}/key"
   ssh-keygen -q -t ed25519 -N '' -C shellscript-e2e -f "$VM_KEY"
-  eval "$(ssh-agent -s)" >/dev/null
-  trap 'ssh-agent -k >/dev/null 2>&1; rm -rf "$VM_KEY_DIR"' EXIT
-  ssh-add -q "$VM_KEY"
+  trap 'rm -rf "$VM_KEY_DIR"' EXIT
+}
+
+# vm_stage "<what>": where the run of a VM is, for a log that would otherwise be silent
+vm_stage() { printf 'run.sh: %s\n' "$1" >&2; }
+
+# wait_for_ssh: until the VM lets its user in. A VM that does not answer yet is
+# booting, for 3 minutes at most; one that refuses the key will not change its mind.
+wait_for_ssh() {
+  local out
+  for _ in $(seq 1 60); do
+    if out="$(vm_ssh "$VM_USER" true 2>&1)"; then return 0; fi
+    if [[ "$out" == *"Permission denied"* ]]; then
+      echo "run.sh: the VM refused the key of the run: ${out}" >&2
+      return 1
+    fi
+    sleep 3
+  done
+  echo "run.sh: the VM did not answer over SSH in 3 minutes: ${out}" >&2
+  return 1
 }
 
 # vm_ssh <user> "<command>": runs it in the VM of VM_PORT
@@ -107,19 +123,39 @@ run_in_vm() {
     echo "run.sh: '${test}' runs in a VM, which needs /dev/kvm (writable by you)" >&2
     return 1
   fi
-  start_vm_agent
+  make_vm_key
+  local log="${VM_KEY_DIR}/${name}.log"
   "${QEMU[@]}" remove "$name" --force >/dev/null 2>&1 || true
+  vm_stage "starting the VM ${name}"
   # Small enough for a GitHub runner, where the jobs run side by side
-  if ! "${QEMU[@]}" start --image "${VM_IMAGES[$image]}" --name "$name" \
-      --memory 2G --cpus 1 --disk 10G >"${TMPDIR:-/tmp}/${name}.log" 2>&1; then
+  if ! "${QEMU[@]}" start --image "${VM_IMAGES[$image]}" --name "$name" --ssh-key "${VM_KEY}.pub" \
+      --memory 2G --cpus 1 --disk 10G >"$log" 2>&1; then
     echo "run.sh: could not start the VM ${name}:" >&2
-    cat "${TMPDIR:-/tmp}/${name}.log" >&2
+    cat "$log" >&2
     return 1
   fi
   VM_PORT="$(sed -n 's/^VM_SSH_PORT=//p' "${HOME}/.shellscript/qemu/vms/${name}/vm.conf" | tr -d '"')"
-  for _ in $(seq 1 100); do vm_ssh "$VM_USER" true 2>/dev/null && break; sleep 3; done
-  vm_ssh "$VM_USER" 'cloud-init status --wait >/dev/null 2>&1' || true
+  vm_stage "waiting for SSH on port ${VM_PORT}"
+  local ready=yes
+  if ! wait_for_ssh; then
+    ready=no
+  else
+    vm_stage "waiting for cloud-init"
+    # Its own exit code says a boot had warnings (Alpine always has one): only the time
+    # limit counts
+    if ! vm_ssh "$VM_USER" 'timeout 300 cloud-init status --wait >/dev/null 2>&1; [ $? -ne 124 ]'; then
+      echo "run.sh: cloud-init did not finish in 5 minutes" >&2
+      ready=no
+    fi
+  fi
+  if [[ "$ready" == "no" ]]; then
+    echo "run.sh: the VM ${name} is not ready. What qemu.sh said when it started it:" >&2
+    cat "$log" >&2
+    "${QEMU[@]}" remove "$name" --force >/dev/null 2>&1 || true
+    return 1
+  fi
 
+  vm_stage "preparing the VM"
   # Where container.sh expects the repository, as a container mounts it
   if ! tar -C "$PUBLIC_DIR" -czf - . | vm_ssh "$VM_USER" "${as_root} mkdir -p /repo && ${as_root} tar -xzf - -C /repo" \
       || ! tar -C "$TESTS_DIR" -czf - . | vm_ssh "$VM_USER" "${as_root} mkdir -p /tests && ${as_root} tar -xzf - -C /tests"; then
@@ -128,11 +164,11 @@ run_in_vm() {
   elif ! vm_ssh "$VM_USER" "${as_root} env E2E_VM=${VM_USER} sh /tests/shared/container.sh ${test}"; then
     code=1
   else
+    vm_stage "running the test"
     # GITHUB_TOKEN through stdin, never on a command line of the host
     printf '%s\n' "${GITHUB_TOKEN:-}" | vm_ssh tester "read -r token; if [ -n \"\$token\" ]; then export GITHUB_TOKEN=\"\$token\"; fi; E2E_VERBOSE=${verbose} bash /tests/testcases/${test}.sh" || code=$?
   fi
   "${QEMU[@]}" remove "$name" --force >/dev/null 2>&1 || true
-  rm -f "${TMPDIR:-/tmp}/${name}.log"
   return "$code"
 }
 

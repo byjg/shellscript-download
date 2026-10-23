@@ -65,7 +65,8 @@ prepare_docker() {
   echo "Docker did not start"
   return 1
 }
-if grep -q '^# needs: docker' "/tests/testcases/$1.sh" && ! prepare_docker >/tmp/docker.log 2>&1; then
+if grep -q '^# needs: docker' "/tests/testcases/$1.sh" && echo "container.sh: preparing Docker" >&2 \
+    && ! prepare_docker >/tmp/docker.log 2>&1; then
   echo "container.sh: could not prepare Docker:" >&2
   cat /tmp/docker.log >&2
   exit 2
