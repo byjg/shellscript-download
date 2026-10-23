@@ -66,7 +66,6 @@ while [[ ${1-} ]]; do
 done
 
 PACKAGES_STATE="${SHELLSCRIPT_HOME}/podman/installed-packages.conf"
-DOCKER_WRAPPER="${SHELLSCRIPT_BIN}/docker"
 
 # Internal hook, not part of the user interface: executed by 'load.sh remove -- podman'
 # through the UNINSTALL_CMD manifest key.
@@ -80,32 +79,11 @@ if [[ "${OSTYPE:-}" != linux* ]]; then
   exit 1
 fi
 
-# A 'docker' that is not our own wrapper is the real one: never shadow it
-if [[ "$DOCKER_ALIAS" == "1" ]]; then
-  while IFS= read -r found; do
-    if [[ "$found" != "$DOCKER_WRAPPER" ]]; then
-      err "Docker is already installed (${found}): not creating a 'docker' command for Podman."
-      err "Run again without --docker, or remove Docker first."
-      exit 3
-    fi
-  done < <(type -aP docker 2>/dev/null || true)
-fi
+[[ "$DOCKER_ALIAS" != "1" ]] || docker_command_check Podman
 
 ensure_package podman "Podman" podman "$PACKAGES_STATE"
 
-if [[ "$DOCKER_ALIAS" == "1" ]]; then
-  run "mkdir -p \"${SHELLSCRIPT_BIN}\""
-  if [[ "$DRY_RUN" == "1" ]]; then
-    log "[dry-run] Writing ${DOCKER_WRAPPER}"
-  else
-    cat >"$DOCKER_WRAPPER" <<'WRAP'
-#!/usr/bin/env bash
-exec podman "$@"
-WRAP
-    chmod +x "$DOCKER_WRAPPER"
-  fi
-  log "The 'docker' command now runs Podman."
-fi
+[[ "$DOCKER_ALIAS" != "1" ]] || docker_command_write Podman podman
 
 # Rootless containers need a range of subordinate ids for the user
 if [[ "$(id -u)" != "0" ]] && ! grep -q "^$(id -un):" /etc/subuid 2>/dev/null; then

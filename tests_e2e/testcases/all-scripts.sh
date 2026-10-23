@@ -37,6 +37,8 @@ for file in "${SCRIPTS_DIR}"/*.sh; do
 
   if [[ "$name" == "byjg-repo" ]] && on_image alpine; then
     skip "--dry-run: byjg-repo has no packages for this image, see its own test"
+  elif [[ "$name" == "nerdctl" ]]; then
+    skip "--dry-run: nerdctl needs systemd, which a container has not, see its own test"
   elif [[ "$NO_DRY_RUN" != *" ${name} "* ]]; then
     before="$(home_snapshot)"
     assert_exit 0 "${LOADER} ${name} -- --dry-run"

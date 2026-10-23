@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # system-packages.sh: code shared by the scripts that install distro packages
-# (qemu.sh, podman.sh, buildah.sh, byjg-repo.sh). Sourced, never run.
+# (qemu.sh, podman.sh, buildah.sh, byjg-repo.sh, nerdctl.sh). Sourced, never run.
 #
 # Every install is recorded in a state file, so the script's uninstall hook removes
 # only the packages it installed and leaves the ones that were already there.
@@ -74,4 +74,34 @@ remove_recorded_packages() {
     apk)     run "${SUDO} apk del ${pkgs}" ;;
   esac
   [[ "$DRY_RUN" == "1" ]] || rm -f "$state"
+}
+
+# The 'docker' command of the scripts that install another container engine (podman.sh,
+# nerdctl.sh): a wrapper in $SHELLSCRIPT_BIN that runs it, for commands and scripts
+# written for Docker.
+DOCKER_WRAPPER="${SHELLSCRIPT_BIN}/docker"
+
+# docker_command_check <label>
+# A 'docker' that is not our own wrapper is the real one: never shadow it
+docker_command_check() {
+  local found
+  while IFS= read -r found; do
+    if [[ "$found" != "$DOCKER_WRAPPER" ]]; then
+      err "Docker is already installed (${found}): not creating a 'docker' command for $1."
+      err "Run again without --docker, or remove Docker first."
+      exit 3
+    fi
+  done < <(type -aP docker 2>/dev/null || true)
+}
+
+# docker_command_write <label> <command>: the 'docker' command runs <command>
+docker_command_write() {
+  run "mkdir -p \"${SHELLSCRIPT_BIN}\""
+  if [[ "$DRY_RUN" == "1" ]]; then
+    log "[dry-run] Writing ${DOCKER_WRAPPER}"
+  else
+    printf '#!/usr/bin/env bash\nexec %q "$@"\n' "$2" >"$DOCKER_WRAPPER"
+    chmod +x "$DOCKER_WRAPPER"
+  fi
+  log "The 'docker' command now runs $1."
 }
