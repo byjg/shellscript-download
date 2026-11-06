@@ -29,6 +29,16 @@ assert_log "Invalid --mysql-uri format"
 assert_exit 2 "${LOADER} byjg-gluo -- myproject ${required} --no-such-option"
 assert_exit 2 "${LOADER} byjg-gluo -- myproject another ${required}"
 
+step "byjg-gluo: the database options it refuses"
+assert_exit 2 "${LOADER} byjg-gluo -- myproject ${required} --db=oracle"
+assert_log "Invalid --db"
+assert_exit 2 "${LOADER} byjg-gluo -- myproject ${required} --db=sqlite --db-uri=mysql://u:p@h/d"
+assert_log "--db=sqlite needs no server"
+assert_exit 2 "${LOADER} byjg-gluo -- myproject ${required} --db=postgres --db-uri=mysql://u:p@h/d"
+assert_log "does not match the scheme of --db-uri"
+assert_exit 2 "${LOADER} byjg-gluo -- myproject ${required} --db-uri=sqlite://u@h/d"
+assert_log "Invalid --db-uri scheme"
+
 step "byjg-gluo: installs nothing on the machine: nothing to remove, nothing to upgrade"
 assert_output "${LOADER} byjg-gluo -- --manifest 2>/dev/null" "UPGRADE=no"
 load remove -- byjg-gluo
@@ -65,6 +75,20 @@ assert_output "${own_files} | xargs grep -l 'E2eApp' | sed -n 1p" "$project"
 assert_output "${own_files} | xargs grep -h 'e2e-db' | sed -n 1p" "e2e-db"
 # Gluo 7 does not create a git repository inside the project
 assert_missing "${project}/.git"
+
+step "byjg-gluo: the project has its compiled routes, the frontend by default, and the next steps"
+assert_exists "${project}/generated/routes.php"
+assert_exists "${project}/generated/openapi.php"
+assert_exists "${project}/frontend"
+assert_log "php gluo --env=dev migrate:reset"
+
+step "byjg-gluo: a pure API on SQLite: no frontend, no database server"
+api="${workdir}/apiproject"
+load byjg-gluo -- apiproject ${required} --db=sqlite --install-frontend=n --install-examples=n --php-version=8.4
+assert_log "Project successfully created in: ${api}"
+assert_missing "${api}/frontend"
+assert_output "grep '^DBDRIVER_CONNECTION=' ${api}/config/dev/credentials.env" "sqlite://"
+assert_exists "${api}/generated/routes.php"
 
 step "byjg-gluo: the answers file does not stay behind"
 assert_missing "${workdir}/setup.json"
