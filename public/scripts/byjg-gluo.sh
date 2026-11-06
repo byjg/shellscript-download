@@ -6,9 +6,13 @@
 #   --name            Composer package name (vendor/package format, e.g., mycompany/myapp)
 #
 # Optional Arguments:
-#   --mysql-uri       MySQL connection string (default values: schema=mysql, host=mysql-container,
-#                     user=root, password=mysqlp455w0rd, dev db=localdev, test db=localtest)
+#   --db              Database: mysql, postgres or sqlite (default: mysql)
+#   --db-uri          Connection string of a MySQL or PostgreSQL server (scheme://user:password@host/database);
+#                     without it, the template's defaults: host gluo-database (the compose service), user root
+#                     (postgres for PostgreSQL), password mysqlp455w0rd, dev db localdev, test db localtest.
+#                     --mysql-uri is the same option, kept for existing calls
 #   --install-examples Install example code (Y or n, default: Y)
+#   --install-frontend Install the frontend (Y or n, default: Y)
 #   --version         Composer version constraint (default: ^7.0)
 #   --php-version     PHP version for Docker (8.3, 8.4, 8.5, 8.6, default: current PHP version)
 #   --timezone        Server timezone (default: UTC)
@@ -38,10 +42,17 @@ Required Arguments:
   --name=<vendor/package>   Composer package name (e.g., mycompany/myapp)
 
 Optional Arguments:
-  --mysql-uri=<uri>         MySQL connection string
-                            (default values: schema=mysql, host=mysql-container,
-                             user=root, password=mysqlp455w0rd, dev db=localdev, test db=localtest)
+  --db=<mysql|postgres|sqlite>
+                            Database (default: mysql). sqlite needs no server: the
+                            databases are files under db/
+  --db-uri=<uri>            Connection string of a MySQL or PostgreSQL server
+                            (scheme://user:password@host/database). Without it, the
+                            template's defaults: host gluo-database (the compose
+                            service), user root (postgres for PostgreSQL), password
+                            mysqlp455w0rd, databases localdev and localtest.
+                            --mysql-uri is the same option, kept for existing calls
   --install-examples=<Y|n>  Install example code (default: Y)
+  --install-frontend=<Y|n>  Install the frontend (default: Y)
   --version=<constraint>    Composer version constraint (default: ^7.0)
   --php-version=<version>   PHP version for Docker (8.3-8.6, default: current)
   --timezone=<tz>           Server timezone (default: UTC)
@@ -54,8 +65,12 @@ Examples:
 
   # Full configuration
   load.sh byjg-gluo -- myproject --namespace=MyApp --name=mycompany/myapp \
-    --mysql-uri=mysql://root:secret@mysql-container/mydb \
-    --install-examples=n --version="^7.0" --php-version=8.4
+    --db-uri=mysql://root:secret@db-server/mydb \
+    --install-examples=n --install-frontend=n --version="^7.0" --php-version=8.4
+
+  # A pure API on SQLite (no database server)
+  load.sh byjg-gluo -- myproject --namespace=MyApp --name=mycompany/myapp \
+    --db=sqlite --install-frontend=n
 
   # Show manifest
   load.sh byjg-gluo -- myproject --namespace=MyApp --name=mycompany/myapp --manifest
@@ -80,25 +95,48 @@ MANIFEST
 FOLDER=""
 NAMESPACE=""
 COMPOSER_NAME=""
-MYSQL_URI=""
+DB_URI=""
+DB_URI_OPTION="--db-uri"   # the option it was given with, for the messages
+DB=""
 INSTALL_EXAMPLES="true"
+INSTALL_FRONTEND="true"
 VERSION="^7.0"
 PHP_VERSION=""
 TIMEZONE="UTC"
+# The database: the schema always, the server only when --db-uri gives one (the template
+# has the defaults of the server its docker compose runs)
 DB_SCHEMA="mysql"
-DB_HOST="mysql-container"
-DB_USER="root"
-DB_PASSWORD="mysqlp455w0rd"
-DB_NAME_DEV="localdev"
-DB_NAME_TEST="localtest"
+DB_HOST=""
+DB_USER=""
+DB_PASSWORD=""
+DB_NAME_DEV=""
+DB_NAME_TEST=""
 SHOW_MANIFEST=0
 
-parse_mysql_uri() {
+# The schema as the template names it: mysql, postgres or sqlite; empty when unknown
+normalize_schema() {
+  case "${1,,}" in
+    mysql) echo "mysql" ;;
+    postgres|postgresql|pgsql) echo "postgres" ;;
+    sqlite) echo "sqlite" ;;
+    *) echo "" ;;
+  esac
+}
+
+# Yes unless the value says no
+is_yes() {
+  case "$1" in
+    n|N|no|No|NO|false) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+parse_db_uri() {
   local uri="$1"
   local schema rest creds host_db user pass host db
 
   if [[ "${uri}" != *"://"* || "${uri}" != *@* || "${uri}" != */* ]]; then
-    err "Invalid --mysql-uri format. Expected mysql://user:password@host/database"
+    err "Invalid ${DB_URI_OPTION} format. Expected mysql://user:password@host/database"
     exit 2
   fi
 
@@ -110,7 +148,7 @@ parse_mysql_uri() {
   db="${host_db#*/}"
 
   if [[ -z "${schema}" || -z "${creds}" || -z "${host}" || -z "${db}" ]]; then
-    err "Invalid --mysql-uri format. Expected mysql://user:password@host/database"
+    err "Invalid ${DB_URI_OPTION} format. Expected mysql://user:password@host/database"
     exit 2
   fi
 
@@ -127,7 +165,13 @@ parse_mysql_uri() {
   db="${db%%#*}"
 
   if [[ -z "${user}" || -z "${db}" ]]; then
-    err "Invalid --mysql-uri format. Expected mysql://user:password@host/database"
+    err "Invalid ${DB_URI_OPTION} format. Expected mysql://user:password@host/database"
+    exit 2
+  fi
+
+  schema="$(normalize_schema "${schema}")"
+  if [[ "${schema}" != "mysql" && "${schema}" != "postgres" ]]; then
+    err "Invalid ${DB_URI_OPTION} scheme. Expected mysql:// or postgres:// (sqlite needs no server: use --db=sqlite)"
     exit 2
   fi
 
@@ -154,17 +198,21 @@ while [[ $# -gt 0 ]]; do
       COMPOSER_NAME="${1#*=}"
       shift
       ;;
-    --mysql-uri=*)
-      MYSQL_URI="${1#*=}"
+    --db=*)
+      DB="${1#*=}"
+      shift
+      ;;
+    --db-uri=*|--mysql-uri=*)
+      DB_URI="${1#*=}"
+      DB_URI_OPTION="${1%%=*}"
       shift
       ;;
     --install-examples=*)
-      val="${1#*=}"
-      if [[ "${val}" == "n" || "${val}" == "N" || "${val}" == "no" || "${val}" == "No" || "${val}" == "false" ]]; then
-        INSTALL_EXAMPLES="false"
-      else
-        INSTALL_EXAMPLES="true"
-      fi
+      if is_yes "${1#*=}"; then INSTALL_EXAMPLES="true"; else INSTALL_EXAMPLES="false"; fi
+      shift
+      ;;
+    --install-frontend=*)
+      if is_yes "${1#*=}"; then INSTALL_FRONTEND="true"; else INSTALL_FRONTEND="false"; fi
       shift
       ;;
     --version=*)
@@ -255,9 +303,25 @@ if [[ $SHOW_MANIFEST -eq 1 ]]; then
   exit 0
 fi
 
-# Override DB defaults if a mysql uri is provided
-if [[ -n "${MYSQL_URI}" ]]; then
-  parse_mysql_uri "${MYSQL_URI}"
+# The database: --db, and the server of --db-uri (its scheme must be the same database)
+if [[ -n "${DB}" ]]; then
+  DB_SCHEMA="$(normalize_schema "${DB}")"
+  if [[ -z "${DB_SCHEMA}" ]]; then
+    err "Invalid --db. Expected mysql, postgres or sqlite"
+    exit 2
+  fi
+fi
+if [[ -n "${DB_URI}" ]]; then
+  if [[ "${DB_SCHEMA}" == "sqlite" ]]; then
+    err "--db=sqlite needs no server: do not pass ${DB_URI_OPTION}"
+    exit 2
+  fi
+  requested_schema="${DB_SCHEMA}"
+  parse_db_uri "${DB_URI}"
+  if [[ -n "${DB}" && "${DB_SCHEMA}" != "${requested_schema}" ]]; then
+    err "--db=${requested_schema} does not match the scheme of ${DB_URI_OPTION} (${DB_SCHEMA})"
+    exit 2
+  fi
 fi
 
 # Validate PHP version if provided
@@ -310,19 +374,26 @@ mkdir -p "${PARENT_DIR}"
 SETUP_JSON="${PARENT_DIR}/setup.json"
 log "Creating setup.json in parent directory: ${SETUP_JSON}"
 
+# The server only when --db-uri gave one: otherwise the template's defaults apply
+DB_SERVER_JSON=""
+if [[ -n "${DB_HOST}" ]]; then
+  DB_SERVER_JSON="  \"db_host\": \"${DB_HOST}\",
+  \"db_user\": \"${DB_USER}\",
+  \"db_password\": \"${DB_PASSWORD}\",
+  \"db_name_dev\": \"${DB_NAME_DEV}\",
+  \"db_name_test\": \"${DB_NAME_TEST}\",
+"
+fi
+
 cat > "${SETUP_JSON}" <<EOF
 {
   "php_version": "${PHP_VERSION}",
   "namespace": "${NAMESPACE}",
   "composer_name": "${COMPOSER_NAME}",
   "db_schema": "${DB_SCHEMA}",
-  "db_host": "${DB_HOST}",
-  "db_user": "${DB_USER}",
-  "db_password": "${DB_PASSWORD}",
-  "db_name_dev": "${DB_NAME_DEV}",
-  "db_name_test": "${DB_NAME_TEST}",
-  "timezone": "${TIMEZONE}",
-  "install_examples": ${INSTALL_EXAMPLES}
+${DB_SERVER_JSON}  "timezone": "${TIMEZONE}",
+  "install_examples": ${INSTALL_EXAMPLES},
+  "install_frontend": ${INSTALL_FRONTEND}
 }
 EOF
 
@@ -351,7 +422,12 @@ log ""
 log "Next steps:"
 log "  1. cd ${FOLDER}"
 log "  2. docker compose up -d"
-log "  3. APP_ENV=dev composer run migrate -- reset --yes"
-log "  4. Visit http://localhost:8080/docs for API documentation"
+log "  3. php gluo --env=dev migrate:reset"
+if [[ "${INSTALL_EXAMPLES}" == "true" ]]; then
+  log "  4. curl http://localhost:8080/sample/ping"
+  log "  5. Visit http://localhost:8080/docs for API documentation"
+else
+  log "  4. Visit http://localhost:8080/docs for API documentation"
+fi
 log ""
 log "Done."

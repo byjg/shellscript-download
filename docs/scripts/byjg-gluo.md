@@ -26,10 +26,17 @@ Required Arguments:
   --name=<vendor/package>   Composer package name (e.g., mycompany/myapp)
 
 Optional Arguments:
-  --mysql-uri=<uri>         MySQL connection string
-                            (default values: schema=mysql, host=mysql-container,
-                             user=root, password=mysqlp455w0rd, dev db=localdev, test db=localtest)
+  --db=<mysql|postgres|sqlite>
+                            Database (default: mysql). sqlite needs no server: the
+                            databases are files under db/
+  --db-uri=<uri>            Connection string of a MySQL or PostgreSQL server
+                            (scheme://user:password@host/database). Without it, the
+                            template's defaults: host gluo-database (the compose
+                            service), user root (postgres for PostgreSQL), password
+                            mysqlp455w0rd, databases localdev and localtest.
+                            --mysql-uri is the same option, kept for existing calls
   --install-examples=<Y|n>  Install example code (default: Y)
+  --install-frontend=<Y|n>  Install the frontend (default: Y)
   --version=<constraint>    Composer version constraint (default: ^7.0)
   --php-version=<version>   PHP version for Docker (8.3-8.6, default: current)
   --timezone=<tz>           Server timezone (default: UTC)
@@ -42,8 +49,12 @@ Examples:
 
   # Full configuration
   load.sh byjg-gluo -- myproject --namespace=MyApp --name=mycompany/myapp \
-    --mysql-uri=mysql://root:secret@mysql-container/mydb \
-    --install-examples=n --version="^7.0" --php-version=8.4
+    --db-uri=mysql://root:secret@db-server/mydb \
+    --install-examples=n --install-frontend=n --version="^7.0" --php-version=8.4
+
+  # A pure API on SQLite (no database server)
+  load.sh byjg-gluo -- myproject --namespace=MyApp --name=mycompany/myapp \
+    --db=sqlite --install-frontend=n
 
   # Show manifest
   load.sh byjg-gluo -- myproject --namespace=MyApp --name=mycompany/myapp --manifest
