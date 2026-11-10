@@ -281,6 +281,7 @@ function buildComponentTsx({ title, bodyText, base, spec }) {
 
 import { Link } from "react-router-dom";
 import { InstallCommand } from "@/components/InstallCommand.tsx";
+import { BadgeEmbed } from "@/components/BadgeEmbed.tsx";
 import { Terminal } from "lucide-react";
 
 export default function ${compName}() {
@@ -297,6 +298,7 @@ export default function ${compName}() {
         <h1 className="text-foreground" style={{fontSize: "1.5rem", margin: "1rem 0"}}>${title}</h1>
         <InstallCommand command="load.sh ${base}"${specAttr} />
         <pre style={{whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', background: '#0b1020', color: '#e5e7eb', padding: '1rem', borderRadius: '.5rem', marginTop: '1rem'}}>{` + "`" + escaped.replace(/`/g, '\\`') + "`" + `}</pre>
+        <BadgeEmbed script="${base}" />
         <br/>
       </div>
     </div>

@@ -30,7 +30,7 @@ interface InstallCommandProps {
   variants?: { label: string; command: string }[];
 }
 
-const CopyButton = ({ text }: { text: string }) => {
+export const CopyButton = ({ text }: { text: string }) => {
   const [copied, setCopied] = useState(false);
 
   const copyToClipboard = async () => {
