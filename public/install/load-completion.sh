@@ -11,7 +11,7 @@ _load_sh_completion() {
   cur="${COMP_WORDS[COMP_CWORD]}"
 
   if [[ $COMP_CWORD -eq 1 ]]; then
-    mapfile -t COMPREPLY < <(compgen -W "--completion --developer --dont-run --help --installed --list --update --upgrade -h ant aws-cli buildah byjg-gluo byjg-repo docker doctl eksctl gcloud gh helm java-corretto java-oracle java-temurin jq kubectl kustomize maven nerdctl node-docker nvm php-docker podman qemu ssh-agent yq" -- "$cur")
+    mapfile -t COMPREPLY < <(compgen -W "--completion --developer --dont-run --help --installed --list --update --upgrade -h ant aws-cli buildah byjg-gluo byjg-repo docker doctl dokku dokku-docker eksctl gcloud gh helm java-corretto java-oracle java-temurin jq kubectl kustomize maven nerdctl node-docker nvm php-docker podman qemu ssh-agent yq" -- "$cur")
     return
   fi
 
@@ -23,6 +23,8 @@ _load_sh_completion() {
     byjg-repo) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --install --list --manifest -h" -- "$cur") ;;
     docker) mapfile -t COMPREPLY < <(compgen -W "--channel --dry-run --help --manifest --no-group -h" -- "$cur") ;;
     doctl) mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --help --manifest --version -h" -- "$cur") ;;
+    dokku) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --hostname --manifest --plugin --ssh-key --version -h" -- "$cur") ;;
+    dokku-docker) mapfile -t COMPREPLY < <(compgen -W "--data-dir --dry-run --help --hostname --http-port --https-port --manifest --plugin --ssh-key --ssh-port --version -h" -- "$cur") ;;
     eksctl) mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --help --manifest --version -h" -- "$cur") ;;
     gcloud) mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --help --manifest --version -h" -- "$cur") ;;
     gh) mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --help --manifest --version -h" -- "$cur") ;;
