@@ -44,9 +44,40 @@ function buildStaticHtml(template, { title, description, bodyText, scriptName })
         <h1>${htmlEscape(title)}</h1>
         <pre><code>load.sh ${htmlEscape(scriptName)}</code></pre>
         <pre>${htmlEscape(bodyText)}</pre>
+        <p>Developed and maintained by <a href="https://opensource.byjg.com">ByJG</a> · <a href="https://github.com/byjg/shellscript-download">GitHub</a> · <a href="https://github.com/sponsors/byjg">Sponsor</a></p>
       </main>
     </div>`)
   return html
+}
+
+// buildBadgeSvg <command>: the badge a project puts in its README to say it installs with
+// shellscript.download. The mark and the colors of the logo (public/logo.png) on the left, the
+// command on the right. Monospace, as the logo, at 6.6px a character: textLength holds the
+// text to that width in whatever monospace font the reader has. No ids (a clipPath): two
+// badges inlined in one page would share them.
+function buildBadgeSvg(command) {
+  const charWidth = 6.6
+  const brand = 'shellscript.download'
+  const brandWidth = brand.length * charWidth
+  const commandWidth = command.length * charWidth
+  const left = 24 + brandWidth + 6
+  const right = 7 + commandWidth + 7
+  const width = left + right
+  const label = `${brand}: ${command}`
+  const text = (x, value, length) =>
+    `<text x="${x}" y="14" textLength="${length.toFixed(1)}" lengthAdjust="spacingAndGlyphs">${htmlEscape(value)}</text>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width.toFixed(1)}" height="20" role="img" aria-label="${htmlEscape(label)}">
+  <title>${htmlEscape(label)}</title>
+  <rect width="${width.toFixed(1)}" height="20" rx="3" fill="#16a249"/>
+  <path d="M3 0H${left.toFixed(1)}V20H3A3 3 0 0 1 0 17V3A3 3 0 0 1 3 0Z" fill="#0f1318"/>
+  <rect x="0.5" y="0.5" width="${(width - 1).toFixed(1)}" height="19" rx="2.5" fill="none" stroke="#3d444d"/>
+  <path d="M7 6l4 4-4 4M13 14.5h5" fill="none" stroke="#16a249" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <g fill="#f8fafc" font-family="DejaVu Sans Mono,Menlo,Consolas,monospace" font-size="11">
+    ${text(24, brand, brandWidth)}
+    ${text(left + 7, command, commandWidth)}
+  </g>
+</svg>
+`
 }
 
 async function generate() {
@@ -57,6 +88,11 @@ async function generate() {
 
   // Ensure dist/scripts exists
   await fs.mkdir(distScriptsDir, { recursive: true })
+
+  // The badges: /badge.svg for the site, /badge/<script>.svg for a script
+  const distBadgeDir = path.join(distDir, 'badge')
+  await fs.mkdir(distBadgeDir, { recursive: true })
+  await fs.writeFile(path.join(distDir, 'badge.svg'), buildBadgeSvg('load.sh'), 'utf8')
 
   // The built app: vite build has written it before this postbuild step runs
   const template = await fs.readFile(path.join(distDir, 'index.html'), 'utf8')
@@ -98,6 +134,7 @@ async function generate() {
     // Cloudflare Pages serves /scripts/<name>.html for /scripts/<name>
     const outHtmlPath = path.join(distScriptsDir, `${base}.html`)
     await fs.writeFile(outHtmlPath, html, 'utf8')
+    await fs.writeFile(path.join(distBadgeDir, `${base}.svg`), buildBadgeSvg(`load.sh ${base}`), 'utf8')
 
     count++
   }
@@ -153,7 +190,7 @@ ${sitemapUrls.map(({ loc, priority, changefreq }) => `  <url>
 if (import.meta.url === url.pathToFileURL(process.argv[1]).href) {
   generate()
     .then(({ count }) => {
-      console.log(`[generate-static-pages] Generated ${count} static HTML page(s) in dist/scripts/`)
+      console.log(`[generate-static-pages] Generated ${count} static HTML page(s) in dist/scripts/ and their badges in dist/badge/`)
     })
     .catch((err) => {
       console.error('[generate-static-pages] Failed:', err)
