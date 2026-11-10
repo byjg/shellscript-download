@@ -18,7 +18,7 @@ async function ensureDir(dir) {
   await fs.mkdir(dir, { recursive: true })
 }
 
-function extractHeaderComments(content) {
+export function extractHeaderComments(content) {
   const lines = content.split(/\r?\n/)
   const result = []
   let started = false
@@ -47,7 +47,7 @@ function extractHeaderComments(content) {
   return result.join('\n')
 }
 
-function extractPrintUsage(content) {
+export function extractPrintUsage(content) {
   // Extract content from print_usage() function's heredoc
   const lines = content.split(/\r?\n/)
   const result = []
@@ -184,7 +184,7 @@ function htmlEscape(s) {
 
 // Short description of a script: the first header line without its "<name>.sh: " prefix,
 // plus the indented lines that continue it
-function extractDescription(header, name) {
+export function extractDescription(header, name) {
   const lines = header.split(/\r?\n/)
   const first = lines.findIndex((l) => l.trim() !== '')
   if (first === -1) return name

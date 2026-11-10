@@ -4,17 +4,12 @@ source "$(dirname "${BASH_SOURCE[0]}")/../shared/lib.sh"
 
 tool_home="${SHELLSCRIPT_HOME}/byjg-repo"
 
-# The repository has APT and RPM packages only
-if command -v apk >/dev/null 2>&1; then
-  step "byjg-repo: refused where there is neither APT nor RPM"
-  load_fails byjg-repo
-  assert_output "cat '$LOG_FILE'" "APT (Debian, Ubuntu) and RPM (Fedora, RHEL) packages only"
-  finish
-  exit 0
-fi
-
+# On Alpine the key says the repository is set up: the repository itself is a line of
+# /etc/apk/repositories
 if command -v apt-get >/dev/null 2>&1; then
   repo_file="/etc/apt/sources.list.d/byjg.sources"
+elif command -v apk >/dev/null 2>&1; then
+  repo_file="/etc/apk/keys/byjg.rsa.pub"
 else
   repo_file="/etc/yum.repos.d/byjg.repo"
 fi

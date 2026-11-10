@@ -1,32 +1,11 @@
-// Generates static HTML pages for each route (for SEO and curl-friendly access)
+// Generates the HTML page of each script route (for SEO and readers without JavaScript): the
+// built app with the script's title, description and documentation written in
 import { promises as fs } from 'fs'
 import path from 'path'
 import url from 'url'
+import { extractDescription, extractHeaderComments, extractPrintUsage } from './generate-script-pages.mjs'
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url))
-
-function extractHeaderComments(content) {
-  const lines = content.split(/\r?\n/)
-  const result = []
-  let started = false
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
-    if (i === 0 && line.startsWith('#!')) {
-      continue
-    }
-    if (line.trim().startsWith('#')) {
-      const cleaned = line.replace(/^\s*#\s?/, '')
-      result.push(cleaned)
-      started = true
-      continue
-    }
-    if (started) break
-    if (line.trim() === '') continue
-    break
-  }
-  while (result.length && result[result.length - 1].trim() === '') result.pop()
-  return result.join('\n')
-}
 
 function htmlEscape(s) {
   return s
@@ -37,118 +16,37 @@ function htmlEscape(s) {
     .replaceAll("'", '&#39;')
 }
 
-function buildStaticHtml({ title, description, bodyText, scriptName }) {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${htmlEscape(title)} - shellscript.download</title>
-  <meta name="description" content="${htmlEscape(description)}">
-  <meta property="og:title" content="${htmlEscape(title)} - shellscript.download">
-  <meta property="og:description" content="${htmlEscape(description)}">
-  <meta property="og:type" content="website">
-  <link rel="canonical" href="https://shellscript.download/scripts/${htmlEscape(scriptName)}">
-  <style>
-    body {
-      margin: 0;
-      padding: 2rem;
-      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      background: linear-gradient(135deg, hsl(220 25% 6%), hsl(220 30% 10%), hsl(142 50% 15%));
-      color: hsl(210 40% 98%);
-      min-height: 100vh;
-    }
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-    }
-    .header {
-      text-align: center;
-      margin-bottom: 2rem;
-    }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.75rem;
-      padding: 0.5rem 1.5rem;
-      border-radius: 9999px;
-      border: 1px solid hsl(220 20% 18%);
-      background: hsl(220 20% 10% / 0.5);
-      backdrop-filter: blur(8px);
-      font-family: ui-monospace, monospace;
-      font-size: 0.875rem;
-      margin-bottom: 1rem;
-    }
-    .terminal-icon {
-      color: hsl(142 76% 36%);
-    }
-    a {
-      color: hsl(142 76% 36%);
-      text-decoration: none;
-      transition: opacity 0.2s;
-    }
-    a:hover {
-      opacity: 0.8;
-    }
-    h1 {
-      font-size: 1.5rem;
-      margin: 1rem 0;
-      color: hsl(210 40% 98%);
-    }
-    .install-command {
-      background: hsl(220 20% 10%);
-      border: 1px solid hsl(220 20% 18%);
-      border-radius: 0.5rem;
-      padding: 1rem;
-      margin: 1rem 0;
-      font-family: ui-monospace, monospace;
-      font-size: 0.875rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    pre {
-      white-space: pre-wrap;
-      font-family: ui-monospace, monospace;
-      background: #0b1020;
-      color: #e5e7eb;
-      padding: 1rem;
-      border-radius: 0.5rem;
-      margin-top: 1rem;
-      overflow-x: auto;
-    }
-    .back-link {
-      display: inline-block;
-      margin-bottom: 1rem;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <header class="header">
-      <div class="badge">
-        <span class="terminal-icon">▶</span>
-        <span>shellscript.download</span>
-      </div>
-    </header>
-    <div style="background: hsl(142 76% 36% / 0.1); border: 1px solid hsl(142 76% 36% / 0.3); border-radius: 0.5rem; padding: 1rem; margin-bottom: 1.5rem; text-align: center;">
-      <p style="margin: 0; color: hsl(210 40% 98%);">
-        📱 For the full interactive experience, visit <a href="/" style="color: hsl(142 76% 36%); font-weight: 600;">shellscript.download</a>
-      </p>
-    </div>
-    <a href="/" class="back-link">← Home</a>
-    <h1>${htmlEscape(title)}</h1>
-    <div class="install-command">
-      <code>load.sh ${htmlEscape(scriptName)}</code>
-    </div>
-    <pre>${htmlEscape(bodyText)}</pre>
-    <br>
-    <p style="margin-top: 2rem; text-align: center;">
-      <a href="/">Return to Home</a>
-    </p>
-  </div>
-</body>
-</html>`
+// replaceOnce <html> <pattern> <replacement>: the template must have the pattern, or the page
+// would silently keep the home page's title and description
+function replaceOnce(html, pattern, replacement) {
+  if (!pattern.test(html)) throw new Error(`dist/index.html has no ${pattern}`)
+  return html.replace(pattern, () => replacement)
+}
+
+// The page of a script is the app itself (dist/index.html, with its scripts and styles), so a
+// direct visit to /scripts/<name> loads the same interactive page as navigating to it. Its
+// title, description and text are written in, for crawlers and readers without JavaScript;
+// React replaces the text in #root when it starts.
+function buildStaticHtml(template, { title, description, bodyText, scriptName }) {
+  const pageTitle = `${title} - shellscript.download`
+  const pageUrl = `https://shellscript.download/scripts/${scriptName}`
+  let html = template
+  html = replaceOnce(html, /<title>[^<]*<\/title>/, `<title>${htmlEscape(pageTitle)}</title>`)
+  html = replaceOnce(html, /<meta name="description" content="[^"]*"\s*\/?>/,
+    `<meta name="description" content="${htmlEscape(description)}" />`)
+  html = replaceOnce(html, /<meta property="og:title" content="[^"]*"\s*\/?>/,
+    `<meta property="og:title" content="${htmlEscape(pageTitle)}" />`)
+  html = replaceOnce(html, /<meta property="og:description" content="[^"]*"\s*\/?>/,
+    `<meta property="og:description" content="${htmlEscape(description)}" />\n    <meta property="og:url" content="${pageUrl}" />\n    <link rel="canonical" href="${pageUrl}" />`)
+  html = replaceOnce(html, /<div id="root"><\/div>/, `<div id="root">
+      <main style="max-width: 56rem; margin: 0 auto; padding: 2rem 1rem;">
+        <a href="/">← Home</a>
+        <h1>${htmlEscape(title)}</h1>
+        <pre><code>load.sh ${htmlEscape(scriptName)}</code></pre>
+        <pre>${htmlEscape(bodyText)}</pre>
+      </main>
+    </div>`)
+  return html
 }
 
 async function generate() {
@@ -159,6 +57,9 @@ async function generate() {
 
   // Ensure dist/scripts exists
   await fs.mkdir(distScriptsDir, { recursive: true })
+
+  // The built app: vite build has written it before this postbuild step runs
+  const template = await fs.readFile(path.join(distDir, 'index.html'), 'utf8')
 
   // Read all script files
   const entries = await fs.readdir(publicScriptsDir, { withFileTypes: true })
@@ -184,15 +85,17 @@ async function generate() {
 
     listItems.push({ name: base, description: firstLine })
 
+    const usage = extractPrintUsage(content)
     const title = `${entry.name}`
-    const html = buildStaticHtml({
+    const html = buildStaticHtml(template, {
       title,
-      description: firstLine,
-      bodyText: header || 'No documentation available.',
+      description: extractDescription(header || '', entry.name),
+      // The same text the app shows: the script's --help, or its header comments
+      bodyText: usage || header || 'No documentation available.',
       scriptName: base
     })
 
-    // Save static HTML - crawlers will find these, and they're accessible at /scripts/docker.html
+    // Cloudflare Pages serves /scripts/<name>.html for /scripts/<name>
     const outHtmlPath = path.join(distScriptsDir, `${base}.html`)
     await fs.writeFile(outHtmlPath, html, 'utf8')
 
