@@ -44,6 +44,7 @@ function buildStaticHtml(template, { title, description, bodyText, scriptName })
         <h1>${htmlEscape(title)}</h1>
         <pre><code>load.sh ${htmlEscape(scriptName)}</code></pre>
         <pre>${htmlEscape(bodyText)}</pre>
+        <p>Developed and maintained by <a href="https://opensource.byjg.com">ByJG</a> · <a href="https://github.com/byjg/shellscript-download">GitHub</a> · <a href="https://github.com/sponsors/byjg">Sponsor</a></p>
       </main>
     </div>`)
   return html
