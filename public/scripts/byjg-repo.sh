@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# byjg-repo.sh: Add the ByJG package repository (APT or RPM) to install ByJG tools
+# byjg-repo.sh: Add the ByJG package repository (APT, RPM or Alpine) to install ByJG tools
 
 set -euo pipefail
 
@@ -8,8 +8,8 @@ print_usage() {
 load.sh byjg-repo -- [options]
 
 Adds the ByJG package repository to the system (uses sudo), with its signing key:
-the APT one on Debian and Ubuntu, the RPM one on Fedora and RHEL. Its packages are
-then installed and updated by the system package manager.
+the APT one on Debian and Ubuntu, the RPM one on Fedora and RHEL, the Alpine one on
+Alpine. Its packages are then installed and updated by the system package manager.
 More: https://opensource.byjg.com/docs/packages
 
 Options:
@@ -78,13 +78,19 @@ REPO_STATE="${STATE_DIR}/repository-added"
 APT_KEY="/etc/apt/keyrings/byjg.gpg"
 APT_SOURCE="/etc/apt/sources.list.d/byjg.sources"
 RPM_REPO="/etc/yum.repos.d/byjg.repo"
+# Alpine has no file per repository: the key says it is set up, the repository is a line
+# of /etc/apk/repositories. The index signature names the key file, so its name is fixed.
+APK_KEY="/etc/apk/keys/byjg.rsa.pub"
+APK_REPOSITORIES="/etc/apk/repositories"
+APK_URL="${REPO_URL}/alpine"
 
 PM=$(detect_pm) || true
 case "$PM" in
   apt-get) REPO_FILE="$APT_SOURCE" ;;
   dnf)     REPO_FILE="$RPM_REPO" ;;
+  apk)     REPO_FILE="$APK_KEY" ;;
   *)
-    err "The ByJG repository has APT (Debian, Ubuntu) and RPM (Fedora, RHEL) packages only."
+    err "The ByJG repository has APT (Debian, Ubuntu), RPM (Fedora, RHEL) and Alpine packages only."
     err "See https://opensource.byjg.com/docs/packages"
     exit 3
     ;;
@@ -103,6 +109,7 @@ if [[ "$UNINSTALL" == "1" ]]; then
   case "$PM" in
     apt-get) run "${SUDO} rm -f ${APT_SOURCE} ${APT_KEY}; ${SUDO} apt-get update" ;;
     dnf)     run "${SUDO} rm -f ${RPM_REPO}; ${SUDO} dnf clean all" ;;
+    apk)     run "${SUDO} sed -i '\\|^${APK_URL}\$|d' ${APK_REPOSITORIES}; ${SUDO} rm -f ${APK_KEY}" ;;
   esac
   [[ "$DRY_RUN" == "1" ]] || rm -f "$REPO_STATE"
   exit 0
@@ -116,6 +123,7 @@ if [[ "$LIST" == "1" ]]; then
     apt-get) fetch "${REPO_URL}/apt/Packages" | grep '^Package: ' | sed 's/^Package: //' | sort -u ;;
     # -y: the first query imports the signing key of the repository metadata
     dnf)     dnf -q -y repoquery --repo=byjg --available --qf '%{name}\n' | sort -u ;;
+    apk)     fetch "${APK_URL}/$(apk --print-arch)/APKINDEX.tar.gz" | tar -xzOf - APKINDEX | sed -n 's/^P://p' | sort -u ;;
   esac
   exit 0
 fi
@@ -140,6 +148,12 @@ else
       run "download \"${REPO_URL}/byjg.asc\" \"${TEMP_DIR}/byjg.asc\""
       run "${SUDO} rpm --import \"${TEMP_DIR}/byjg.asc\""
       run "printf '[byjg]\nname=ByJG Packages\nbaseurl=${REPO_URL}/rpm\nenabled=1\ngpgcheck=1\nrepo_gpgcheck=1\ngpgkey=${REPO_URL}/byjg.asc\n' | ${SUDO} tee ${RPM_REPO} >/dev/null"
+      ;;
+    apk)
+      run "download \"${REPO_URL}/byjg.rsa.pub\" \"${TEMP_DIR}/byjg.rsa.pub\""
+      run "${SUDO} install -D -m 644 \"${TEMP_DIR}/byjg.rsa.pub\" ${APK_KEY}"
+      run "grep -qx '${APK_URL}' ${APK_REPOSITORIES} || echo '${APK_URL}' | ${SUDO} tee -a ${APK_REPOSITORIES} >/dev/null"
+      run "${SUDO} apk update"
       ;;
   esac
   if [[ "$DRY_RUN" != "1" ]]; then

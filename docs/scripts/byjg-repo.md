@@ -1,11 +1,11 @@
 ---
 # Auto-generated from public/scripts/byjg-repo.sh — Do not edit.
-description: "Add the ByJG package repository (APT or RPM) to install ByJG tools"
+description: "Add the ByJG package repository (APT, RPM or Alpine) to install ByJG tools"
 ---
 
 # byjg-repo
 
-Add the ByJG package repository (APT or RPM) to install ByJG tools
+Add the ByJG package repository (APT, RPM or Alpine) to install ByJG tools
 
 ```bash
 load.sh byjg-repo
@@ -17,8 +17,8 @@ load.sh byjg-repo
 load.sh byjg-repo -- [options]
 
 Adds the ByJG package repository to the system (uses sudo), with its signing key:
-the APT one on Debian and Ubuntu, the RPM one on Fedora and RHEL. Its packages are
-then installed and updated by the system package manager.
+the APT one on Debian and Ubuntu, the RPM one on Fedora and RHEL, the Alpine one on
+Alpine. Its packages are then installed and updated by the system package manager.
 More: https://opensource.byjg.com/docs/packages
 
 Options:

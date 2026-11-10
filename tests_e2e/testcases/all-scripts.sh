@@ -35,9 +35,7 @@ for file in "${SCRIPTS_DIR}"/*.sh; do
   $LOADER "$name" -- --no-such-option-e2e >"$LOG_FILE" 2>&1 || code=$?
   if [[ "$code" != "0" ]]; then pass "refuses an unknown option (exit ${code})"; else fail "accepted an unknown option"; fi
 
-  if [[ "$name" == "byjg-repo" ]] && on_image alpine; then
-    skip "--dry-run: byjg-repo has no packages for this image, see its own test"
-  elif [[ "$name" == "nerdctl" ]]; then
+  if [[ "$name" == "nerdctl" ]]; then
     skip "--dry-run: nerdctl needs systemd, which a container has not, see its own test"
   elif [[ "$NO_DRY_RUN" != *" ${name} "* ]]; then
     before="$(home_snapshot)"
