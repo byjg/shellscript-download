@@ -32,7 +32,7 @@ Options:
                           hostname of the machine)
   --ssh-key <file>        Public keys allowed to push apps (default: ~/.ssh/authorized_keys).
                           A key already in Dokku is not added again
-  --plugin <name>=<url>   Install a plugin, unless it is installed (can be repeated)
+  --plugin <name=url>     Install a plugin, unless it is installed (can be repeated)
   --dry-run               Print actions without executing them
   --manifest              Print installation manifest and exit
 

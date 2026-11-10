@@ -26,7 +26,7 @@ Options:
   --https-port <port>     Port of the host for the apps over HTTPS (default: 8443)
   --ssh-key <file>        Public keys allowed to push apps (default: ~/.ssh/authorized_keys).
                           A key already in Dokku is not added again
-  --plugin <name>=<url>   Install a plugin, unless it is installed (can be repeated). It is
+  --plugin <name=url>     Install a plugin, unless it is installed (can be repeated). It is
                           installed again when the container is replaced
   --dry-run               Print actions without executing them
   --manifest              Print installation manifest and exit
@@ -94,7 +94,7 @@ while [[ ${1-} ]]; do
       [[ -f "$SSH_KEY_FILE" ]] || { err "--ssh-key: no such file: ${SSH_KEY_FILE}"; exit 2; }
       ;;
     --plugin)
-      [[ "${2-}" == ?*=?* ]] || { err "--plugin requires <name>=<url>"; exit 2; }
+      [[ "${2-}" == ?*=?* ]] || { err "--plugin requires <name=url>"; exit 2; }
       PLUGINS+=("$2"); shift
       ;;
     uninstall) UNINSTALL=1 ;;

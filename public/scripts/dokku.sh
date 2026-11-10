@@ -23,7 +23,7 @@ Options:
                           hostname of the machine)
   --ssh-key <file>        Public keys allowed to push apps (default: ~/.ssh/authorized_keys).
                           A key already in Dokku is not added again
-  --plugin <name>=<url>   Install a plugin, unless it is installed (can be repeated)
+  --plugin <name=url>     Install a plugin, unless it is installed (can be repeated)
   --dry-run               Print actions without executing them
   --manifest              Print installation manifest and exit
 
@@ -74,7 +74,7 @@ while [[ ${1-} ]]; do
     --ssh-key)  shift || true; SSH_KEY_FILE="${1-}"; [[ -f "$SSH_KEY_FILE" ]] || { err "--ssh-key: no such file: ${SSH_KEY_FILE}"; exit 2; } ;;
     --plugin)
       shift || true
-      [[ "${1-}" == ?*=?* ]] || { err "--plugin requires <name>=<url>"; exit 2; }
+      [[ "${1-}" == ?*=?* ]] || { err "--plugin requires <name=url>"; exit 2; }
       PLUGINS+=("$1")
       ;;
     uninstall) UNINSTALL=1 ;;
