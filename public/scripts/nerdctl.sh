@@ -3,6 +3,9 @@
 
 set -euo pipefail
 
+# It changes the system: load.sh keeps one copy of it for every user, owned by root
+SYSTEM_SCRIPT=yes
+
 print_usage() {
   cat <<'USAGE'
 load.sh nerdctl -- [options]
@@ -13,7 +16,9 @@ containerd and BuildKit services.
 
 By default it runs rootless: the bundle goes to $HOME/.shellscript/nerdctl/current and
 the services are systemd user services of the current user. With --no-rootless it goes
-to /opt/nerdctl, the services are system services and 'nerdctl' runs through sudo.
+to /opt/nerdctl, the services are system services and 'nerdctl' runs through sudo:
+it is there for every user, and only root removes it, with
+'load.sh remove -- nerdctl --force'.
 
 Rootless mode needs newuidmap (installed when missing), subordinate ids for the user
 and a systemd user session. Uses sudo to install the missing packages (uidmap, iptables)
@@ -90,7 +95,9 @@ done
 
 # Configuration
 NERDCTL_HOME="${SHELLSCRIPT_HOME}/nerdctl"
-PACKAGES_STATE="${NERDCTL_HOME}/installed-packages.conf"
+PACKAGES_STATE="$(system_state nerdctl)/installed-packages.conf"
+# What was downloaded: the user's own for rootless; the machine's, for every user, for
+# the system-wide install
 STAMP_FILE="${NERDCTL_HOME}/installed-stamp"
 ROOTLESS_DIR="${NERDCTL_HOME}/current"
 ROOTFUL_DIR="/opt/nerdctl"
@@ -103,8 +110,12 @@ UNIT_MARKER="# Installed by shellscript.download nerdctl.sh"
 # a profile of its own, named after its path, as RootlessKit itself suggests
 APPARMOR_PROFILE="/etc/apparmor.d/$(printf '%s' "${ROOTLESS_DIR#/}/bin/rootlesskit" | tr / .)"
 
+system_state_migrate nerdctl installed-packages.conf
+
 # Internal hook, not part of the user interface: executed by 'load.sh remove -- nerdctl'
-# through the UNINSTALL_CMD manifest key. Each mode is removed when this script set it up.
+# through the UNINSTALL_CMD manifest key. Each mode is removed when this script set it
+# up: the rootless one is the user's; the system-wide one is for every user, and only
+# root takes it out, with --force, with the packages.
 if [[ "$UNINSTALL" == "1" ]]; then
   if grep -qs "${ROOTLESS_DIR}/bin" "${USER_UNITS}/containerd.service"; then
     log "Removing the rootless containerd and BuildKit services"
@@ -117,16 +128,19 @@ if [[ "$UNINSTALL" == "1" ]]; then
     run "${SUDO} apparmor_parser -R \"${APPARMOR_PROFILE}\" || true"
     run "${SUDO} rm -f \"${APPARMOR_PROFILE}\""
   fi
-  if grep -qsx "$UNIT_MARKER" "${SYSTEM_UNITS}/containerd.service"; then
-    log "Removing the containerd and BuildKit system services and ${ROOTFUL_DIR}"
-    run "${SUDO} systemctl disable --now ${UNITS}"
-    run "${SUDO} rm -f ${SYSTEM_UNITS}/containerd.service ${SYSTEM_UNITS}/buildkit.service"
-    run "${SUDO} systemctl daemon-reload"
-    # buildkitd ends with an error when it is stopped: systemd would list it as failed
-    run "${SUDO} systemctl reset-failed ${UNITS} 2>/dev/null || true"
+  if system_release nerdctl; then
+    if grep -qsx "$UNIT_MARKER" "${SYSTEM_UNITS}/containerd.service"; then
+      log "Removing the containerd and BuildKit system services and ${ROOTFUL_DIR}"
+      run "${SUDO} systemctl disable --now ${UNITS}"
+      run "${SUDO} rm -f ${SYSTEM_UNITS}/containerd.service ${SYSTEM_UNITS}/buildkit.service"
+      run "${SUDO} systemctl daemon-reload"
+      # buildkitd ends with an error when it is stopped: systemd would list it as failed
+      run "${SUDO} systemctl reset-failed ${UNITS} 2>/dev/null || true"
+    fi
+    [[ ! -d "$ROOTFUL_DIR" ]] || run "${SUDO} rm -rf \"${ROOTFUL_DIR}\""
+    remove_recorded_packages "nerdctl" "$PACKAGES_STATE"
+    system_forget nerdctl
   fi
-  [[ ! -d "$ROOTFUL_DIR" ]] || run "${SUDO} rm -rf \"${ROOTFUL_DIR}\""
-  remove_recorded_packages "nerdctl" "$PACKAGES_STATE"
   exit 0
 fi
 
@@ -170,6 +184,7 @@ else
   [[ -z "$SUDO" ]] || require_cmd sudo
   INSTALL_DIR="$ROOTFUL_DIR"
   AS_OWNER="${SUDO:+$SUDO }"
+  STAMP_FILE="$(system_state nerdctl)/installed-stamp"
 fi
 
 [[ "$DOCKER_ALIAS" != "1" ]] || docker_command_check nerdctl
@@ -261,7 +276,9 @@ else
     if command -v restorecon >/dev/null 2>&1; then run "${AS_OWNER}restorecon -R \"${INSTALL_DIR}\""; fi
   fi
 
-  if [[ "$DRY_RUN" != "1" ]] && declare -F record_installed >/dev/null; then
+  if [[ "$ROOTLESS" != "1" ]]; then
+    remote_stamp "$DOWNLOAD_URL" | system_state_write "$STAMP_FILE"
+  elif [[ "$DRY_RUN" != "1" ]] && declare -F record_installed >/dev/null; then
     record_installed "$DOWNLOAD_URL" "$STAMP_FILE"
   fi
   [[ ! -f "${UNIT_DIR}/containerd.service" ]] || RESTART=1
@@ -288,8 +305,8 @@ if [[ "$SERVICES" == "1" && "$ROOTLESS" == "1" ]]; then
     if [[ "$DRY_RUN" == "1" ]]; then
       log "[dry-run] Writing ${APPARMOR_PROFILE}"
     else
-      require_cmd sudo
-      sudo tee "$APPARMOR_PROFILE" >/dev/null <<PROFILE
+      [[ -z "$SUDO" ]] || require_cmd sudo
+      ${SUDO} tee "$APPARMOR_PROFILE" >/dev/null <<PROFILE
 abi <abi/4.0>,
 include <tunables/global>
 
@@ -298,7 +315,7 @@ ${INSTALL_DIR}/bin/rootlesskit flags=(unconfined) {
 }
 PROFILE
     fi
-    run "sudo apparmor_parser -r \"${APPARMOR_PROFILE}\""
+    run "${SUDO} apparmor_parser -r \"${APPARMOR_PROFILE}\""
   fi
 
   # The setup tool of the bundle writes the user services, starts and enables them, and
@@ -352,5 +369,7 @@ if [[ "$ROOTLESS" == "1" ]]; then
     log "To start the services at boot, without logging in: sudo loginctl enable-linger $(id -un)"
   fi
 fi
+
+system_user_add nerdctl
 
 log "Done. Try: nerdctl run --rm hello-world"

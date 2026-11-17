@@ -2,7 +2,7 @@
 # container.sh: prepares a container, or a VM, and runs one test case in it. Started by
 # run.sh, as root. Usage: container.sh <testcase>
 #
-# load.sh never runs as root: the test runs as 'tester', a regular user with sudo.
+# The test runs as 'tester', a regular user with sudo, as most people run load.sh.
 # The container is left as a machine where the loader was installed, with the working
 # copy of the repository (/repo is its public folder) in place of what is published:
 #   - the installer puts load.sh in ~/.shellscript/bin, as it does for a user

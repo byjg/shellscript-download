@@ -23,6 +23,20 @@ fail() { printf '  FAIL  %s\n' "$*"; FAILURES=$((FAILURES + 1)); }
 # such as under sudo.
 LOADER="load.sh"
 LOADER_PATH="${SHELLSCRIPT_HOME}/bin/load.sh"
+# The loader as root, with the working copy of the scripts: root has none in its cache
+ROOT_LOADER="sudo ${LOADER_PATH} --developer ${SCRIPTS_DIR}"
+
+# Where a script keeps the state of what it installed on the system, for every user
+SYSTEM_STATE="/var/lib/shellscript"
+
+# Another user of the machine, for what is shared between users, and the loader as that
+# user: the working copy, which every user can read (the home of the test may not be)
+OTHER_USER="e2e-other-user"
+OTHER_LOADER="sudo -u ${OTHER_USER} -H bash ${SCRIPTS_DIR}/load.sh --developer ${SCRIPTS_DIR}"
+other_user() {
+  id "$OTHER_USER" >/dev/null 2>&1 && return 0
+  if command -v useradd >/dev/null 2>&1; then sudo useradd -m "$OTHER_USER"; else sudo adduser -D "$OTHER_USER"; fi
+}
 
 # load <script> [-- options]: runs the loader. Its output is shown only when it fails,
 # or always with 'run.sh --verbose'.
@@ -248,34 +262,75 @@ test_single_binary() {
 test_system_package() {
   local name="$1" cmd="$2" check="${3:-}"
   local tool_home="${SHELLSCRIPT_HOME}/${name}"
-  local state="${tool_home}/installed-packages.conf"
+  local state="${SYSTEM_STATE}/${name}"
 
-  step "${name}: install with the defaults"
+  step "${name}: install with the defaults records it in the system state"
   load "$name"
   assert_command "$cmd"
-  assert_output "cat '${state}'" "$name"
+  assert_output "cat '${state}/installed-packages.conf'" "$name"
+  assert_output "cat '${state}/installed-by'" "$(id -un)"
+  assert_output "${LOADER} --installed 2>/dev/null | grep '^${name} ' | awk '{print \$2}'" "yes"
   [[ -z "$check" ]] || "$check"
+
+  step "${name}: another user sees it installed system-wide, and leaves its upgrade to who installed it"
+  other_user
+  assert_output "${OTHER_LOADER} --installed 2>/dev/null | grep '^${name} '" "system (by $(id -un))"
+  assert_exit 1 "${OTHER_LOADER} --upgrade ${name}"
+  assert_log "is installed system-wide by $(id -un)"
+  assert_exit 0 "${OTHER_LOADER} --upgrade"
+  assert_log "left to them: ${name} (by $(id -un))"
 
   step "${name}: install again changes nothing"
   load "$name"
   assert_output "cat '$LOG_FILE'" "already installed"
 
-  step "${name}: remove uninstalls the package and keeps the folder"
+  step "${name}: a user's remove keeps the package, there for every user"
   load remove -- "$name"
+  assert_log "Root removes it with 'load.sh remove -- ${name} --force'"
+  assert_command "$cmd"
+  assert_exists "${state}/installed-packages.conf"
+  assert_no_output "cat '${state}/installed-by'" "$(id -un)"
+  assert_no_output "${LOADER} --installed 2>/dev/null" "${name} "
+
+  step "${name}: --force is for root"
+  load_fails remove -- "$name" --force
+  assert_log "only root does it"
+  assert_command "$cmd"
+
+  step "${name}: root's remove keeps the package too, without --force"
+  assert_exit 0 "${ROOT_LOADER} remove -- ${name}"
+  assert_log "Root removes it with"
+  assert_command "$cmd"
+
+  step "${name}: root's remove --force uninstalls the package"
+  assert_exit 0 "${ROOT_LOADER} remove -- ${name} --force"
   assert_no_command "$cmd"
-  assert_exists "$tool_home"
+  assert_missing "$state"
 
   step "${name}: purge removes the folder"
   load remove -- "$name" --purge
   assert_missing "$tool_home"
 
+  step "${name}: what an older version recorded in the user's folder moves to the system state"
+  if sys_install "$name"; then pass "installed ${name} with the package manager"; else fail "could not install ${name}"; fi
+  mkdir -p "$tool_home"
+  echo "$name" > "${tool_home}/installed-packages.conf"
+  load "$name"
+  assert_missing "${tool_home}/installed-packages.conf"
+  assert_output "cat '${state}/installed-packages.conf'" "$name"
+  assert_output "cat '${state}/installed-by'" "$(id -un)"
+  assert_exit 0 "${ROOT_LOADER} remove -- ${name} --force"
+  assert_no_command "$cmd"
+  load remove -- "$name" --purge
+
   step "${name}: a package that was already installed is left alone"
   if sys_install "$name"; then pass "installed ${name} with the package manager"; else fail "could not install ${name}"; fi
   load "$name"
-  assert_missing "$state"
-  load remove -- "$name" --purge
-  assert_output "cat '$LOG_FILE'" "was not installed by this script"
+  assert_missing "${state}/installed-packages.conf"
+  assert_exit 0 "${ROOT_LOADER} remove -- ${name} --force"
+  assert_log "was not installed by this script"
   assert_command "$cmd"
+  load remove -- "$name" --purge
 }
 
 # test_java_vendor <vendor> [<default> <other>]

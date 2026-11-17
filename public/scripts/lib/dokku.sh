@@ -2,9 +2,18 @@
 # dokku.sh: code shared by dokku.sh and dokku-docker.sh. Sourced, never run.
 #
 # The script sets, before calling these:
-#   DOKKU_CMD      how the dokku command runs: "sudo dokku", or "docker exec -i dokku dokku"
+#   DOKKU_CMD      how the dokku command runs: "${SUDO} dokku", or "docker exec -i dokku dokku"
 #   DOKKU_RUNNING  1 when Dokku can answer now; empty in a dry run of the first install,
 #                  when there is nothing to ask yet
+
+# Dokku is there for every user of the machine, and so is what the scripts record about
+# it: in their system state, with the helpers of load.sh. An older one does not have them.
+if ! declare -F system_release >/dev/null; then
+  echo "Error: this script needs a newer load.sh: run 'load.sh --update'" >&2
+  exit 3
+fi
+
+SUDO="$(sudo_cmd)"
 
 # dokku_query <arguments>: what Dokku answers, or nothing when it is not running
 dokku_query() {

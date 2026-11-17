@@ -120,7 +120,7 @@ GITHUB_TOKEN=$(gh auth token) tests_e2e/run.sh
 
 ## Test by hand in a clean environment
 
-To try a script by hand, use a clean, non-root Linux. The simplest is a Docker container with
+To try a script by hand, use a clean Linux. The simplest is a Docker container with
 the working tree mounted:
 
 ```bash
@@ -131,7 +131,8 @@ docker run -it --rm \
   ubuntu:24.04 bash
 ```
 
-Inside the container, create an unprivileged user, since scripts refuse to run as root:
+Inside the container, create an unprivileged user, to run the scripts as most people do (root
+installs for itself, in `/root/.shellscript`):
 
 ```bash
 apt update && apt install -y curl sudo

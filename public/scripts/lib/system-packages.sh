@@ -3,10 +3,17 @@
 # (qemu.sh, podman.sh, buildah.sh, byjg-repo.sh, nerdctl.sh). Sourced, never run.
 #
 # Every install is recorded in a state file, so the script's uninstall hook removes
-# only the packages it installed and leaves the ones that were already there.
+# only the packages it installed and leaves the ones that were already there. The
+# packages are there for every user of the machine, and so is that file: in the system
+# state of the script (system_state, from load.sh).
 
-SUDO="sudo"
-[[ "$(id -u)" == "0" ]] && SUDO=""
+# The system state helpers come from load.sh: an older one does not have them
+if ! declare -F system_release >/dev/null; then
+  echo "Error: this script needs a newer load.sh: run 'load.sh --update'" >&2
+  exit 3
+fi
+
+SUDO="$(sudo_cmd)"
 
 detect_pm() {
   local pm
@@ -30,11 +37,8 @@ install_packages() {
     zypper)  run "${SUDO} zypper install -y ${pkgs}" ;;
     apk)     run "${SUDO} apk add ${pkgs}" ;;
   esac
-  if [[ "$DRY_RUN" != "1" ]]; then
-    mkdir -p "$(dirname "$state")"
-    printf '%s\n' ${pkgs} >> "$state"
-    sort -u -o "$state" "$state"
-  fi
+  # shellcheck disable=SC2086  # one argument per package
+  system_state_add "$state" ${pkgs}
 }
 
 # ensure_package <command> <label> <package> <state_file>
@@ -73,7 +77,7 @@ remove_recorded_packages() {
     zypper)  run "${SUDO} zypper remove -y ${pkgs}" ;;
     apk)     run "${SUDO} apk del ${pkgs}" ;;
   esac
-  [[ "$DRY_RUN" == "1" ]] || rm -f "$state"
+  [[ "$DRY_RUN" == "1" ]] || ${SUDO} rm -f "$state"
 }
 
 # subuid_hint <label> [<command>]: rootless containers need a range of subordinate ids
@@ -90,7 +94,8 @@ subuid_hint() {
 # OpenRC mounts only with its service. Now and at boot. What it changes is recorded, for
 # rootless_host_undo <name>.
 rootless_host_setup() {
-  local modules="/etc/modules-load.d/shellscript-$1.conf" marker="${SHELLSCRIPT_HOME}/$1/cgroups-service"
+  local modules="/etc/modules-load.d/shellscript-$1.conf" marker
+  marker="$(system_state "$1")/cgroups-service"
   if [[ ! -e /dev/net/tun ]]; then
     log "Loading the tun module, now and at boot: ${modules}"
     run "${SUDO} modprobe tun"
@@ -100,18 +105,19 @@ rootless_host_setup() {
     log "Starting the cgroups service of OpenRC, now and at boot"
     run "${SUDO} rc-update add cgroups boot"
     run "${SUDO} rc-service cgroups start"
-    if [[ "$DRY_RUN" != "1" ]]; then mkdir -p "$(dirname "$marker")"; touch "$marker"; fi
+    system_state_add "$marker"
   fi
 }
 
 # rootless_host_undo <name>: takes out what rootless_host_setup <name> changed. The
 # cgroups stay mounted until the next boot: a container may still use them.
 rootless_host_undo() {
-  local modules="/etc/modules-load.d/shellscript-$1.conf" marker="${SHELLSCRIPT_HOME}/$1/cgroups-service"
+  local modules="/etc/modules-load.d/shellscript-$1.conf" marker
+  marker="$(system_state "$1")/cgroups-service"
   [[ ! -f "$modules" ]] || run "${SUDO} rm -f \"${modules}\""
   if [[ -f "$marker" ]]; then
     run "${SUDO} rc-update del cgroups boot"
-    [[ "$DRY_RUN" == "1" ]] || rm -f "$marker"
+    [[ "$DRY_RUN" == "1" ]] || ${SUDO} rm -f "$marker"
   fi
 }
 

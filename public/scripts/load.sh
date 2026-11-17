@@ -4,6 +4,8 @@
 #
 # Cache location used by this script:
 #   $HOME/.shellscript/downloads/<script>.sh
+#   /var/lib/shellscript/scripts/<script>.sh for a script that changes the system
+#   (SYSTEM_SCRIPT=yes): one copy for every user, owned by root
 #
 # Usage and options: load.sh --help
 #
@@ -28,11 +30,11 @@
 
 set -euo pipefail
 
-# Disallow running as root (UID 0)
-if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
-  echo "Error: load.sh must not be run as root (UID 0)." >&2
-  echo "Please run as a regular user without sudo." >&2
-  echo "If necessary the script will call the sudo internally" >&2
+# Root installs for itself, in its own HOME. Never in the HOME of another user, as with
+# 'sudo -E': what it wrote there would belong to root, and that user could not change it.
+if [[ "${EUID:-$(id -u)}" -eq 0 && ! -O "${HOME:-}" ]]; then
+  echo "Error: HOME is ${HOME:-unset}, which is not owned by root." >&2
+  echo "Run as that user (the scripts call sudo when they need it), or as root with its own HOME (sudo without -E, or sudo -i)." >&2
   exit 1
 fi
 
@@ -254,6 +256,84 @@ require_script() {
   "${loader[@]}" "$script" >&2 || { err "'load.sh ${script}' failed"; exit 1; }
   command -v "$cmd" >/dev/null 2>&1 || { err "'${cmd}' is still not available after 'load.sh ${script}'"; exit 1; }
 }
+# The system half of a script: what it changes on the system, through sudo, is there for
+# every user of the machine, and so is what it records about it, in
+# ${SHELLSCRIPT_SYSTEM_HOME}/<script>, owned by root:
+#   installed-by   the users who installed the script, one per line
+#   <file>         what the script recorded, e.g. installed-packages.conf
+# A user's 'load.sh remove' takes out only what is the user's own: the system half stays
+# until root removes it with --force (system_release). Nothing is written with --dry-run.
+SHELLSCRIPT_SYSTEM_HOME="/var/lib/shellscript"
+export SHELLSCRIPT_SYSTEM_HOME
+# sudo_cmd: what goes before a command to run it as root: nothing for root, sudo for
+# anyone else. A script sets SUDO="$(sudo_cmd)" once, and checks that sudo is there only
+# before what needs it ([[ -z "$SUDO" ]] || require_cmd sudo): a run that needs no sudo
+# works where it is not installed.
+sudo_cmd() { [[ "$(id -u)" == "0" ]] || printf 'sudo'; }
+# system_state <script>: the folder of its system state
+system_state() { printf '%s/%s\n' "$SHELLSCRIPT_SYSTEM_HOME" "$1"; }
+# system_state_add <file> [line...]: adds the lines to a file of the system state; with
+# none, the file only has to be there. Nothing is written (no sudo) when it has them.
+system_state_add() {
+  local file="$1" line missing=""; shift
+  [[ "${DRY_RUN:-0}" != "1" ]] || return 0
+  [[ -f "$file" ]] || missing=yes
+  for line in "$@"; do grep -qxF -- "$line" "$file" 2>/dev/null || missing=yes; done
+  [[ -n "$missing" ]] || return 0
+  $(sudo_cmd) mkdir -p "$(dirname "$file")"
+  { cat "$file" 2>/dev/null || true; [[ $# -eq 0 ]] || printf '%s\n' "$@"; } \
+    | sed '/^$/d' | sort -u | $(sudo_cmd) tee "${file}.new" >/dev/null
+  $(sudo_cmd) mv "${file}.new" "$file"
+}
+# system_state_write <file>: the file of the system state holds what comes on stdin, in
+# place of what it held. Nothing is written (no sudo) when it holds that already.
+system_state_write() {
+  local content
+  content="$(cat)"
+  [[ "${DRY_RUN:-0}" != "1" ]] || return 0
+  if [[ -f "$1" && "$(cat "$1")" == "$content" ]]; then return 0; fi
+  $(sudo_cmd) mkdir -p "$(dirname "$1")"
+  printf '%s\n' "$content" | $(sudo_cmd) tee "$1" >/dev/null
+}
+# system_state_del <file> <line>: takes the line out of a file of the system state
+system_state_del() {
+  [[ "${DRY_RUN:-0}" != "1" && -f "$1" ]] || return 0
+  { grep -vxF -- "$2" "$1" || true; } | $(sudo_cmd) tee "${1}.new" >/dev/null
+  $(sudo_cmd) mv "${1}.new" "$1"
+}
+# system_user_add <script>: the caller is one of the users of the script
+system_user_add() { system_state_add "$(system_state "$1")/installed-by" "$(id -un)"; }
+# system_state_migrate <script> <file>...: the files the caller recorded in
+# ~/.shellscript/<script>, before the system state was shared, go into it
+system_state_migrate() {
+  local name="$1" file old
+  local -a lines
+  shift
+  [[ "${DRY_RUN:-0}" != "1" ]] || return 0
+  for file in "$@"; do
+    old="${SHELLSCRIPT_HOME}/${name}/${file}"
+    [[ -f "$old" ]] || continue
+    log "Moving ${old} to $(system_state "$name"), shared by the users of this machine"
+    mapfile -t lines < "$old"
+    system_state_add "$(system_state "$name")/${file}" ${lines[@]+"${lines[@]}"}
+    system_user_add "$name"
+    rm -f "$old"
+  done
+}
+# system_release <script>: for the uninstall hook of a script. The caller leaves its
+# users; true when the system half is to be taken out too, which only root does, with
+# 'load.sh remove -- <script> --force'
+system_release() {
+  local users="" state
+  state="$(system_state "$1")"
+  system_state_del "${state}/installed-by" "$(id -un)"
+  if [[ "$(id -u)" == "0" && "${SHELLSCRIPT_FORCE:-0}" == "1" ]]; then return 0; fi
+  [[ ! -f "${state}/installed-by" ]] || users="$(tr '\n' ' ' < "${state}/installed-by")"
+  log "What ${1} installed on the system stays${users:+, used by ${users% }}. Root removes it with 'load.sh remove -- ${1} --force'."
+  return 1
+}
+# system_forget <script>: once its system half is taken out, what it recorded goes too
+system_forget() { [[ "${DRY_RUN:-0}" == "1" ]] || $(sudo_cmd) rm -rf "$(system_state "$1")"; }
 # The key everything published on shellscript.download is signed with, base64 of the
 # binary key (gpgv does not read an armored one). It is the key of the ByJG APT and RPM
 # repositories, https://packages.byjg.com/byjg.gpg: ByJG Opensource <info@byjg.com.br>,
@@ -338,7 +418,33 @@ download_signed() {
   rm -f "$tmp" "$tmp.sig" "$tmp.key"
   return "$status"
 }
-export -f log err run require_cmd github_auth_header fetch download require_downloader final_url remote_stamp already_installed record_installed github_latest_tag require_script
+export -f log err run require_cmd github_auth_header fetch download require_downloader final_url remote_stamp already_installed record_installed github_latest_tag require_script \
+  sudo_cmd system_state system_state_add system_state_write system_state_del system_user_add system_state_migrate system_release system_forget
+
+# Where the scripts this machine has are: in the cache of the user, except a script that
+# changes the system (a line SYSTEM_SCRIPT=yes), which is there once for every user,
+# owned by root, next to its system state. With --developer, in that folder.
+USER_SCRIPTS_DIR="$HOME/.shellscript/downloads"
+SYSTEM_SCRIPTS_DIR="${SHELLSCRIPT_SYSTEM_HOME}/scripts"
+
+# script_path <script>: the file of a script, where it is or where it would be
+script_path() {
+  if [[ -n "$DEVELOPER_PATH" ]]; then printf '%s/%s.sh\n' "$DEVELOPER_PATH" "$1"
+  elif [[ -f "${SYSTEM_SCRIPTS_DIR}/$1.sh" ]]; then printf '%s/%s.sh\n' "$SYSTEM_SCRIPTS_DIR" "$1"
+  else printf '%s/%s.sh\n' "$USER_SCRIPTS_DIR" "$1"; fi
+}
+
+# script_names: the scripts this machine has, each once
+script_names() {
+  local dir file
+  local -a dirs=("$USER_SCRIPTS_DIR" "$SYSTEM_SCRIPTS_DIR")
+  [[ -z "$DEVELOPER_PATH" ]] || dirs=("$DEVELOPER_PATH")
+  for dir in "${dirs[@]}"; do
+    for file in "$dir"/*.sh; do
+      if [[ -f "$file" ]]; then basename "$file" .sh; fi
+    done
+  done | sort -u
+}
 
 # installed_state <script>: prints the installed version of what a script installs, or
 # "yes" when it has no version to show, and nothing when it is not on this machine.
@@ -351,11 +457,12 @@ export -f log err run require_cmd github_auth_header fetch download require_down
 # folder of the tool itself, such a link is not ours to read (~/.nvm/current is a Node).
 # script_manifest <script>: prints the manifest of a script this machine has, or nothing
 script_manifest() {
-  local name="$1" dir="${DEVELOPER_PATH:-$HOME/.shellscript/downloads}" manifest
-  [[ -f "${dir}/${name}.sh" ]] || return 0
+  local name="$1" file manifest
+  file="$(script_path "$name")"
+  [[ -f "$file" ]] || return 0
   # Asking for the manifest runs the script: one that does not know --manifest would do
   # what it does by default, which is to install
-  grep -q -- '--manifest' "${dir}/${name}.sh" || return 0
+  grep -q -- '--manifest' "$file" || return 0
   manifest="$("$LOADER_SELF" ${DEVELOPER_PATH:+--developer "$DEVELOPER_PATH"} "$name" -- --manifest 2>/dev/null)" || return 0
   [[ "$manifest" == *"FOLDERS="* ]] || return 0
   printf '%s\n' "$manifest"
@@ -378,6 +485,8 @@ installed_state() {
     if [[ -e "$HOME/.shellscript/bin/${item}" ]]; then found=yes; fi
   done
   if [[ -n "$shellrc" && -e "$shellrc" ]]; then found=yes; fi
+  # A script whose system half this user installed: it keeps nothing in the home
+  if grep -qsxF "$(id -un)" "$(system_state "$name")/installed-by"; then found=yes; fi
   if [[ -z "$found" && ( -n "$hook" || ( -z "$bins" && -z "$shellrc" ) ) ]]; then
     for item in $folders; do
       if [[ -d "$item" && -n "$(ls -A "$item" 2>/dev/null)" ]]; then found=yes; fi
@@ -424,13 +533,24 @@ list_scripts() {
   done <<<"$json"
 }
 
-# What is installed, from the scripts this machine has: it needs no network
+# system_users <script>: who installed the system half of a script, "jg,alice", or nothing
+system_users() {
+  local file
+  file="$(system_state "$1")/installed-by"
+  [[ ! -s "$file" ]] || paste -sd, - < "$file"
+}
+
+# What is installed, from the scripts this machine has: it needs no network. What another
+# user installed on the system is there for this one too: "system (by <users>)".
 list_installed() {
-  local dir="${DEVELOPER_PATH:-$HOME/.shellscript/downloads}" file name state desc any=""
-  for file in "$dir"/*.sh; do
-    [[ -f "$file" ]] || continue
-    name="$(basename "$file" .sh)"
+  local file name state users desc any=""
+  while IFS= read -r name <&3; do
+    file="$(script_path "$name")"
     state="$(installed_state "$name")"
+    if [[ -z "$state" ]]; then
+      users="$(system_users "$name")"
+      [[ -z "$users" ]] || state="system (by ${users})"
+    fi
     [[ -n "$state" ]] || continue
     if [[ -z "$any" ]]; then
       # shellcheck disable=SC2059  # the format is a constant
@@ -440,7 +560,7 @@ list_installed() {
     fi
     desc="$(sed -n '2s/^# *//p' "$file")"
     printf "$LIST_FORMAT" "$name" "$state" "${desc#"${name}.sh: "}"
-  done
+  done 3< <(script_names)
   [[ -n "$any" ]] || echo "Nothing installed with load.sh on this machine." >&2
 }
 
@@ -499,18 +619,18 @@ update_all() {
 
   # Each script goes through the loader just updated, which also downloads the file it
   # shares with other scripts
-  for file in "${home}/downloads"/*.sh; do
-    [[ -f "$file" ]] || continue
-    name="$(basename "$file" .sh)"
-    before="$(cksum < "$file")"
+  # A script that changes the system, found in the cache of the user, moves where every
+  # user has it: the cksum is of the file wherever it is
+  while IFS= read -r name <&3; do
+    before="$(cksum < "$(script_path "$name")")"
     if "$loader" --update --dont-run "$name" >/dev/null 2>&1; then
-      if [[ "$(cksum < "$file")" == "$before" ]]; then state="up to date"; else state="updated"; fi
+      if [[ "$(cksum < "$(script_path "$name")")" == "$before" ]]; then state="up to date"; else state="updated"; fi
     else
       # A script that left the catalog, or a download that failed: the same answer
       state="could not be downloaded, kept as it is"
     fi
     printf "$format" "${name}.sh" "$state"
-  done
+  done 3< <(script_names)
 }
 
 # Where the loader keeps the arguments each script was last installed with
@@ -520,13 +640,11 @@ saved_arguments_file() { echo "$HOME/.shellscript/downloads/$1.args"; }
 # arguments it was last installed with. A script says in its manifest when that is not
 # something to do to it (UPGRADE=no): its arguments are commands, not what to install.
 upgrade_installed() {
-  local only="$1" dir="${DEVELOPER_PATH:-$HOME/.shellscript/downloads}"
-  local file name manifest saved upgraded="" failed="" left="" any=""
+  local only="$1"
+  local name manifest saved users upgraded="" failed="" left="" any=""
   local -a arguments
 
-  for file in "$dir"/*.sh; do
-    [[ -f "$file" ]] || continue
-    name="$(basename "$file" .sh)"
+  while IFS= read -r name <&3; do
     [[ -z "$only" || "$only" == "$name" ]] || continue
     manifest="$(script_manifest "$name")"
     if grep -qx 'UPGRADE=no' <<<"$manifest"; then
@@ -534,6 +652,13 @@ upgrade_installed() {
       continue
     fi
     if [[ -z "$(installed_state "$name")" ]]; then
+      # What another user installed on the system is that user's to upgrade
+      users="$(system_users "$name")"
+      if [[ -n "$users" ]]; then
+        [[ -z "$only" ]] || { echo "${name} is installed system-wide by ${users}: upgraded by them, or install it yourself with 'load.sh ${name}'." >&2; return 1; }
+        left+=" ${name} (by ${users})"
+        continue
+      fi
       [[ -z "$only" ]] || { echo "${name} is not installed: install it with 'load.sh ${name}'." >&2; return 1; }
       continue
     fi
@@ -552,11 +677,12 @@ upgrade_installed() {
     else
       failed+=" ${name}"
     fi
-  done
+  done 3< <(script_names)
 
+  [[ -z "$left" ]] || echo "Installed system-wide by another user, left to them:${left}"
   if [[ -z "$any" ]]; then
     [[ -z "$only" ]] || { echo "No such script on this machine: ${only}" >&2; return 1; }
-    echo "Nothing installed with load.sh on this machine." >&2
+    [[ -n "$left" ]] || echo "Nothing installed with load.sh on this machine." >&2
     return 0
   fi
   echo
@@ -598,14 +724,17 @@ if [[ -n "${DEVELOPER_PATH}" ]]; then
     exit 3
   fi
 else
-  DEST_DIR="$HOME/.shellscript/downloads"
-  DEST_PATH="$DEST_DIR/${SCRIPT_NAME}.sh"
+  # Downloaded to the cache of the user, where its signature is checked; a script that
+  # changes the system then goes where every user has it (script_path)
+  DEST_DIR="$USER_SCRIPTS_DIR"
+  DEST_PATH="$(script_path "$SCRIPT_NAME")"
   URL="https://shellscript.download/scripts/${SCRIPT_NAME}.sh"
 
   ensure_downloaded() {
     # Download if missing or update requested
     if [[ "${UPDATE}" == true || ! -f "${DEST_PATH}" ]]; then
       echo "Fetching: ${URL}" >&2
+      DEST_PATH="${DEST_DIR}/${SCRIPT_NAME}.sh"
       download_signed "${URL}" "${DEST_PATH}" || exit 3
       chmod +x "${DEST_PATH}" || true
       DOWNLOADED=true
@@ -615,10 +744,32 @@ else
   ensure_downloaded
 
   # The file the script shares with other scripts (public/scripts/lib), named by its
-  # SHARED_LIB line: downloaded with the script, and again when it is missing
+  # SHARED_LIB line: downloaded with the script, and again when it is missing next to it
   shared_lib="$(sed -n 's|^SHARED_LIB=.*/\(lib/[a-z0-9-]*\.sh\)"$|\1|p' "${DEST_PATH}")"
-  if [[ -n "${shared_lib}" && ( "${DOWNLOADED}" == true || ! -f "${DEST_DIR}/${shared_lib}" ) ]]; then
+  LIB_DOWNLOADED=false
+  if [[ -n "${shared_lib}" && ( "${DOWNLOADED}" == true || ! -f "$(dirname "${DEST_PATH}")/${shared_lib}" ) ]]; then
     download_signed "https://shellscript.download/scripts/${shared_lib}" "${DEST_DIR}/${shared_lib}" || exit 3
+    LIB_DOWNLOADED=true
+  fi
+
+  # A script that changes the system: one copy for every user, owned by root. What was
+  # just downloaded, and checked, goes there, and the copy of the user goes away. One
+  # in the cache of the user from before stays there, and runs, until --update.
+  if [[ "$DEST_PATH" == "${SYSTEM_SCRIPTS_DIR}/"* ]] \
+      || { [[ "$DOWNLOADED" == true ]] && grep -qx 'SYSTEM_SCRIPT=yes' "$DEST_PATH"; }; then
+    root_cmd="$(sudo_cmd)"
+    if [[ "$DOWNLOADED" == true || "$LIB_DOWNLOADED" == true ]]; then
+      [[ -z "$root_cmd" ]] || require_cmd sudo
+      echo "Sharing ${SCRIPT_NAME}.sh with every user of this machine: ${SYSTEM_SCRIPTS_DIR}" >&2
+    fi
+    if [[ "$DOWNLOADED" == true ]]; then
+      $root_cmd install -D -m 755 "${DEST_DIR}/${SCRIPT_NAME}.sh" "${SYSTEM_SCRIPTS_DIR}/${SCRIPT_NAME}.sh" || exit 3
+      rm -f "${DEST_DIR}/${SCRIPT_NAME}.sh"
+    fi
+    if [[ "$LIB_DOWNLOADED" == true ]]; then
+      $root_cmd install -D -m 644 "${DEST_DIR}/${shared_lib}" "${SYSTEM_SCRIPTS_DIR}/${shared_lib}" || exit 3
+    fi
+    DEST_PATH="${SYSTEM_SCRIPTS_DIR}/${SCRIPT_NAME}.sh"
   fi
 fi
 

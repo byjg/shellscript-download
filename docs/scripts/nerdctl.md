@@ -22,7 +22,9 @@ containerd and BuildKit services.
 
 By default it runs rootless: the bundle goes to $HOME/.shellscript/nerdctl/current and
 the services are systemd user services of the current user. With --no-rootless it goes
-to /opt/nerdctl, the services are system services and 'nerdctl' runs through sudo.
+to /opt/nerdctl, the services are system services and 'nerdctl' runs through sudo:
+it is there for every user, and only root removes it, with
+'load.sh remove -- nerdctl --force'.
 
 Rootless mode needs newuidmap (installed when missing), subordinate ids for the user
 and a systemd user session. Uses sudo to install the missing packages (uidmap, iptables)

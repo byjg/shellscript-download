@@ -9,9 +9,14 @@ assert_output "bash -ic 'command -v load.sh' 2>/dev/null" "$LOADER_PATH"
 assert_exists "${SHELLSCRIPT_HOME}/shellrc/00-setup.sh"
 assert_exists "${SHELLSCRIPT_HOME}/shellrc/01-load-completion.sh"
 
-step "load: never runs as root"
-assert_exit 1 "sudo ${LOADER_PATH} jq"
-assert_log "must not be run as root"
+step "load: as root, installs for root, and never in the HOME of another user"
+assert_exit 0 "sudo ${LOADER_PATH} --developer ${SCRIPTS_DIR} jq"
+assert_exit 0 "sudo test -x /root/.shellscript/bin/jq"
+assert_missing "${SHELLSCRIPT_HOME}/bin/jq"
+# As 'sudo -E' does, where the sudoers keep HOME: written out, not to depend on them
+assert_exit 1 "sudo env HOME=${HOME} ${LOADER_PATH} --developer ${SCRIPTS_DIR} jq"
+assert_log "is not owned by root"
+assert_missing "${SHELLSCRIPT_HOME}/bin/jq"
 
 step "load: usage and wrong calls"
 assert_exit 0 "${LOADER} --help"
@@ -393,6 +398,44 @@ assert_output "cmp '${site}/scripts/lib/binary-install.sh' '${cached}/lib/binary
 rm -f "${cached}/lib/binary-install.sh"
 assert_exit 3 "bash ${cached}/jq.sh --help"
 assert_log "lib/binary-install.sh, which this script needs, is missing: run 'load.sh --update'"
+
+# A script that changes the system: one copy for every user, owned by root, with its lib
+shared="/var/lib/shellscript/scripts"
+cat > "${site}/scripts/shared-e2e.sh" <<'PROBE'
+#!/usr/bin/env bash
+# shared-e2e.sh: a script that changes the system
+SYSTEM_SCRIPT=yes
+SHARED_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/binary-install.sh"
+[[ -f "$SHARED_LIB" ]] || exit 3
+echo "ran from $(dirname "${BASH_SOURCE[0]}")"
+PROBE
+sign "${site}/scripts/shared-e2e.sh"
+assert_exit 0 "${signed_loader} shared-e2e"
+assert_log "Sharing shared-e2e.sh with every user of this machine"
+assert_log "ran from ${shared}"
+assert_output "stat -c '%U %a' ${shared}/shared-e2e.sh" "root 755"
+assert_output "stat -c '%U %a' ${shared}/lib/binary-install.sh" "root 644"
+assert_missing "${cached}/shared-e2e.sh"
+# Run again: from there, with nothing downloaded
+assert_exit 0 "${signed_loader} shared-e2e"
+assert_log "ran from ${shared}"
+assert_no_output "cat '${LOG_FILE}'" "Fetching"
+# Changed after it was signed: refused, and the shared copy stays
+echo "# tampered-e2e" >> "${site}/scripts/shared-e2e.sh"
+assert_exit 3 "${signed_loader} --update --dont-run shared-e2e"
+assert_no_output "cat '${shared}/shared-e2e.sh'" "tampered-e2e"
+sign "${site}/scripts/shared-e2e.sh"
+# One in the cache of the user, from an older loader: runs from there, until --update
+# moves it where every user has it
+sudo rm -f "${shared}/shared-e2e.sh"
+cp "${site}/scripts/shared-e2e.sh" "${cached}/shared-e2e.sh"
+chmod +x "${cached}/shared-e2e.sh"
+assert_exit 0 "${signed_loader} shared-e2e"
+assert_log "ran from ${cached}"
+assert_exit 0 "${signed_loader} --update --dont-run shared-e2e"
+assert_exists "${shared}/shared-e2e.sh"
+assert_missing "${cached}/shared-e2e.sh"
+sudo rm -rf "$shared"
 
 # The completion, as the loader replaces its own files
 echo "# tampered-e2e" >> "${site}/install/load-completion.sh"

@@ -21,7 +21,7 @@ _load_sh_completion() {
     buildah) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --manifest -h" -- "$cur") ;;
     byjg-gluo) mapfile -t COMPREPLY < <(compgen -W "--db --db-uri --help --install-examples --install-frontend --manifest --mysql-uri --name --namespace --php-version --timezone --version -h" -- "$cur") ;;
     byjg-repo) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --install --list --manifest -h" -- "$cur") ;;
-    docker) mapfile -t COMPREPLY < <(compgen -W "--channel --dry-run --help --manifest --no-group -h" -- "$cur") ;;
+    docker) mapfile -t COMPREPLY < <(compgen -W "--channel --dry-run --help --manifest --no-group --user -h" -- "$cur") ;;
     doctl) mapfile -t COMPREPLY < <(compgen -W "--dry-run --force --help --manifest --version -h" -- "$cur") ;;
     dokku) mapfile -t COMPREPLY < <(compgen -W "--dry-run --help --hostname --manifest --plugin --ssh-key --version -h" -- "$cur") ;;
     dokku-docker) mapfile -t COMPREPLY < <(compgen -W "--data-dir --dry-run --help --hostname --http-port --https-port --manifest --plugin --ssh-key --ssh-port --version -h" -- "$cur") ;;

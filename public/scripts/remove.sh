@@ -6,12 +6,17 @@ set -euo pipefail
 
 print_usage() {
   cat <<'USAGE'
-load.sh remove -- [--purge] [--dry-run] <script-name>
+load.sh remove -- [--purge] [--force] [--dry-run] <script-name>
 
 Removes installed tools from shellscript.download.
 
+What a script installed on the system (packages, repositories, services) is there for
+every user of the machine: a user's remove takes out only what is the user's own.
+Root takes out the rest, for everyone, with --force.
+
 Options:
   --purge       Also remove tool folders (binaries/downloads)
+  --force       As root: also remove what the script installed on the system
   --dry-run     Print actions without executing them
   -h, --help    Show this help and exit
 
@@ -22,12 +27,14 @@ Examples:
   load.sh remove -- maven
   load.sh remove -- --purge maven
   load.sh remove -- --dry-run --purge nvm
+  sudo ~/.shellscript/bin/load.sh remove -- podman --force
 USAGE
 }
 
 # Parse flags
 DRY_RUN=0
 PURGE=0
+FORCE=0
 SCRIPT_NAME=""
 
 while [[ ${1-} ]]; do
@@ -35,6 +42,7 @@ while [[ ${1-} ]]; do
     -h|--help) print_usage; exit 0 ;;
     --dry-run) DRY_RUN=1 ;;
     --purge) PURGE=1 ;;
+    --force) FORCE=1 ;;
     -*)
       err "Unknown option: $1"
       print_usage
@@ -58,11 +66,20 @@ if [[ -z "$SCRIPT_NAME" ]]; then
   exit 2
 fi
 
+if [[ "$FORCE" == "1" && "$(id -u)" != "0" ]]; then
+  err "--force removes what ${SCRIPT_NAME} installed on the system, for every user: only root does it."
+  err "Run: sudo ${SHELLSCRIPT_LOADER:-load.sh} remove -- ${SCRIPT_NAME} --force"
+  exit 2
+fi
+
 # Standard directories
 BASE_DIR="${SHELLSCRIPT_HOME}"
 BIN_DIR="$BASE_DIR/bin"
 DOWNLOADS_DIR="$BASE_DIR/downloads"
 SCRIPT_PATH="$DOWNLOADS_DIR/${SCRIPT_NAME}.sh"
+# A script that changes the system is there once for every user (load.sh)
+SYSTEM_SCRIPT_PATH="${SHELLSCRIPT_SYSTEM_HOME:-/var/lib/shellscript}/scripts/${SCRIPT_NAME}.sh"
+[[ ! -f "$SYSTEM_SCRIPT_PATH" ]] || SCRIPT_PATH="$SYSTEM_SCRIPT_PATH"
 
 # With 'load.sh --developer <path>' the script is the local one, as it was to install
 if [[ -n "${SHELLSCRIPT_DEVELOPER_PATH:-}" ]]; then
@@ -85,6 +102,7 @@ if [[ ! -f "$SCRIPT_PATH" ]]; then
         err "Failed to download script using load.sh"
         exit 3
       }
+      [[ ! -f "$SYSTEM_SCRIPT_PATH" ]] || SCRIPT_PATH="$SYSTEM_SCRIPT_PATH"
     else
       # Download directly
       mkdir -p "$DOWNLOADS_DIR"
@@ -142,7 +160,8 @@ REMOVED_SOMETHING=0
 # Run the script's own uninstall hook first (e.g. remove system packages it installed)
 if [[ -n "$UNINSTALL_CMD" ]]; then
   log "Running uninstall hook: ${SCRIPT_NAME}.sh ${UNINSTALL_CMD}"
-  run "\"$SCRIPT_PATH\" ${UNINSTALL_CMD}"
+  # The hook reads it to take out the system half too (system_release)
+  run "SHELLSCRIPT_FORCE=${FORCE} \"$SCRIPT_PATH\" ${UNINSTALL_CMD}"
   REMOVED_SOMETHING=1
 fi
 

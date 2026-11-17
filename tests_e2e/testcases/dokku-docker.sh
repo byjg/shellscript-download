@@ -7,6 +7,7 @@
 source "$(dirname "${BASH_SOURCE[0]}")/../shared/lib.sh"
 
 tool_home="${SHELLSCRIPT_HOME}/dokku-docker"
+state="${SYSTEM_STATE}/dokku-docker"
 older="0.38.33"
 latest="$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/dokku/dokku/releases/latest)"
 latest="${latest##*/v}"
@@ -24,6 +25,8 @@ assert_exit 0 "[ \$(${in_dokku} ssh-keys:list | wc -l) -eq ${keys} ]"
 assert_exit 0 "${in_dokku} plugin:installed maintenance"
 assert_output "sudo cat /var/lib/dokku/plugin-list" "maintenance: https://github.com/dokku/dokku-maintenance.git"
 assert_exit 0 "${in_dokku} apps:create e2e-app"
+assert_output "cat '${state}/config'" "VERSION=${older}"
+assert_output "cat '${state}/installed-by'" "$(id -un)"
 
 step "dokku-docker: run again keeps the container, its options, the keys and the plugin"
 created="$(docker inspect -f '{{.Created}}' dokku)"
@@ -45,12 +48,17 @@ assert_output "${in_dokku} apps:list" "e2e-app"
 assert_exit 0 "[ \$(${in_dokku} ssh-keys:list | wc -l) -eq ${keys} ]"
 assert_exit 0 "${in_dokku} plugin:installed maintenance"
 
-step "dokku-docker: remove takes out the container and keeps the data"
+step "dokku-docker: a user's remove keeps the container, there for every user"
 load remove -- dokku-docker
+assert_log "Root removes it with 'load.sh remove -- dokku-docker --force'"
+assert_exit 0 "docker inspect dokku"
+
+step "dokku-docker: root's remove --force takes out the container and keeps the data"
+assert_exit 0 "${ROOT_LOADER} remove -- dokku-docker --force"
 assert_log "The data of Dokku stays in /var/lib/dokku"
 assert_exit 1 "docker inspect dokku"
 assert_exit 0 "sudo test -d /var/lib/dokku/home/dokku/e2e-app"
-assert_exists "$tool_home"
+assert_missing "$state"
 
 step "dokku-docker: purge removes the folder"
 load remove -- dokku-docker --purge

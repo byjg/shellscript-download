@@ -3,6 +3,9 @@
 
 set -euo pipefail
 
+# It changes the system: load.sh keeps one copy of it for every user, owned by root
+SYSTEM_SCRIPT=yes
+
 print_usage() {
   cat <<'USAGE'
 load.sh buildah -- [options]
@@ -56,13 +59,18 @@ while [[ ${1-} ]]; do
   shift || true
 done
 
-PACKAGES_STATE="${SHELLSCRIPT_HOME}/buildah/installed-packages.conf"
+PACKAGES_STATE="$(system_state buildah)/installed-packages.conf"
+system_state_migrate buildah installed-packages.conf cgroups-service
 
 # Internal hook, not part of the user interface: executed by 'load.sh remove -- buildah'
-# through the UNINSTALL_CMD manifest key.
+# through the UNINSTALL_CMD manifest key. The package is there for every user: only
+# root takes it out, with --force.
 if [[ "$UNINSTALL" == "1" ]]; then
-  remove_recorded_packages "Buildah" "$PACKAGES_STATE"
-  rootless_host_undo buildah
+  if system_release buildah; then
+    remove_recorded_packages "Buildah" "$PACKAGES_STATE"
+    rootless_host_undo buildah
+    system_forget buildah
+  fi
   exit 0
 fi
 
@@ -76,6 +84,7 @@ packages="buildah"
 [[ "$(detect_pm || true)" != "apk" ]] || packages="buildah netavark passt"
 ensure_package buildah "Buildah" "$packages" "$PACKAGES_STATE"
 rootless_host_setup buildah
+system_user_add buildah
 
 subuid_hint Buildah
 

@@ -3,6 +3,9 @@
 
 set -euo pipefail
 
+# It changes the system: load.sh keeps one copy of it for every user, owned by root
+SYSTEM_SCRIPT=yes
+
 print_usage() {
   cat <<'USAGE'
 load.sh podman -- [options]
@@ -65,13 +68,18 @@ while [[ ${1-} ]]; do
   shift || true
 done
 
-PACKAGES_STATE="${SHELLSCRIPT_HOME}/podman/installed-packages.conf"
+PACKAGES_STATE="$(system_state podman)/installed-packages.conf"
+system_state_migrate podman installed-packages.conf cgroups-service
 
 # Internal hook, not part of the user interface: executed by 'load.sh remove -- podman'
-# through the UNINSTALL_CMD manifest key.
+# through the UNINSTALL_CMD manifest key. The package is there for every user: only
+# root takes it out, with --force.
 if [[ "$UNINSTALL" == "1" ]]; then
-  remove_recorded_packages "Podman" "$PACKAGES_STATE"
-  rootless_host_undo podman
+  if system_release podman; then
+    remove_recorded_packages "Podman" "$PACKAGES_STATE"
+    rootless_host_undo podman
+    system_forget podman
+  fi
   exit 0
 fi
 
@@ -84,6 +92,7 @@ fi
 
 ensure_package podman "Podman" podman "$PACKAGES_STATE"
 rootless_host_setup podman
+system_user_add podman
 
 [[ "$DOCKER_ALIAS" != "1" ]] || docker_command_write Podman podman
 

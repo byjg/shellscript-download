@@ -58,6 +58,9 @@ load.sh php-docker -- --help
   `https://shellscript.download/scripts/<script>.sh` and cached in
   `$HOME/.shellscript/downloads`.
 - The cached copy is used on the next runs. `load.sh --update <script>` downloads it again.
+- A script that changes the system (Docker, Podman, QEMU, ...) is kept once for every user of
+  the machine, owned by root, in `/var/lib/shellscript/scripts`: downloading it asks for sudo.
+  One you downloaded before moves there with `load.sh --update`.
 - What is downloaded from shellscript.download (a script, the files the scripts share, the
   loader and its completion) is published with a signature, `<file>.sig`. The loader uses it only
   when that is the signature of the key written in `load.sh`, the one of
@@ -65,6 +68,17 @@ load.sh php-docker -- --help
   [Signed downloads](docs/signatures.md).
 - The script is executed unless `--dont-run` is given, and `load.sh` exits with its status code.
 - Commands a script installs go to `$HOME/.shellscript/bin`, which the loader adds to your `PATH`.
+- Run it as yourself: a script calls `sudo` for what it changes on the system. Root may run it
+  too, and installs for itself, in `/root/.shellscript`. With `sudo`, name the loader by its path
+  (`sudo ~/.shellscript/bin/load.sh <script>`), as sudo does not use your `PATH`. Never with
+  `sudo -E`: as root in your HOME, it would leave there files you could not change, and the
+  loader stops.
+- What a script installs on the system (packages, a repository) is there for every user of the
+  machine, and so is what it records about it, in `/var/lib/shellscript`. Your
+  `load.sh remove -- <script>` takes out only what is yours; root takes out the rest, for
+  everyone, with `sudo ~/.shellscript/bin/load.sh remove -- <script> --force`.
+  `load.sh --installed` shows what another user installed there as `system (by <user>)`, and
+  `load.sh --upgrade` leaves it to them.
 
 All its options are in the [load](docs/scripts/load.md) page.
 
