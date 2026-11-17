@@ -121,6 +121,17 @@ is there for every user of the machine, and so is what it records about it: in
 A user's `load.sh remove` takes out only what is the user's own; the system half stays until
 root removes it with `load.sh remove -- <script> --force`.
 
+Such a script says so in a line of its own, near the top, which `load.sh` reads without
+running it:
+
+```bash
+# It changes the system: load.sh keeps one copy of it for every user, owned by root
+SYSTEM_SCRIPT=yes
+```
+
+`load.sh` then keeps its code, and the lib it shares, in `/var/lib/shellscript/scripts`, once
+for every user, instead of in each user's cache: every user runs the same version of it.
+
 | Function | Behaviour |
 |---|---|
 | `system_state podman` | The folder of the system state of a script: `/var/lib/shellscript/podman` |

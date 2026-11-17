@@ -58,6 +58,9 @@ load.sh php-docker -- --help
   `https://shellscript.download/scripts/<script>.sh` and cached in
   `$HOME/.shellscript/downloads`.
 - The cached copy is used on the next runs. `load.sh --update <script>` downloads it again.
+- A script that changes the system (Docker, Podman, QEMU, ...) is kept once for every user of
+  the machine, owned by root, in `/var/lib/shellscript/scripts`: downloading it asks for sudo.
+  One you downloaded before moves there with `load.sh --update`.
 - What is downloaded from shellscript.download (a script, the files the scripts share, the
   loader and its completion) is published with a signature, `<file>.sig`. The loader uses it only
   when that is the signature of the key written in `load.sh`, the one of

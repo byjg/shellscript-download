@@ -77,6 +77,9 @@ BASE_DIR="${SHELLSCRIPT_HOME}"
 BIN_DIR="$BASE_DIR/bin"
 DOWNLOADS_DIR="$BASE_DIR/downloads"
 SCRIPT_PATH="$DOWNLOADS_DIR/${SCRIPT_NAME}.sh"
+# A script that changes the system is there once for every user (load.sh)
+SYSTEM_SCRIPT_PATH="${SHELLSCRIPT_SYSTEM_HOME:-/var/lib/shellscript}/scripts/${SCRIPT_NAME}.sh"
+[[ ! -f "$SYSTEM_SCRIPT_PATH" ]] || SCRIPT_PATH="$SYSTEM_SCRIPT_PATH"
 
 # With 'load.sh --developer <path>' the script is the local one, as it was to install
 if [[ -n "${SHELLSCRIPT_DEVELOPER_PATH:-}" ]]; then
@@ -99,6 +102,7 @@ if [[ ! -f "$SCRIPT_PATH" ]]; then
         err "Failed to download script using load.sh"
         exit 3
       }
+      [[ ! -f "$SYSTEM_SCRIPT_PATH" ]] || SCRIPT_PATH="$SYSTEM_SCRIPT_PATH"
     else
       # Download directly
       mkdir -p "$DOWNLOADS_DIR"

@@ -3,6 +3,9 @@
 
 set -euo pipefail
 
+# It changes the system: load.sh keeps one copy of it for every user, owned by root
+SYSTEM_SCRIPT=yes
+
 
 print_usage() {
   cat <<'USAGE'

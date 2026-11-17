@@ -4,6 +4,8 @@
 #
 # Cache location used by this script:
 #   $HOME/.shellscript/downloads/<script>.sh
+#   /var/lib/shellscript/scripts/<script>.sh for a script that changes the system
+#   (SYSTEM_SCRIPT=yes): one copy for every user, owned by root
 #
 # Usage and options: load.sh --help
 #
@@ -419,6 +421,31 @@ download_signed() {
 export -f log err run require_cmd github_auth_header fetch download require_downloader final_url remote_stamp already_installed record_installed github_latest_tag require_script \
   sudo_cmd system_state system_state_add system_state_write system_state_del system_user_add system_state_migrate system_release system_forget
 
+# Where the scripts this machine has are: in the cache of the user, except a script that
+# changes the system (a line SYSTEM_SCRIPT=yes), which is there once for every user,
+# owned by root, next to its system state. With --developer, in that folder.
+USER_SCRIPTS_DIR="$HOME/.shellscript/downloads"
+SYSTEM_SCRIPTS_DIR="${SHELLSCRIPT_SYSTEM_HOME}/scripts"
+
+# script_path <script>: the file of a script, where it is or where it would be
+script_path() {
+  if [[ -n "$DEVELOPER_PATH" ]]; then printf '%s/%s.sh\n' "$DEVELOPER_PATH" "$1"
+  elif [[ -f "${SYSTEM_SCRIPTS_DIR}/$1.sh" ]]; then printf '%s/%s.sh\n' "$SYSTEM_SCRIPTS_DIR" "$1"
+  else printf '%s/%s.sh\n' "$USER_SCRIPTS_DIR" "$1"; fi
+}
+
+# script_names: the scripts this machine has, each once
+script_names() {
+  local dir file
+  local -a dirs=("$USER_SCRIPTS_DIR" "$SYSTEM_SCRIPTS_DIR")
+  [[ -z "$DEVELOPER_PATH" ]] || dirs=("$DEVELOPER_PATH")
+  for dir in "${dirs[@]}"; do
+    for file in "$dir"/*.sh; do
+      if [[ -f "$file" ]]; then basename "$file" .sh; fi
+    done
+  done | sort -u
+}
+
 # installed_state <script>: prints the installed version of what a script installs, or
 # "yes" when it has no version to show, and nothing when it is not on this machine.
 # It reads the manifest of the script, the one 'load.sh remove' uses, so it knows only
@@ -430,11 +457,12 @@ export -f log err run require_cmd github_auth_header fetch download require_down
 # folder of the tool itself, such a link is not ours to read (~/.nvm/current is a Node).
 # script_manifest <script>: prints the manifest of a script this machine has, or nothing
 script_manifest() {
-  local name="$1" dir="${DEVELOPER_PATH:-$HOME/.shellscript/downloads}" manifest
-  [[ -f "${dir}/${name}.sh" ]] || return 0
+  local name="$1" file manifest
+  file="$(script_path "$name")"
+  [[ -f "$file" ]] || return 0
   # Asking for the manifest runs the script: one that does not know --manifest would do
   # what it does by default, which is to install
-  grep -q -- '--manifest' "${dir}/${name}.sh" || return 0
+  grep -q -- '--manifest' "$file" || return 0
   manifest="$("$LOADER_SELF" ${DEVELOPER_PATH:+--developer "$DEVELOPER_PATH"} "$name" -- --manifest 2>/dev/null)" || return 0
   [[ "$manifest" == *"FOLDERS="* ]] || return 0
   printf '%s\n' "$manifest"
@@ -507,10 +535,9 @@ list_scripts() {
 
 # What is installed, from the scripts this machine has: it needs no network
 list_installed() {
-  local dir="${DEVELOPER_PATH:-$HOME/.shellscript/downloads}" file name state desc any=""
-  for file in "$dir"/*.sh; do
-    [[ -f "$file" ]] || continue
-    name="$(basename "$file" .sh)"
+  local file name state desc any=""
+  while IFS= read -r name <&3; do
+    file="$(script_path "$name")"
     state="$(installed_state "$name")"
     [[ -n "$state" ]] || continue
     if [[ -z "$any" ]]; then
@@ -521,7 +548,7 @@ list_installed() {
     fi
     desc="$(sed -n '2s/^# *//p' "$file")"
     printf "$LIST_FORMAT" "$name" "$state" "${desc#"${name}.sh: "}"
-  done
+  done 3< <(script_names)
   [[ -n "$any" ]] || echo "Nothing installed with load.sh on this machine." >&2
 }
 
@@ -580,18 +607,18 @@ update_all() {
 
   # Each script goes through the loader just updated, which also downloads the file it
   # shares with other scripts
-  for file in "${home}/downloads"/*.sh; do
-    [[ -f "$file" ]] || continue
-    name="$(basename "$file" .sh)"
-    before="$(cksum < "$file")"
+  # A script that changes the system, found in the cache of the user, moves where every
+  # user has it: the cksum is of the file wherever it is
+  while IFS= read -r name <&3; do
+    before="$(cksum < "$(script_path "$name")")"
     if "$loader" --update --dont-run "$name" >/dev/null 2>&1; then
-      if [[ "$(cksum < "$file")" == "$before" ]]; then state="up to date"; else state="updated"; fi
+      if [[ "$(cksum < "$(script_path "$name")")" == "$before" ]]; then state="up to date"; else state="updated"; fi
     else
       # A script that left the catalog, or a download that failed: the same answer
       state="could not be downloaded, kept as it is"
     fi
     printf "$format" "${name}.sh" "$state"
-  done
+  done 3< <(script_names)
 }
 
 # Where the loader keeps the arguments each script was last installed with
@@ -601,13 +628,11 @@ saved_arguments_file() { echo "$HOME/.shellscript/downloads/$1.args"; }
 # arguments it was last installed with. A script says in its manifest when that is not
 # something to do to it (UPGRADE=no): its arguments are commands, not what to install.
 upgrade_installed() {
-  local only="$1" dir="${DEVELOPER_PATH:-$HOME/.shellscript/downloads}"
-  local file name manifest saved upgraded="" failed="" left="" any=""
+  local only="$1"
+  local name manifest saved upgraded="" failed="" left="" any=""
   local -a arguments
 
-  for file in "$dir"/*.sh; do
-    [[ -f "$file" ]] || continue
-    name="$(basename "$file" .sh)"
+  while IFS= read -r name <&3; do
     [[ -z "$only" || "$only" == "$name" ]] || continue
     manifest="$(script_manifest "$name")"
     if grep -qx 'UPGRADE=no' <<<"$manifest"; then
@@ -633,7 +658,7 @@ upgrade_installed() {
     else
       failed+=" ${name}"
     fi
-  done
+  done 3< <(script_names)
 
   if [[ -z "$any" ]]; then
     [[ -z "$only" ]] || { echo "No such script on this machine: ${only}" >&2; return 1; }
@@ -679,14 +704,17 @@ if [[ -n "${DEVELOPER_PATH}" ]]; then
     exit 3
   fi
 else
-  DEST_DIR="$HOME/.shellscript/downloads"
-  DEST_PATH="$DEST_DIR/${SCRIPT_NAME}.sh"
+  # Downloaded to the cache of the user, where its signature is checked; a script that
+  # changes the system then goes where every user has it (script_path)
+  DEST_DIR="$USER_SCRIPTS_DIR"
+  DEST_PATH="$(script_path "$SCRIPT_NAME")"
   URL="https://shellscript.download/scripts/${SCRIPT_NAME}.sh"
 
   ensure_downloaded() {
     # Download if missing or update requested
     if [[ "${UPDATE}" == true || ! -f "${DEST_PATH}" ]]; then
       echo "Fetching: ${URL}" >&2
+      DEST_PATH="${DEST_DIR}/${SCRIPT_NAME}.sh"
       download_signed "${URL}" "${DEST_PATH}" || exit 3
       chmod +x "${DEST_PATH}" || true
       DOWNLOADED=true
@@ -696,10 +724,32 @@ else
   ensure_downloaded
 
   # The file the script shares with other scripts (public/scripts/lib), named by its
-  # SHARED_LIB line: downloaded with the script, and again when it is missing
+  # SHARED_LIB line: downloaded with the script, and again when it is missing next to it
   shared_lib="$(sed -n 's|^SHARED_LIB=.*/\(lib/[a-z0-9-]*\.sh\)"$|\1|p' "${DEST_PATH}")"
-  if [[ -n "${shared_lib}" && ( "${DOWNLOADED}" == true || ! -f "${DEST_DIR}/${shared_lib}" ) ]]; then
+  LIB_DOWNLOADED=false
+  if [[ -n "${shared_lib}" && ( "${DOWNLOADED}" == true || ! -f "$(dirname "${DEST_PATH}")/${shared_lib}" ) ]]; then
     download_signed "https://shellscript.download/scripts/${shared_lib}" "${DEST_DIR}/${shared_lib}" || exit 3
+    LIB_DOWNLOADED=true
+  fi
+
+  # A script that changes the system: one copy for every user, owned by root. What was
+  # just downloaded, and checked, goes there, and the copy of the user goes away. One
+  # in the cache of the user from before stays there, and runs, until --update.
+  if [[ "$DEST_PATH" == "${SYSTEM_SCRIPTS_DIR}/"* ]] \
+      || { [[ "$DOWNLOADED" == true ]] && grep -qx 'SYSTEM_SCRIPT=yes' "$DEST_PATH"; }; then
+    root_cmd="$(sudo_cmd)"
+    if [[ "$DOWNLOADED" == true || "$LIB_DOWNLOADED" == true ]]; then
+      [[ -z "$root_cmd" ]] || require_cmd sudo
+      echo "Sharing ${SCRIPT_NAME}.sh with every user of this machine: ${SYSTEM_SCRIPTS_DIR}" >&2
+    fi
+    if [[ "$DOWNLOADED" == true ]]; then
+      $root_cmd install -D -m 755 "${DEST_DIR}/${SCRIPT_NAME}.sh" "${SYSTEM_SCRIPTS_DIR}/${SCRIPT_NAME}.sh" || exit 3
+      rm -f "${DEST_DIR}/${SCRIPT_NAME}.sh"
+    fi
+    if [[ "$LIB_DOWNLOADED" == true ]]; then
+      $root_cmd install -D -m 644 "${DEST_DIR}/${shared_lib}" "${SYSTEM_SCRIPTS_DIR}/${shared_lib}" || exit 3
+    fi
+    DEST_PATH="${SYSTEM_SCRIPTS_DIR}/${SCRIPT_NAME}.sh"
   fi
 fi
 

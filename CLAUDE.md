@@ -36,7 +36,9 @@ system_release <script>        # uninstall hook: true only for root with --force
 system_forget <script>         # after the system half is taken out
 ```
 What a script changes on the system (through sudo) is recorded in `system_state`, never in
-`$HOME`: a user's `remove` keeps it, root's `remove --force` takes it out. See CONTRIBUTING.
+`$HOME`: a user's `remove` keeps it, root's `remove --force` takes it out. Such a script has a
+line `SYSTEM_SCRIPT=yes` near the top: load.sh keeps its code once for every user, in
+/var/lib/shellscript/scripts. See CONTRIBUTING.
 Run as root with `${SUDO} <cmd>` (`SUDO="$(sudo_cmd)"`), never `sudo` directly, and check
 `[[ -z "$SUDO" ]] || require_cmd sudo` only before what needs it.
 Never call `curl` or `wget` directly in scripts — use `fetch`/`download` so both tools work.
