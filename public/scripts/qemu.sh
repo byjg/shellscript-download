@@ -78,7 +78,8 @@ Bridged VMs:
       (apt, dnf) and the network started. A bridge with another name must exist.
     - "allow <bridge>" is added to /etc/qemu/bridge.conf, and qemu-bridge-helper is
       made setuid, so QEMU can attach VMs to the bridge as your user.
-  'load.sh remove -- qemu' undoes these, like the packages.
+  They are for every user of the machine: root undoes them, like the packages, with
+  'load.sh remove -- qemu --force'.
 
 GPU passthrough:
   --gpu gives the VM the device itself, through VFIO, so it runs the vendor's driver
@@ -88,7 +89,8 @@ GPU passthrough:
   'ulimit -l', since VFIO locks it. Then, with sudo, the devices move from their host
   driver to vfio-pci; a device still in use on the host is refused. 'stop' and
   'remove' give each back to the driver it came from, also when the VM shut itself
-  down; 'load.sh remove -- qemu' gives back anything left. Some laptop GPUs do not
+  down; 'load.sh remove -- qemu' gives back anything your VMs left, and root's
+  'load.sh remove -- qemu --force' what the VMs of every user left. Some laptop GPUs do not
   reset cleanly, and giving one back may then need a reboot.
 
 Examples:
@@ -265,16 +267,12 @@ bridge_helper() {
 }
 
 # Changes made to the host for bridged VMs, one per line ("allow <bridge>",
-# "setuid <helper>"), so 'load.sh remove -- qemu' can undo exactly those
-BRIDGE_STATE="${QEMU_HOME}/bridge-setup.conf"
+# "setuid <helper>"), so 'load.sh remove -- qemu' can undo exactly those. They are for
+# every user of the machine: in the system state.
+BRIDGE_STATE="$(system_state qemu)/bridge-setup.conf"
 PACKAGES_STATE="$(system_state qemu)/installed-packages.conf"
 
-record_bridge_change() {
-  [[ "$DRY_RUN" == "1" ]] && return
-  mkdir -p "$QEMU_HOME"
-  printf '%s\n' "$1" >> "$BRIDGE_STATE"
-  sort -u -o "$BRIDGE_STATE" "$BRIDGE_STATE"
-}
+record_bridge_change() { system_state_add "$BRIDGE_STATE" "$1"; }
 
 # Sets up what a bridged VM needs, like any other requirement: whatever is missing,
 # with sudo. libvirt's default network provides virbr0 (DHCP and NAT); a bridge with
@@ -342,9 +340,25 @@ vm_address() {
 
 # ---------- GPU passthrough (VFIO) ----------
 
-# Devices given to VMs, one per line: "<vm> <pci device> <driver it was taken from>",
-# so stopping or removing the VM gives each back to its own driver
-VFIO_STATE="${QEMU_HOME}/vfio.conf"
+# Devices given to VMs, one per line: "<user>:<vm> <pci device> <driver it was taken
+# from>", so stopping or removing the VM gives each back to its own driver. A device is
+# the machine's: in the system state, where the VMs of two users may share a name.
+VFIO_STATE="$(system_state qemu)/vfio.conf"
+OLD_VFIO_STATE="${QEMU_HOME}/vfio.conf"
+
+# vfio_key <vm>: the VM of this user, as vfio.conf names it
+vfio_key() { printf '%s:%s' "$(id -un)" "$1"; }
+
+# What an older version recorded in the user's folder, without the user: moves to the
+# system state, with it. Nothing to do (no sudo) once it moved.
+vfio_migrate() {
+  [[ -f "$OLD_VFIO_STATE" && "$DRY_RUN" != "1" ]] || return 0
+  local vm d drv lines=()
+  while read -r vm d drv; do lines+=("$(vfio_key "$vm") ${d} ${drv}"); done < "$OLD_VFIO_STATE"
+  log "Moving ${OLD_VFIO_STATE} to ${VFIO_STATE}, shared by the users of this machine"
+  system_state_add "$VFIO_STATE" ${lines[@]+"${lines[@]}"}
+  rm -f "$OLD_VFIO_STATE"
+}
 
 # PCI address in sysfs form: 01:00.0 -> 0000:01:00.0
 pci_addr() {
@@ -421,6 +435,7 @@ check_gpu() {
 # vfio-pci, recording where each came from, and lets this user open the group
 acquire_gpu() {
   local name="$1" addr="$2" d drv group
+  vfio_migrate
   check_gpu "$addr" "$VM_MEMORY"
   run "${SUDO} modprobe vfio-pci"
   for d in $(gpu_group_devices "$addr"); do
@@ -431,31 +446,29 @@ acquire_gpu() {
     run "echo vfio-pci | ${SUDO} tee /sys/bus/pci/devices/${d}/driver_override >/dev/null"
     [[ -n "$drv" ]] && run "echo ${d} | ${SUDO} tee /sys/bus/pci/devices/${d}/driver/unbind >/dev/null"
     run "echo ${d} | ${SUDO} tee /sys/bus/pci/drivers_probe >/dev/null"
-    if [[ "$DRY_RUN" != "1" ]]; then
-      mkdir -p "$QEMU_HOME"
-      printf '%s %s %s\n' "$name" "$d" "${drv:-none}" >> "$VFIO_STATE"
-    fi
+    system_state_add "$VFIO_STATE" "$(vfio_key "$name") ${d} ${drv:-none}"
   done
   group=$(basename "$(readlink "/sys/bus/pci/devices/${addr}/iommu_group")")
   run "${SUDO} chown $(id -u) /dev/vfio/${group}"
 }
 
-# Gives the devices a VM took back to the drivers they came from
-release_gpu() {
-  local name="$1" vm d drv
+# Gives the devices a VM of this user took back to the drivers they came from
+release_gpu() { vfio_migrate; release_gpu_key "$(vfio_key "$1")"; }
+
+# release_gpu_key <user>:<vm>: the same, for the VM of any user
+release_gpu_key() {
+  local key="$1" line vm d drv
   [[ -s "$VFIO_STATE" ]] || return 0
-  grep -q "^${name} " "$VFIO_STATE" || return 0
-  while read -r vm d drv; do
-    [[ "$vm" == "$name" ]] || continue
+  grep -q "^${key} " "$VFIO_STATE" || return 0
+  while read -r line; do
+    read -r vm d drv <<<"$line"
+    [[ "$vm" == "$key" ]] || continue
     log "Giving ${d} back to ${drv}"
     run "echo | ${SUDO} tee /sys/bus/pci/devices/${d}/driver_override >/dev/null"
     run "echo ${d} | ${SUDO} tee /sys/bus/pci/drivers/vfio-pci/unbind >/dev/null 2>&1 || true"
     [[ "$drv" == "none" ]] || run "echo ${d} | ${SUDO} tee /sys/bus/pci/drivers_probe >/dev/null"
-  done < "$VFIO_STATE"
-  if [[ "$DRY_RUN" != "1" ]]; then
-    grep -v "^${name} " "$VFIO_STATE" > "${VFIO_STATE}.tmp" || true
-    mv "${VFIO_STATE}.tmp" "$VFIO_STATE"
-  fi
+    system_state_del "$VFIO_STATE" "$line"
+  done < <(cat "$VFIO_STATE")
 }
 
 missing_packages() {
@@ -675,7 +688,7 @@ CFG
 # Bare 'load.sh qemu' — install everything, report readiness
 cmd_setup() {
   # Only here and in the removal: a VM command never asks for sudo to record it
-  system_state_migrate qemu installed-packages.conf
+  system_state_migrate qemu installed-packages.conf bridge-setup.conf
   ensure_qemu
   system_user_add qemu
 
@@ -692,8 +705,9 @@ cmd_setup() {
 # Internal hook, not part of the user interface: executed by 'load.sh remove -- qemu'
 # through the UNINSTALL_CMD manifest key.
 cmd_uninstall() {
-  system_state_migrate qemu installed-packages.conf
-  # Stop any running VMs first
+  system_state_migrate qemu installed-packages.conf bridge-setup.conf
+  vfio_migrate
+  # Stop any running VMs of this user first
   local dir name
   for dir in "$VMS_DIR"/*/; do
     [[ -d "$dir" ]] || continue
@@ -704,11 +718,19 @@ cmd_uninstall() {
     fi
   done
 
-  # Devices still given to VFIO (a VM that shut itself down) go back to the host
+  # Devices still given to a VM of this user (one that shut itself down) go back
+  local key
   if [[ -s "$VFIO_STATE" ]]; then
-    local vm
-    for vm in $(cut -d' ' -f1 "$VFIO_STATE" | sort -u); do release_gpu "$vm"; done
-    [[ "$DRY_RUN" == "1" ]] || rm -f "$VFIO_STATE"
+    for key in $(cut -d' ' -f1 "$VFIO_STATE" | grep "^$(id -un):" | sort -u); do release_gpu_key "$key"; done
+  fi
+
+  # The packages and the bridge setup are there for every user: only root takes them
+  # out, with --force
+  system_release qemu || return 0
+
+  # Devices still given to VMs of other users go back too: QEMU is going away
+  if [[ -s "$VFIO_STATE" ]]; then
+    for key in $(cut -d' ' -f1 "$VFIO_STATE" | sort -u); do release_gpu_key "$key"; done
   fi
 
   # Undo the bridge setup this script made, whoever installed QEMU
@@ -724,14 +746,10 @@ cmd_uninstall() {
           run "${SUDO} chmod u-s ${what} 2>/dev/null || true" ;;
       esac
     done < "$BRIDGE_STATE"
-    [[ "$DRY_RUN" == "1" ]] || rm -f "$BRIDGE_STATE"
   fi
 
-  # The packages are there for every user: only root takes them out, with --force
-  if system_release qemu; then
-    remove_recorded_packages "QEMU" "$PACKAGES_STATE"
-    system_forget qemu
-  fi
+  remove_recorded_packages "QEMU" "$PACKAGES_STATE"
+  system_forget qemu
 }
 
 boot_vm() {

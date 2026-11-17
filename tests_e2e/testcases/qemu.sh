@@ -43,6 +43,14 @@ step "qemu: install again changes nothing"
 load qemu
 if grep -q "Installing missing packages" "$LOG_FILE"; then fail "installed packages again"; else pass "no package installed again"; fi
 
+step "qemu: the bridge setup an older version recorded in the user's folder moves to the system state"
+sudo mkdir -p /etc/qemu
+echo "allow e2e-br0" | sudo tee -a /etc/qemu/bridge.conf >/dev/null
+echo "allow e2e-br0" > "${tool_home}/bridge-setup.conf"
+load qemu
+assert_missing "${tool_home}/bridge-setup.conf"
+assert_output "cat '${SYSTEM_STATE}/qemu/bridge-setup.conf'" "allow e2e-br0"
+
 step "qemu: list, images, and wrong calls"
 assert_output "${LOADER} qemu -- list 2>/dev/null" "NAME"
 assert_output "${LOADER} qemu -- images 2>/dev/null" "alpine-"
@@ -108,10 +116,12 @@ assert_command qemu-img
 assert_no_output "pgrep -a qemu-system || true" "$vm"
 assert_missing "${SHELLSCRIPT_HOME}/bin/qemu-vm"
 assert_exists "$tool_home"
+assert_output "sudo cat /etc/qemu/bridge.conf" "allow e2e-br0"
 
-step "qemu: root's remove --force uninstalls the packages"
+step "qemu: root's remove --force uninstalls the packages and undoes the bridge setup"
 assert_exit 0 "${ROOT_LOADER} remove -- qemu --force"
 assert_no_command qemu-img
+assert_no_output "sudo cat /etc/qemu/bridge.conf" "allow e2e-br0"
 assert_missing "${SYSTEM_STATE}/qemu"
 
 step "qemu: purge removes the folder"

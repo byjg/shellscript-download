@@ -87,7 +87,8 @@ Bridged VMs:
       (apt, dnf) and the network started. A bridge with another name must exist.
     - "allow <bridge>" is added to /etc/qemu/bridge.conf, and qemu-bridge-helper is
       made setuid, so QEMU can attach VMs to the bridge as your user.
-  'load.sh remove -- qemu' undoes these, like the packages.
+  They are for every user of the machine: root undoes them, like the packages, with
+  'load.sh remove -- qemu --force'.
 
 GPU passthrough:
   --gpu gives the VM the device itself, through VFIO, so it runs the vendor's driver
@@ -97,7 +98,8 @@ GPU passthrough:
   'ulimit -l', since VFIO locks it. Then, with sudo, the devices move from their host
   driver to vfio-pci; a device still in use on the host is refused. 'stop' and
   'remove' give each back to the driver it came from, also when the VM shut itself
-  down; 'load.sh remove -- qemu' gives back anything left. Some laptop GPUs do not
+  down; 'load.sh remove -- qemu' gives back anything your VMs left, and root's
+  'load.sh remove -- qemu --force' what the VMs of every user left. Some laptop GPUs do not
   reset cleanly, and giving one back may then need a reboot.
 
 Examples:
