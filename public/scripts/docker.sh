@@ -61,8 +61,7 @@ if ! declare -F system_user_add >/dev/null; then
   exit 3
 fi
 
-SUDO="sudo"
-[[ "$(id -u)" == "0" ]] && SUDO=""
+SUDO="$(sudo_cmd)"
 
 # Preconditions
 require_downloader

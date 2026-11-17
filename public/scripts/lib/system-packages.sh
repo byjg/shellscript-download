@@ -13,8 +13,7 @@ if ! declare -F system_release >/dev/null; then
   exit 3
 fi
 
-SUDO="sudo"
-[[ "$(id -u)" == "0" ]] && SUDO=""
+SUDO="$(sudo_cmd)"
 
 detect_pm() {
   local pm
@@ -78,7 +77,7 @@ remove_recorded_packages() {
     zypper)  run "${SUDO} zypper remove -y ${pkgs}" ;;
     apk)     run "${SUDO} apk del ${pkgs}" ;;
   esac
-  [[ "$DRY_RUN" == "1" ]] || as_root rm -f "$state"
+  [[ "$DRY_RUN" == "1" ]] || ${SUDO} rm -f "$state"
 }
 
 # subuid_hint <label> [<command>]: rootless containers need a range of subordinate ids
@@ -118,7 +117,7 @@ rootless_host_undo() {
   [[ ! -f "$modules" ]] || run "${SUDO} rm -f \"${modules}\""
   if [[ -f "$marker" ]]; then
     run "${SUDO} rc-update del cgroups boot"
-    [[ "$DRY_RUN" == "1" ]] || as_root rm -f "$marker"
+    [[ "$DRY_RUN" == "1" ]] || ${SUDO} rm -f "$marker"
   fi
 }
 

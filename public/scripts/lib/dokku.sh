@@ -13,8 +13,7 @@ if ! declare -F system_release >/dev/null; then
   exit 3
 fi
 
-SUDO="sudo"
-[[ "$(id -u)" == "0" ]] && SUDO=""
+SUDO="$(sudo_cmd)"
 
 # dokku_query <arguments>: what Dokku answers, or nothing when it is not running
 dokku_query() {

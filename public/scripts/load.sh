@@ -263,9 +263,11 @@ require_script() {
 # until root removes it with --force (system_release). Nothing is written with --dry-run.
 SHELLSCRIPT_SYSTEM_HOME="/var/lib/shellscript"
 export SHELLSCRIPT_SYSTEM_HOME
-# as_root <command> [args]: runs it as root, through sudo unless it is root already. For
-# the helpers below: a script calls sudo with its own ${SUDO}, empty for root
-as_root() { if [[ "$(id -u)" == "0" ]]; then "$@"; else sudo "$@"; fi; }
+# sudo_cmd: what goes before a command to run it as root: nothing for root, sudo for
+# anyone else. A script sets SUDO="$(sudo_cmd)" once, and checks that sudo is there only
+# before what needs it ([[ -z "$SUDO" ]] || require_cmd sudo): a run that needs no sudo
+# works where it is not installed.
+sudo_cmd() { [[ "$(id -u)" == "0" ]] || printf 'sudo'; }
 # system_state <script>: the folder of its system state
 system_state() { printf '%s/%s\n' "$SHELLSCRIPT_SYSTEM_HOME" "$1"; }
 # system_state_add <file> [line...]: adds the lines to a file of the system state; with
@@ -276,10 +278,10 @@ system_state_add() {
   [[ -f "$file" ]] || missing=yes
   for line in "$@"; do grep -qxF -- "$line" "$file" 2>/dev/null || missing=yes; done
   [[ -n "$missing" ]] || return 0
-  as_root mkdir -p "$(dirname "$file")"
+  $(sudo_cmd) mkdir -p "$(dirname "$file")"
   { cat "$file" 2>/dev/null || true; [[ $# -eq 0 ]] || printf '%s\n' "$@"; } \
-    | sed '/^$/d' | sort -u | as_root tee "${file}.new" >/dev/null
-  as_root mv "${file}.new" "$file"
+    | sed '/^$/d' | sort -u | $(sudo_cmd) tee "${file}.new" >/dev/null
+  $(sudo_cmd) mv "${file}.new" "$file"
 }
 # system_state_write <file>: the file of the system state holds what comes on stdin, in
 # place of what it held. Nothing is written (no sudo) when it holds that already.
@@ -288,14 +290,14 @@ system_state_write() {
   content="$(cat)"
   [[ "${DRY_RUN:-0}" != "1" ]] || return 0
   if [[ -f "$1" && "$(cat "$1")" == "$content" ]]; then return 0; fi
-  as_root mkdir -p "$(dirname "$1")"
-  printf '%s\n' "$content" | as_root tee "$1" >/dev/null
+  $(sudo_cmd) mkdir -p "$(dirname "$1")"
+  printf '%s\n' "$content" | $(sudo_cmd) tee "$1" >/dev/null
 }
 # system_state_del <file> <line>: takes the line out of a file of the system state
 system_state_del() {
   [[ "${DRY_RUN:-0}" != "1" && -f "$1" ]] || return 0
-  { grep -vxF -- "$2" "$1" || true; } | as_root tee "${1}.new" >/dev/null
-  as_root mv "${1}.new" "$1"
+  { grep -vxF -- "$2" "$1" || true; } | $(sudo_cmd) tee "${1}.new" >/dev/null
+  $(sudo_cmd) mv "${1}.new" "$1"
 }
 # system_user_add <script>: the caller is one of the users of the script
 system_user_add() { system_state_add "$(system_state "$1")/installed-by" "$(id -un)"; }
@@ -329,7 +331,7 @@ system_release() {
   return 1
 }
 # system_forget <script>: once its system half is taken out, what it recorded goes too
-system_forget() { [[ "${DRY_RUN:-0}" == "1" ]] || as_root rm -rf "$(system_state "$1")"; }
+system_forget() { [[ "${DRY_RUN:-0}" == "1" ]] || $(sudo_cmd) rm -rf "$(system_state "$1")"; }
 # The key everything published on shellscript.download is signed with, base64 of the
 # binary key (gpgv does not read an armored one). It is the key of the ByJG APT and RPM
 # repositories, https://packages.byjg.com/byjg.gpg: ByJG Opensource <info@byjg.com.br>,
@@ -415,7 +417,7 @@ download_signed() {
   return "$status"
 }
 export -f log err run require_cmd github_auth_header fetch download require_downloader final_url remote_stamp already_installed record_installed github_latest_tag require_script \
-  as_root system_state system_state_add system_state_write system_state_del system_user_add system_state_migrate system_release system_forget
+  sudo_cmd system_state system_state_add system_state_write system_state_del system_user_add system_state_migrate system_release system_forget
 
 # installed_state <script>: prints the installed version of what a script installs, or
 # "yes" when it has no version to show, and nothing when it is not on this machine.

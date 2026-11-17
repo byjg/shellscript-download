@@ -294,8 +294,8 @@ if [[ "$SERVICES" == "1" && "$ROOTLESS" == "1" ]]; then
     if [[ "$DRY_RUN" == "1" ]]; then
       log "[dry-run] Writing ${APPARMOR_PROFILE}"
     else
-      require_cmd sudo
-      sudo tee "$APPARMOR_PROFILE" >/dev/null <<PROFILE
+      [[ -z "$SUDO" ]] || require_cmd sudo
+      ${SUDO} tee "$APPARMOR_PROFILE" >/dev/null <<PROFILE
 abi <abi/4.0>,
 include <tunables/global>
 
@@ -304,7 +304,7 @@ ${INSTALL_DIR}/bin/rootlesskit flags=(unconfined) {
 }
 PROFILE
     fi
-    run "sudo apparmor_parser -r \"${APPARMOR_PROFILE}\""
+    run "${SUDO} apparmor_parser -r \"${APPARMOR_PROFILE}\""
   fi
 
   # The setup tool of the bundle writes the user services, starts and enables them, and
