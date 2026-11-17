@@ -23,6 +23,7 @@ load byjg-repo
 assert_exists "$repo_file"
 assert_exists "${state}/repository-added"
 assert_output "cat '${state}/installed-by'" "$(id -un)"
+assert_output "${LOADER} --installed 2>/dev/null | grep '^byjg-repo ' | awk '{print \$2}'" "yes"
 
 step "byjg-repo: --list shows the packages"
 assert_output "${LOADER} byjg-repo -- --list 2>/dev/null" "static-httpserver"

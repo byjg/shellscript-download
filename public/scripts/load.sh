@@ -444,6 +444,8 @@ installed_state() {
     if [[ -e "$HOME/.shellscript/bin/${item}" ]]; then found=yes; fi
   done
   if [[ -n "$shellrc" && -e "$shellrc" ]]; then found=yes; fi
+  # A script whose system half this user installed: it keeps nothing in the home
+  if grep -qsxF "$(id -un)" "$(system_state "$name")/installed-by"; then found=yes; fi
   if [[ -z "$found" && ( -n "$hook" || ( -z "$bins" && -z "$shellrc" ) ) ]]; then
     for item in $folders; do
       if [[ -d "$item" && -n "$(ls -A "$item" 2>/dev/null)" ]]; then found=yes; fi

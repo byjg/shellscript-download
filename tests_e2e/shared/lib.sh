@@ -260,6 +260,7 @@ test_system_package() {
   assert_command "$cmd"
   assert_output "cat '${state}/installed-packages.conf'" "$name"
   assert_output "cat '${state}/installed-by'" "$(id -un)"
+  assert_output "${LOADER} --installed 2>/dev/null | grep '^${name} ' | awk '{print \$2}'" "yes"
   [[ -z "$check" ]] || "$check"
 
   step "${name}: install again changes nothing"
@@ -272,6 +273,7 @@ test_system_package() {
   assert_command "$cmd"
   assert_exists "${state}/installed-packages.conf"
   assert_no_output "cat '${state}/installed-by'" "$(id -un)"
+  assert_no_output "${LOADER} --installed 2>/dev/null" "${name} "
 
   step "${name}: --force is for root"
   load_fails remove -- "$name" --force
