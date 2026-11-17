@@ -127,8 +127,10 @@ run_in_vm() {
   local log="${VM_KEY_DIR}/${name}.log"
   "${QEMU[@]}" remove "$name" --force >/dev/null 2>&1 || true
   vm_stage "starting the VM ${name}"
-  # Small enough for a GitHub runner, where the jobs run side by side
-  if ! "${QEMU[@]}" start --image "${VM_IMAGES[$image]}" --name "$name" --ssh-key "${VM_KEY}.pub" \
+  # Small enough for a GitHub runner, where the jobs run side by side. One VM is created at
+  # a time on this machine: a VM takes the first free port, and keeps it once created, so
+  # runs side by side (one per image) never take the same one.
+  if ! flock "${TMPDIR:-/tmp}/shellscript-e2e-vm-start.lock" "${QEMU[@]}" start --image "${VM_IMAGES[$image]}" --name "$name" --ssh-key "${VM_KEY}.pub" \
       --memory 2G --cpus 1 --disk 10G >"$log" 2>&1; then
     echo "run.sh: could not start the VM ${name}:" >&2
     cat "$log" >&2
