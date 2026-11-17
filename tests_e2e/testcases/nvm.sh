@@ -17,6 +17,16 @@ assert_output "grep -qs NVM_DIR ~/.bashrc ~/.bash_profile ~/.profile && echo fou
 if on_image alpine; then
   skip "nvm install: no Node for the C library of this image"
 else
+  step "nvm: says how to install libatomic, which Node needs and the image does not have"
+  load nvm
+  if on_image fedora; then
+    assert_log "Install it with: sudo dnf install -y libatomic"
+    sys_install libatomic
+  else
+    assert_log "Install it with: sudo apt-get install -y libatomic1"
+    sys_install libatomic1
+  fi
+
   step "nvm: installs Node"
   assert_output ". '${shellrc}'; nvm install --lts >/dev/null 2>&1; node --version" "v"
 fi
@@ -24,6 +34,7 @@ fi
 step "nvm: install again works"
 load nvm
 assert_output ". '${shellrc}'; nvm --version" "0."
+on_image alpine || assert_no_output "cat '$LOG_FILE'" "libatomic"
 
 step "nvm: remove keeps the folder"
 load remove -- nvm

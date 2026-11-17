@@ -86,4 +86,20 @@ export NVM_SYMLINK_CURRENT=true
 WRAP
 fi
 
+# The Node that NVM downloads needs libatomic, which a minimal system does not have. A
+# system package: this script, which installs for the user alone, only says how.
+if ! compgen -G '/usr/lib*/libatomic.so.1' >/dev/null && ! compgen -G '/usr/lib/*/libatomic.so.1' >/dev/null \
+    && ! compgen -G '/lib*/libatomic.so.1' >/dev/null && ! compgen -G '/lib/*/libatomic.so.1' >/dev/null; then
+  case "$(command -v apt-get || command -v dnf || command -v apk || command -v pacman || command -v zypper || true)" in
+    */apt-get) libatomic_install="sudo apt-get install -y libatomic1" ;;
+    */dnf)     libatomic_install="sudo dnf install -y libatomic" ;;
+    */apk)     libatomic_install="sudo apk add libatomic" ;;
+    */pacman)  libatomic_install="sudo pacman -S gcc-libs" ;;
+    */zypper)  libatomic_install="sudo zypper install -y libatomic1" ;;
+    *)         libatomic_install="your package manager (the library libatomic.so.1)" ;;
+  esac
+  log "Node needs libatomic, which this system does not have: 'node' does not start without it."
+  log "Install it with: ${libatomic_install}"
+fi
+
 log "Done. Source ${DEST_FOLDER}/nvm-init.sh from your shell rc. Close the terminal and open it again)"
