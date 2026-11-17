@@ -29,6 +29,15 @@ ROOT_LOADER="sudo ${LOADER_PATH} --developer ${SCRIPTS_DIR}"
 # Where a script keeps the state of what it installed on the system, for every user
 SYSTEM_STATE="/var/lib/shellscript"
 
+# Another user of the machine, for what is shared between users, and the loader as that
+# user: the working copy, which every user can read (the home of the test may not be)
+OTHER_USER="e2e-other-user"
+OTHER_LOADER="sudo -u ${OTHER_USER} -H bash ${SCRIPTS_DIR}/load.sh --developer ${SCRIPTS_DIR}"
+other_user() {
+  id "$OTHER_USER" >/dev/null 2>&1 && return 0
+  if command -v useradd >/dev/null 2>&1; then sudo useradd -m "$OTHER_USER"; else sudo adduser -D "$OTHER_USER"; fi
+}
+
 # load <script> [-- options]: runs the loader. Its output is shown only when it fails,
 # or always with 'run.sh --verbose'.
 load() {
@@ -262,6 +271,14 @@ test_system_package() {
   assert_output "cat '${state}/installed-by'" "$(id -un)"
   assert_output "${LOADER} --installed 2>/dev/null | grep '^${name} ' | awk '{print \$2}'" "yes"
   [[ -z "$check" ]] || "$check"
+
+  step "${name}: another user sees it installed system-wide, and leaves its upgrade to who installed it"
+  other_user
+  assert_output "${OTHER_LOADER} --installed 2>/dev/null | grep '^${name} '" "system (by $(id -un))"
+  assert_exit 1 "${OTHER_LOADER} --upgrade ${name}"
+  assert_log "is installed system-wide by $(id -un)"
+  assert_exit 0 "${OTHER_LOADER} --upgrade"
+  assert_log "left to them: ${name} (by $(id -un))"
 
   step "${name}: install again changes nothing"
   load "$name"

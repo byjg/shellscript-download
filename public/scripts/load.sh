@@ -533,12 +533,24 @@ list_scripts() {
   done <<<"$json"
 }
 
-# What is installed, from the scripts this machine has: it needs no network
+# system_users <script>: who installed the system half of a script, "jg,alice", or nothing
+system_users() {
+  local file
+  file="$(system_state "$1")/installed-by"
+  [[ ! -s "$file" ]] || paste -sd, - < "$file"
+}
+
+# What is installed, from the scripts this machine has: it needs no network. What another
+# user installed on the system is there for this one too: "system (by <users>)".
 list_installed() {
-  local file name state desc any=""
+  local file name state users desc any=""
   while IFS= read -r name <&3; do
     file="$(script_path "$name")"
     state="$(installed_state "$name")"
+    if [[ -z "$state" ]]; then
+      users="$(system_users "$name")"
+      [[ -z "$users" ]] || state="system (by ${users})"
+    fi
     [[ -n "$state" ]] || continue
     if [[ -z "$any" ]]; then
       # shellcheck disable=SC2059  # the format is a constant
@@ -629,7 +641,7 @@ saved_arguments_file() { echo "$HOME/.shellscript/downloads/$1.args"; }
 # something to do to it (UPGRADE=no): its arguments are commands, not what to install.
 upgrade_installed() {
   local only="$1"
-  local name manifest saved upgraded="" failed="" left="" any=""
+  local name manifest saved users upgraded="" failed="" left="" any=""
   local -a arguments
 
   while IFS= read -r name <&3; do
@@ -640,6 +652,13 @@ upgrade_installed() {
       continue
     fi
     if [[ -z "$(installed_state "$name")" ]]; then
+      # What another user installed on the system is that user's to upgrade
+      users="$(system_users "$name")"
+      if [[ -n "$users" ]]; then
+        [[ -z "$only" ]] || { echo "${name} is installed system-wide by ${users}: upgraded by them, or install it yourself with 'load.sh ${name}'." >&2; return 1; }
+        left+=" ${name} (by ${users})"
+        continue
+      fi
       [[ -z "$only" ]] || { echo "${name} is not installed: install it with 'load.sh ${name}'." >&2; return 1; }
       continue
     fi
@@ -660,9 +679,10 @@ upgrade_installed() {
     fi
   done 3< <(script_names)
 
+  [[ -z "$left" ]] || echo "Installed system-wide by another user, left to them:${left}"
   if [[ -z "$any" ]]; then
     [[ -z "$only" ]] || { echo "No such script on this machine: ${only}" >&2; return 1; }
-    echo "Nothing installed with load.sh on this machine." >&2
+    [[ -n "$left" ]] || echo "Nothing installed with load.sh on this machine." >&2
     return 0
   fi
   echo

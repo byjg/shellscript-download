@@ -77,6 +77,8 @@ load.sh php-docker -- --help
   machine, and so is what it records about it, in `/var/lib/shellscript`. Your
   `load.sh remove -- <script>` takes out only what is yours; root takes out the rest, for
   everyone, with `sudo ~/.shellscript/bin/load.sh remove -- <script> --force`.
+  `load.sh --installed` shows what another user installed there as `system (by <user>)`, and
+  `load.sh --upgrade` leaves it to them.
 
 All its options are in the [load](docs/scripts/load.md) page.
 
