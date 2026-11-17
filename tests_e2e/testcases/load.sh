@@ -9,9 +9,14 @@ assert_output "bash -ic 'command -v load.sh' 2>/dev/null" "$LOADER_PATH"
 assert_exists "${SHELLSCRIPT_HOME}/shellrc/00-setup.sh"
 assert_exists "${SHELLSCRIPT_HOME}/shellrc/01-load-completion.sh"
 
-step "load: never runs as root"
-assert_exit 1 "sudo ${LOADER_PATH} jq"
-assert_log "must not be run as root"
+step "load: as root, installs for root, and never in the HOME of another user"
+assert_exit 0 "sudo ${LOADER_PATH} --developer ${SCRIPTS_DIR} jq"
+assert_exit 0 "sudo test -x /root/.shellscript/bin/jq"
+assert_missing "${SHELLSCRIPT_HOME}/bin/jq"
+# As 'sudo -E' does, where the sudoers keep HOME: written out, not to depend on them
+assert_exit 1 "sudo env HOME=${HOME} ${LOADER_PATH} --developer ${SCRIPTS_DIR} jq"
+assert_log "is not owned by root"
+assert_missing "${SHELLSCRIPT_HOME}/bin/jq"
 
 step "load: usage and wrong calls"
 assert_exit 0 "${LOADER} --help"

@@ -28,11 +28,11 @@
 
 set -euo pipefail
 
-# Disallow running as root (UID 0)
-if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
-  echo "Error: load.sh must not be run as root (UID 0)." >&2
-  echo "Please run as a regular user without sudo." >&2
-  echo "If necessary the script will call the sudo internally" >&2
+# Root installs for itself, in its own HOME. Never in the HOME of another user, as with
+# 'sudo -E': what it wrote there would belong to root, and that user could not change it.
+if [[ "${EUID:-$(id -u)}" -eq 0 && ! -O "${HOME:-}" ]]; then
+  echo "Error: HOME is ${HOME:-unset}, which is not owned by root." >&2
+  echo "Run as that user (the scripts call sudo when they need it), or as root with its own HOME (sudo without -E, or sudo -i)." >&2
   exit 1
 fi
 

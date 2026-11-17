@@ -65,6 +65,11 @@ load.sh php-docker -- --help
   [Signed downloads](docs/signatures.md).
 - The script is executed unless `--dont-run` is given, and `load.sh` exits with its status code.
 - Commands a script installs go to `$HOME/.shellscript/bin`, which the loader adds to your `PATH`.
+- Run it as yourself: a script calls `sudo` for what it changes on the system. Root may run it
+  too, and installs for itself, in `/root/.shellscript`. With `sudo`, name the loader by its path
+  (`sudo ~/.shellscript/bin/load.sh <script>`), as sudo does not use your `PATH`. Never with
+  `sudo -E`: as root in your HOME, it would leave there files you could not change, and the
+  loader stops.
 
 All its options are in the [load](docs/scripts/load.md) page.
 
