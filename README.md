@@ -70,6 +70,10 @@ load.sh php-docker -- --help
   (`sudo ~/.shellscript/bin/load.sh <script>`), as sudo does not use your `PATH`. Never with
   `sudo -E`: as root in your HOME, it would leave there files you could not change, and the
   loader stops.
+- What a script installs on the system (packages, a repository) is there for every user of the
+  machine, and so is what it records about it, in `/var/lib/shellscript`. Your
+  `load.sh remove -- <script>` takes out only what is yours; root takes out the rest, for
+  everyone, with `sudo ~/.shellscript/bin/load.sh remove -- <script> --force`.
 
 All its options are in the [load](docs/scripts/load.md) page.
 

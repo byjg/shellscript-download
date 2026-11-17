@@ -32,7 +32,8 @@ assert_log "QEMU is ready"
 assert_command qemu-img
 assert_command "qemu-system-$(uname -m)"
 assert_exists "${SHELLSCRIPT_HOME}/bin/qemu-vm"
-assert_exists "${tool_home}/installed-packages.conf"
+assert_exists "${SYSTEM_STATE}/qemu/installed-packages.conf"
+assert_output "cat '${SYSTEM_STATE}/qemu/installed-by'" "$(id -un)"
 
 step "qemu: is not upgraded by installing it again: its arguments are commands"
 assert_exit 1 "${LOADER} --upgrade qemu"
@@ -100,12 +101,18 @@ else
   assert_output "${LOADER} qemu -- list 2>/dev/null" "running"
 fi
 
-step "qemu: remove uninstalls the packages and keeps the folder"
+step "qemu: a user's remove stops the VMs and keeps the packages, there for every user"
 load remove -- qemu
-assert_no_command qemu-img
+assert_log "Root removes it with 'load.sh remove -- qemu --force'"
+assert_command qemu-img
 assert_no_output "pgrep -a qemu-system || true" "$vm"
 assert_missing "${SHELLSCRIPT_HOME}/bin/qemu-vm"
 assert_exists "$tool_home"
+
+step "qemu: root's remove --force uninstalls the packages"
+assert_exit 0 "${ROOT_LOADER} remove -- qemu --force"
+assert_no_command qemu-img
+assert_missing "${SYSTEM_STATE}/qemu"
 
 step "qemu: purge removes the folder"
 load remove -- qemu --purge

@@ -267,7 +267,7 @@ bridge_helper() {
 # Changes made to the host for bridged VMs, one per line ("allow <bridge>",
 # "setuid <helper>"), so 'load.sh remove -- qemu' can undo exactly those
 BRIDGE_STATE="${QEMU_HOME}/bridge-setup.conf"
-PACKAGES_STATE="${QEMU_HOME}/installed-packages.conf"
+PACKAGES_STATE="$(system_state qemu)/installed-packages.conf"
 
 record_bridge_change() {
   [[ "$DRY_RUN" == "1" ]] && return
@@ -674,7 +674,10 @@ CFG
 
 # Bare 'load.sh qemu' — install everything, report readiness
 cmd_setup() {
+  # Only here and in the removal: a VM command never asks for sudo to record it
+  system_state_migrate qemu installed-packages.conf
   ensure_qemu
+  system_user_add qemu
 
   if [[ -e /dev/kvm && ! -w /dev/kvm ]]; then
     log "Note: /dev/kvm exists but is not writable by you."
@@ -689,6 +692,7 @@ cmd_setup() {
 # Internal hook, not part of the user interface: executed by 'load.sh remove -- qemu'
 # through the UNINSTALL_CMD manifest key.
 cmd_uninstall() {
+  system_state_migrate qemu installed-packages.conf
   # Stop any running VMs first
   local dir name
   for dir in "$VMS_DIR"/*/; do
@@ -723,7 +727,11 @@ cmd_uninstall() {
     [[ "$DRY_RUN" == "1" ]] || rm -f "$BRIDGE_STATE"
   fi
 
-  remove_recorded_packages "QEMU" "$PACKAGES_STATE"
+  # The packages are there for every user: only root takes them out, with --force
+  if system_release qemu; then
+    remove_recorded_packages "QEMU" "$PACKAGES_STATE"
+    system_forget qemu
+  fi
 }
 
 boot_vm() {

@@ -70,7 +70,7 @@ done
 PACKAGES="${PACKAGES# }"
 
 REPO_URL="https://packages.byjg.com"
-STATE_DIR="${SHELLSCRIPT_HOME}/byjg-repo"
+STATE_DIR="$(system_state byjg-repo)"
 PACKAGES_STATE="${STATE_DIR}/installed-packages.conf"
 # Present when this script added the repository: only then does the removal take it out
 REPO_STATE="${STATE_DIR}/repository-added"
@@ -96,22 +96,26 @@ case "$PM" in
     ;;
 esac
 [[ -z "$SUDO" ]] || require_cmd sudo
+system_state_migrate byjg-repo installed-packages.conf repository-added
 
 # Internal hook, not part of the user interface: executed by 'load.sh remove -- byjg-repo'
-# through the UNINSTALL_CMD manifest key.
+# through the UNINSTALL_CMD manifest key. The repository and its packages are there for
+# every user: only root takes them out, with --force.
 if [[ "$UNINSTALL" == "1" ]]; then
-  remove_recorded_packages "A ByJG package" "$PACKAGES_STATE"
-  if [[ ! -e "$REPO_STATE" ]]; then
-    log "The repository was not added by this script — leaving it in place."
-    exit 0
+  if system_release byjg-repo; then
+    remove_recorded_packages "A ByJG package" "$PACKAGES_STATE"
+    if [[ -e "$REPO_STATE" ]]; then
+      log "Removing the ByJG repository"
+      case "$PM" in
+        apt-get) run "${SUDO} rm -f ${APT_SOURCE} ${APT_KEY}; ${SUDO} apt-get update" ;;
+        dnf)     run "${SUDO} rm -f ${RPM_REPO}; ${SUDO} dnf clean all" ;;
+        apk)     run "${SUDO} sed -i '\\|^${APK_URL}\$|d' ${APK_REPOSITORIES}; ${SUDO} rm -f ${APK_KEY}" ;;
+      esac
+    else
+      log "The repository was not added by this script — leaving it in place."
+    fi
+    system_forget byjg-repo
   fi
-  log "Removing the ByJG repository"
-  case "$PM" in
-    apt-get) run "${SUDO} rm -f ${APT_SOURCE} ${APT_KEY}; ${SUDO} apt-get update" ;;
-    dnf)     run "${SUDO} rm -f ${RPM_REPO}; ${SUDO} dnf clean all" ;;
-    apk)     run "${SUDO} sed -i '\\|^${APK_URL}\$|d' ${APK_REPOSITORIES}; ${SUDO} rm -f ${APK_KEY}" ;;
-  esac
-  [[ "$DRY_RUN" == "1" ]] || rm -f "$REPO_STATE"
   exit 0
 fi
 
@@ -156,12 +160,10 @@ else
       run "${SUDO} apk update"
       ;;
   esac
-  if [[ "$DRY_RUN" != "1" ]]; then
-    mkdir -p "$STATE_DIR"
-    : > "$REPO_STATE"
-  fi
+  system_state_add "$REPO_STATE"
 fi
 
 [[ -z "$PACKAGES" ]] || install_packages "$PM" "$PACKAGES" "$PACKAGES_STATE"
+system_user_add byjg-repo
 
 log "Done. List the packages with: load.sh byjg-repo -- --list"

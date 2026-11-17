@@ -25,7 +25,17 @@ github_latest_tag <owner/repo> # tag of the latest release, without the GitHub A
 already_installed "<url>" <file>  # true when what the URL serves is what record_installed wrote down
 record_installed "<url>" <file>   # after an install: remember what the URL served
 require_script <script> [cmd]  # run 'load.sh <script>' unless <cmd> (default: <script>) exists
+as_root <cmd> [args]           # run as root: through sudo unless root already
+system_state <script>          # /var/lib/shellscript/<script>: state of the system half, for every user
+system_state_add <file> [line...]  # add lines to a file of the system state (no sudo when it has them)
+system_state_del <file> <line>     # take a line out of it
+system_user_add <script>       # after an install: the caller is one of its users
+system_state_migrate <script> <file>...  # move what an older version kept in ~/.shellscript/<script>
+system_release <script>        # uninstall hook: true only for root with --force
+system_forget <script>         # after the system half is taken out
 ```
+What a script changes on the system (through sudo) is recorded in `system_state`, never in
+`$HOME`: a user's `remove` keeps it, root's `remove --force` takes it out. See CONTRIBUTING.
 Never call `curl` or `wget` directly in scripts — use `fetch`/`download` so both tools work.
 Each script defines only its own `print_usage() { cat <<'USAGE' ... USAGE }` (and `print_manifest`).
 

@@ -254,6 +254,71 @@ require_script() {
   "${loader[@]}" "$script" >&2 || { err "'load.sh ${script}' failed"; exit 1; }
   command -v "$cmd" >/dev/null 2>&1 || { err "'${cmd}' is still not available after 'load.sh ${script}'"; exit 1; }
 }
+# The system half of a script: what it changes on the system, through sudo, is there for
+# every user of the machine, and so is what it records about it, in
+# ${SHELLSCRIPT_SYSTEM_HOME}/<script>, owned by root:
+#   installed-by   the users who installed the script, one per line
+#   <file>         what the script recorded, e.g. installed-packages.conf
+# A user's 'load.sh remove' takes out only what is the user's own: the system half stays
+# until root removes it with --force (system_release). Nothing is written with --dry-run.
+SHELLSCRIPT_SYSTEM_HOME="/var/lib/shellscript"
+export SHELLSCRIPT_SYSTEM_HOME
+# as_root <command> [args]: runs it as root, through sudo unless it is root already
+as_root() { if [[ "$(id -u)" == "0" ]]; then "$@"; else sudo "$@"; fi; }
+# system_state <script>: the folder of its system state
+system_state() { printf '%s/%s\n' "$SHELLSCRIPT_SYSTEM_HOME" "$1"; }
+# system_state_add <file> [line...]: adds the lines to a file of the system state; with
+# none, the file only has to be there. Nothing is written (no sudo) when it has them.
+system_state_add() {
+  local file="$1" line missing=""; shift
+  [[ "${DRY_RUN:-0}" != "1" ]] || return 0
+  [[ -f "$file" ]] || missing=yes
+  for line in "$@"; do grep -qxF -- "$line" "$file" 2>/dev/null || missing=yes; done
+  [[ -n "$missing" ]] || return 0
+  as_root mkdir -p "$(dirname "$file")"
+  { cat "$file" 2>/dev/null || true; [[ $# -eq 0 ]] || printf '%s\n' "$@"; } \
+    | sed '/^$/d' | sort -u | as_root tee "${file}.new" >/dev/null
+  as_root mv "${file}.new" "$file"
+}
+# system_state_del <file> <line>: takes the line out of a file of the system state
+system_state_del() {
+  [[ "${DRY_RUN:-0}" != "1" && -f "$1" ]] || return 0
+  { grep -vxF -- "$2" "$1" || true; } | as_root tee "${1}.new" >/dev/null
+  as_root mv "${1}.new" "$1"
+}
+# system_user_add <script>: the caller is one of the users of the script
+system_user_add() { system_state_add "$(system_state "$1")/installed-by" "$(id -un)"; }
+# system_state_migrate <script> <file>...: the files the caller recorded in
+# ~/.shellscript/<script>, before the system state was shared, go into it
+system_state_migrate() {
+  local name="$1" file old
+  local -a lines
+  shift
+  [[ "${DRY_RUN:-0}" != "1" ]] || return 0
+  for file in "$@"; do
+    old="${SHELLSCRIPT_HOME}/${name}/${file}"
+    [[ -f "$old" ]] || continue
+    log "Moving ${old} to $(system_state "$name"), shared by the users of this machine"
+    mapfile -t lines < "$old"
+    system_state_add "$(system_state "$name")/${file}" ${lines[@]+"${lines[@]}"}
+    system_user_add "$name"
+    rm -f "$old"
+  done
+}
+# system_release <script>: for the uninstall hook of a script. The caller leaves its
+# users; true when the system half is to be taken out too, which only root does, with
+# 'load.sh remove -- <script> --force'
+system_release() {
+  local users="" state
+  state="$(system_state "$1")"
+  system_state_del "${state}/installed-by" "$(id -un)"
+  if [[ "$(id -u)" == "0" && "${SHELLSCRIPT_FORCE:-0}" == "1" ]]; then return 0; fi
+  [[ ! -f "${state}/installed-by" ]] || users="$(tr '\n' ' ' < "${state}/installed-by")"
+  log "What ${1} installed on the system stays${users:+, used by ${users% }}. Root removes it with 'load.sh remove -- ${1} --force'."
+  return 1
+}
+# system_forget <script>: once its system half is taken out, what it recorded goes too
+system_forget() { [[ "${DRY_RUN:-0}" == "1" ]] || as_root rm -rf "$(system_state "$1")"; }
 # The key everything published on shellscript.download is signed with, base64 of the
 # binary key (gpgv does not read an armored one). It is the key of the ByJG APT and RPM
 # repositories, https://packages.byjg.com/byjg.gpg: ByJG Opensource <info@byjg.com.br>,
@@ -338,7 +403,8 @@ download_signed() {
   rm -f "$tmp" "$tmp.sig" "$tmp.key"
   return "$status"
 }
-export -f log err run require_cmd github_auth_header fetch download require_downloader final_url remote_stamp already_installed record_installed github_latest_tag require_script
+export -f log err run require_cmd github_auth_header fetch download require_downloader final_url remote_stamp already_installed record_installed github_latest_tag require_script \
+  as_root system_state system_state_add system_state_del system_user_add system_state_migrate system_release system_forget
 
 # installed_state <script>: prints the installed version of what a script installs, or
 # "yes" when it has no version to show, and nothing when it is not on this machine.

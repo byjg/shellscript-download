@@ -90,7 +90,7 @@ done
 
 # Configuration
 NERDCTL_HOME="${SHELLSCRIPT_HOME}/nerdctl"
-PACKAGES_STATE="${NERDCTL_HOME}/installed-packages.conf"
+PACKAGES_STATE="$(system_state nerdctl)/installed-packages.conf"
 STAMP_FILE="${NERDCTL_HOME}/installed-stamp"
 ROOTLESS_DIR="${NERDCTL_HOME}/current"
 ROOTFUL_DIR="/opt/nerdctl"
@@ -102,6 +102,8 @@ UNIT_MARKER="# Installed by shellscript.download nerdctl.sh"
 # Ubuntu lets only the programs AppArmor allows create user namespaces: RootlessKit gets
 # a profile of its own, named after its path, as RootlessKit itself suggests
 APPARMOR_PROFILE="/etc/apparmor.d/$(printf '%s' "${ROOTLESS_DIR#/}/bin/rootlesskit" | tr / .)"
+
+system_state_migrate nerdctl installed-packages.conf
 
 # Internal hook, not part of the user interface: executed by 'load.sh remove -- nerdctl'
 # through the UNINSTALL_CMD manifest key. Each mode is removed when this script set it up.
@@ -126,7 +128,11 @@ if [[ "$UNINSTALL" == "1" ]]; then
     run "${SUDO} systemctl reset-failed ${UNITS} 2>/dev/null || true"
   fi
   [[ ! -d "$ROOTFUL_DIR" ]] || run "${SUDO} rm -rf \"${ROOTFUL_DIR}\""
-  remove_recorded_packages "nerdctl" "$PACKAGES_STATE"
+  # The packages are there for every user: only root takes them out, with --force
+  if system_release nerdctl; then
+    remove_recorded_packages "nerdctl" "$PACKAGES_STATE"
+    system_forget nerdctl
+  fi
   exit 0
 fi
 
@@ -352,5 +358,7 @@ if [[ "$ROOTLESS" == "1" ]]; then
     log "To start the services at boot, without logging in: sudo loginctl enable-linger $(id -un)"
   fi
 fi
+
+system_user_add nerdctl
 
 log "Done. Try: nerdctl run --rm hello-world"

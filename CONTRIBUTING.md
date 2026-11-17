@@ -112,6 +112,41 @@ following so scripts can use them without redeclaring:
 
 `log` and `err` use `basename "$0"` so the script name in the output is always correct.
 
+### The system half of a script
+
+What a script changes on the system through sudo (packages, a repository, a kernel module)
+is there for every user of the machine, and so is what it records about it: in
+`/var/lib/shellscript/<script>` (`SHELLSCRIPT_SYSTEM_HOME`), owned by root, never in a home.
+A user's `load.sh remove` takes out only what is the user's own; the system half stays until
+root removes it with `load.sh remove -- <script> --force`.
+
+| Function | Behaviour |
+|---|---|
+| `as_root <command>` | Runs it as root: through sudo, unless the script runs as root already |
+| `system_state podman` | The folder of the system state of a script: `/var/lib/shellscript/podman` |
+| `system_state_add <file> [line...]` | Adds lines to a file of the system state (with none, the file only has to be there). Writes nothing, and asks no sudo, when the file has them |
+| `system_state_del <file> <line>` | Takes a line out of a file of the system state |
+| `system_user_add podman` | After an install: the caller is one of the users of the script (`installed-by`) |
+| `system_state_migrate podman <file>...` | Moves what an older version recorded in `~/.shellscript/podman/<file>` into the system state |
+| `system_release podman` | In the uninstall hook: the caller leaves the users; true only for root with `--force`, when the system half is to be taken out |
+| `system_forget podman` | After the system half is taken out: its state goes too |
+
+None of them writes with `--dry-run`. The uninstall hook of such a script:
+
+```bash
+if [[ "$UNINSTALL" == "1" ]]; then
+  if system_release podman; then
+    remove_recorded_packages "Podman" "$PACKAGES_STATE"
+    system_forget podman
+  fi
+  exit 0
+fi
+```
+
+A command a user runs every day (`qemu start`) does not record anything: only the install and
+the removal do, so that it never asks for sudo. `lib/system-packages.sh` stops with "run
+`load.sh --update`" under a loader older than these functions.
+
 `run` reads `DRY_RUN` at call-time — scripts set it in their own flag parsing with no conflict.
 
 ### Environment variables
@@ -122,6 +157,7 @@ following so scripts can use them without redeclaring:
 | `SHELLSCRIPT_BIN` | `$HOME/.shellscript/bin` | Wrapper scripts (on `PATH` via the loader) |
 | `SHELLSCRIPT_SHELLRC` | `$HOME/.shellscript/shellrc` | Shell init snippets sourced at login |
 | `SHELLSCRIPT_DOWNLOADS` | `$HOME/.shellscript/downloads` | Cached script downloads |
+| `SHELLSCRIPT_SYSTEM_HOME` | `/var/lib/shellscript` | State of what the scripts installed on the system, for every user (see above) |
 
 All four directories are created by `load.sh` before `exec`, so scripts don't need to
 `mkdir -p` them (though doing so is harmless).
