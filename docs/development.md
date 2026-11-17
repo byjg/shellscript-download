@@ -91,6 +91,18 @@ say `# needs: docker`. It needs `/dev/kvm`. The VMs are reached with a key made 
 run, in an ssh-agent of the run alone, and removed after; the cloud images stay cached in
 `~/.shellscript/qemu/images`.
 
+The images can run side by side, one run each, which takes about a third of the time:
+
+```bash
+for image in ubuntu fedora alpine; do
+  tests_e2e/run.sh --image "$image" podman > "/tmp/e2e-${image}.log" 2>&1 &
+done
+wait
+```
+
+The runs create their VMs one at a time (a lock in `run.sh`), so that two never take the
+same port.
+
 A pull request runs that last one by itself: for each script of `public/scripts` it changes,
 the test of that script, and `all-scripts`, which checks what every script must do
 (`.github/workflows/build.yml`).
