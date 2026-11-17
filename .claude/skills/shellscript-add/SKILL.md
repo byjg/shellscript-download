@@ -80,10 +80,12 @@ MANIFEST
 }
 ```
 
-Optional manifest key for scripts that install **system packages** (via sudo + package
-manager): add `UNINSTALL_CMD=<subcommand>`. `remove.sh` runs `<name>.sh <subcommand>` before
-its normal file cleanup. The subcommand must only remove what the script itself installed
-(pre-existing packages stay): `lib/system-packages.sh` does that, see "System package" below.
+Optional manifest key for scripts that change the **system** (via sudo: packages, a
+repository, services): add `UNINSTALL_CMD=<subcommand>`. `remove.sh` runs `<name>.sh
+<subcommand>` before its normal file cleanup. What the script changed on the system is there
+for every user of the machine: the subcommand takes it out only for root with `--force`
+(`system_release`), and only what the script itself installed (pre-existing packages stay).
+See "The system half of a script" below.
 
 ```bash
 
@@ -124,6 +126,16 @@ done
   name) is already available. For a tool another script of the catalog installs (e.g. jq).
   Loaders older than it do not have it: `if declare -F require_script >/dev/null; then
   require_script jq; else require_cmd jq; fi`
+- `sudo_cmd` — what goes before a command to run it as root: nothing for root, `sudo` for
+  anyone else. Set `SUDO="$(sudo_cmd)"` once and run `${SUDO} <cmd>`; check
+  `[[ -z "$SUDO" ]] || require_cmd sudo` only before what needs it. `lib/system-packages.sh`
+  and `lib/dokku.sh` set `SUDO` already.
+- `system_state`, `system_state_add`, `system_state_write`, `system_state_del`,
+  `system_user_add`, `system_state_migrate`, `system_release`, `system_forget` — the state of
+  what a script changes on the system, for every user: see "The system half of a script".
+
+**DO NOT call `sudo` directly.** Use `${SUDO}` (above): root, a container or CI, may have no
+sudo installed.
 
 **DO NOT call `curl` or `wget` directly.** Use `fetch "<url>"` to read a URL to stdout and
 `download "<url>" "<dest>"` to save it to a file — both fall back from curl to wget
@@ -229,30 +241,60 @@ No `print_manifest` and no flag parsing: the shared code has `-h`, `--version`, 
   only when zsh is; with neither, no shell init file is written.
 - Check that the download exists for both architectures before you finish.
 
+### The system half of a script
+
+What a script changes on the system through sudo (packages, a repository, services, a
+kernel module) is there for every user of the machine, and so is what it records about it:
+in `$(system_state <name>)` = `/var/lib/shellscript/<name>`, owned by root, **never in
+`$SHELLSCRIPT_HOME`**. Such a script:
+
+- says so near the top, right after `set -euo pipefail`, so that `load.sh` keeps one copy of
+  its code for every user, in `/var/lib/shellscript/scripts`:
+
+  ```bash
+  # It changes the system: load.sh keeps one copy of it for every user, owned by root
+  SYSTEM_SCRIPT=yes
+  ```
+- records its state with `system_state_add` (lines), `system_state_write` (a whole file,
+  from stdin) and `system_state_del`: they ask sudo only when something changes;
+- calls `system_user_add <name>` once the install worked (`installed-by`: `--installed` and
+  `--upgrade` read it);
+- in its uninstall hook, takes out what is the user's own, and the system half only when
+  `system_release <name>` says so (root, with `load.sh remove -- <name> --force`), then
+  `system_forget <name>`;
+- never records anything on a command a user runs every day (`qemu start`): only the install
+  and the removal do, so that it never asks for sudo for nothing.
+
 ### System package (see buildah.sh and podman.sh for reference)
 
-The script is `print_usage`, a manifest with `UNINSTALL_CMD=uninstall`, the shared-code
-block for `lib/system-packages.sh`, flag parsing that accepts the `uninstall` word, and:
+The script is `print_usage`, a manifest with `UNINSTALL_CMD=uninstall`, `SYSTEM_SCRIPT=yes`,
+the shared-code block for `lib/system-packages.sh`, flag parsing that accepts the `uninstall`
+word, and:
 
 ```bash
-PACKAGES_STATE="${SHELLSCRIPT_HOME}/<name>/installed-packages.conf"
+PACKAGES_STATE="$(system_state <name>)/installed-packages.conf"
 
 # Internal hook, not part of the user interface: executed by 'load.sh remove -- <name>'
-# through the UNINSTALL_CMD manifest key.
+# through the UNINSTALL_CMD manifest key. The package is there for every user: only
+# root takes it out, with --force.
 if [[ "$UNINSTALL" == "1" ]]; then
-  remove_recorded_packages "<Label>" "$PACKAGES_STATE"
+  if system_release <name>; then
+    remove_recorded_packages "<Label>" "$PACKAGES_STATE"
+    system_forget <name>
+  fi
   exit 0
 fi
 
 # <command> <label> <package> <state file>: installs unless the command is there
 ensure_package <cmd> "<Label>" <package> "$PACKAGES_STATE"
+system_user_add <name>
 ```
 
 `ensure_package` records what it installs, and `remove_recorded_packages` removes only
 that. Use `install_packages "$pm" "<pkg> <pkg>" "$PACKAGES_STATE"` when the package names
 change with the package manager (`pm=$(detect_pm)`). A file the script writes outside the
-home (a repository, a key) needs its own marker, so that the removal takes out only what
-the script added: see `byjg-repo.sh`.
+home (a repository, a key) needs its own marker in the system state, so that the removal
+takes out only what the script added: see `byjg-repo.sh`.
 
 ### Binary download (see maven.sh for reference)
 
@@ -503,6 +545,9 @@ tests_e2e/run.sh                         # every test: about 40 minutes
 tests_e2e/run.sh --changed main          # the tests of what the branch changed since main
 ```
 
+The images can run side by side, one run each, in about a third of the time (see
+`docs/development.md`).
+
 A pull request runs that last one by itself (`.github/workflows/build.yml`): the test of each
 script it changes, the tests of the scripts that use a `lib/` file it changes, and
 `all-scripts`. A change to `tests_e2e/shared/lib.sh` selects the tests that use the
@@ -574,6 +619,10 @@ If `npm run build` fails, check:
 - [ ] `--dry-run` prints all actions without side effects
 - [ ] Run a second time, it skips what is already there (or has `UPGRADE=no` in its manifest)
 - [ ] Paths use `$SHELLSCRIPT_*` variables, not hardcoded `$HOME/.shellscript/…`
+- [ ] Root through `${SUDO}` (`SUDO="$(sudo_cmd)"`), never `sudo` directly
+- [ ] A script that changes the system: `SYSTEM_SCRIPT=yes`, its state in `system_state`
+      (never in the home), `system_user_add` after the install, and an uninstall hook that
+      takes out the system half only through `system_release` (root, `--force`)
 - [ ] No `log`, `err`, `run`, `require_cmd`, `fetch`, `download` or `require_script` defined locally
 - [ ] Nothing copied from another script: shared code is in `public/scripts/lib/`
 - [ ] Wrappers hold the absolute path, not `$HOME`
