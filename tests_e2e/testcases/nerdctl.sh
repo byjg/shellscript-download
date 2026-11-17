@@ -96,10 +96,19 @@ step "nerdctl: --no-rootless installs to /opt/nerdctl and starts the system serv
 load nerdctl -- --no-rootless
 assert_output "stat -c '%U' /opt/nerdctl/bin/nerdctl" "root"
 assert_exit 0 "systemctl is-active --quiet containerd.service buildkit.service"
+assert_exists "${SYSTEM_STATE}/nerdctl/installed-stamp"
 runs_containers
 
-step "nerdctl: remove takes /opt/nerdctl and the system services out"
+step "nerdctl: a user's remove keeps /opt/nerdctl and the system services, there for every user"
 load remove -- nerdctl --purge
+assert_log "Root removes it with 'load.sh remove -- nerdctl --force'"
+assert_exists /opt/nerdctl/bin/nerdctl
+assert_exit 0 "systemctl is-active --quiet containerd.service buildkit.service"
+assert_removed nerdctl
+
+step "nerdctl: root's remove --force takes /opt/nerdctl and the system services out"
+assert_exit 0 "${ROOT_LOADER} remove -- nerdctl --force"
+assert_missing "${SYSTEM_STATE}/nerdctl"
 assert_missing /opt/nerdctl
 assert_missing /etc/systemd/system/containerd.service
 assert_missing /etc/systemd/system/buildkit.service
