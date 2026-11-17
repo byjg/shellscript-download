@@ -163,6 +163,50 @@ PROBE
 assert_exit 22 "GITHUB_TOKEN=e2e-not-a-token ${LOADER} token-fetch -- https://api.github.com/rate_limit"
 assert_output "GITHUB_TOKEN=e2e-not-a-token ${LOADER} token-fetch -- https://shellscript.download/list.json 2>/dev/null" "fetched"
 
+step "load: a download that fails is tried again, and one that keeps failing stops"
+# A server that fails the first time a path is asked for (503), and answers after; a path
+# that starts with /never fails every time. A 503, and not a dropped connection, which
+# GNU wget would try again by itself: each attempt the log counts is one of the loader.
+sys_install python3
+flaky_log="/tmp/e2e-flaky.log"
+: > "$flaky_log"
+cat > /tmp/e2e-flaky.py <<'PY'
+import http.server, sys
+seen = set()
+class Handler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        with open(sys.argv[1], "a") as log:
+            log.write(self.path + "\n")
+        if self.path.startswith("/never") or self.path not in seen:
+            seen.add(self.path)
+            self.send_error(503)
+            return
+        body = b"served-e2e\n"
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+    def log_message(self, *args):
+        pass
+http.server.HTTPServer(("127.0.0.1", 8766), Handler).serve_forever()
+PY
+python3 /tmp/e2e-flaky.py "$flaky_log" &
+flaky_server=$!
+for _ in $(seq 50); do curl -fs http://127.0.0.1:8766/up >/dev/null 2>&1 && break; sleep 0.2; done
+flaky="http://127.0.0.1:8766"
+fixture flaky-probe <<'PROBE'
+#!/usr/bin/env bash
+set -euo pipefail
+fetch "$1"
+download "$2" /tmp/e2e-flaky-download
+cat /tmp/e2e-flaky-download
+PROBE
+assert_exit 0 "${LOADER} flaky-probe -- ${flaky}/fetch-curl ${flaky}/download-curl 2>/dev/null"
+assert_output "grep -c served-e2e '$LOG_FILE'" "2"
+assert_output "grep -c '^/fetch-curl\$' '$flaky_log'" "2"
+load_fails flaky-probe -- "${flaky}/never-curl" "${flaky}/download-unused"
+assert_output "grep -c '^/never-curl\$' '$flaky_log'" "3"
+
 step "load: everything works with wget, where there is no curl"
 if sys_install wget; then pass "installed wget"; else fail "could not install wget"; fi
 curl_path="$(command -v curl)"
@@ -187,6 +231,12 @@ cp "${SCRIPTS_DIR}/lib/binary-install.sh" "${SHELLSCRIPT_HOME}/downloads/lib/bin
 load jq
 assert_output "jq --version" "jq-"
 load remove -- jq --purge
+# A download that fails is tried again with wget too
+assert_exit 0 "${LOADER} flaky-probe -- ${flaky}/fetch-wget ${flaky}/download-wget 2>/dev/null"
+assert_output "grep -c served-e2e '$LOG_FILE'" "2"
+load_fails flaky-probe -- "${flaky}/never-wget" "${flaky}/download-unused"
+assert_output "grep -c '^/never-wget\$' '$flaky_log'" "3"
+kill "$flaky_server"
 sudo mv "${curl_path}.e2e-off" "$curl_path"
 hash -r
 

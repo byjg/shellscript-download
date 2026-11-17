@@ -178,13 +178,31 @@ github_auth_header() {
     printf 'Authorization: Bearer %s' "$GITHUB_TOKEN"
   fi
 }
+# A download that fails is tried again, 3 times in all, 2 seconds apart: a network that
+# drops a connection now and then (a CI runner, a hotel Wi-Fi) does not stop an install.
+# It ends with the exit code of the last attempt, as curl or wget gave it. fetch goes
+# through a file, so that an attempt that fails halfway prints nothing.
 fetch() {
-  local auth; auth="$(github_auth_header "$1")"
-  if command -v curl >/dev/null 2>&1; then curl -fsSL ${auth:+-H "$auth"} "$1"; else wget -qO- ${auth:+--header="$auth"} "$1"; fi
+  local file status=0
+  file="$(mktemp)"
+  download "$1" "$file" && cat "$file" || status=$?
+  rm -f "$file"
+  return "$status"
 }
 download() {
-  local auth; auth="$(github_auth_header "$1")"
-  if command -v curl >/dev/null 2>&1; then curl -fsSL ${auth:+-H "$auth"} -o "$2" "$1"; else wget -qO "$2" ${auth:+--header="$auth"} "$1"; fi
+  local auth try status=0
+  auth="$(github_auth_header "$1")"
+  for try in 1 2 3; do
+    [[ "$try" == 1 ]] || sleep 2
+    status=0
+    if command -v curl >/dev/null 2>&1; then
+      curl -fsSL ${auth:+-H "$auth"} -o "$2" "$1" || status=$?
+    else
+      wget -qO "$2" ${auth:+--header="$auth"} "$1" || status=$?
+    fi
+    [[ "$status" != 0 ]] || return 0
+  done
+  return "$status"
 }
 require_downloader() { command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1 || { err "Required command 'curl' or 'wget' not found"; exit 1; }; }
 # final_url <url>: where a URL leads after its redirects, without downloading it

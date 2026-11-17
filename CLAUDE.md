@@ -17,8 +17,8 @@ log "message"                  # prefixed stdout logging
 err "message"                  # prefixed stderr logging
 run "command"                  # honors --dry-run
 require_cmd <cmd>              # exit 1 if command missing
-fetch "<url>"                  # URL to stdout (curl, falls back to wget)
-download "<url>" "<dest>"      # URL to file (curl, falls back to wget)
+fetch "<url>"                  # URL to stdout (curl, falls back to wget; 3 attempts)
+download "<url>" "<dest>"      # URL to file (curl, falls back to wget; 3 attempts)
 require_downloader             # exit 1 unless curl or wget is available
 final_url "<url>"              # where a URL leads after its redirects, without downloading it
 github_latest_tag <owner/repo> # tag of the latest release, without the GitHub API and its quota

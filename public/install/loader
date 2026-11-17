@@ -5,16 +5,23 @@
 
 set -eu
 
-# Download a URL to a file using curl or wget (whichever is available)
+# Download a URL to a file using curl or wget (whichever is available). One that fails is
+# tried again, 3 times in all, 2 seconds apart, as load.sh does.
 download() {
-  if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "$1" -o "$2"
-  elif command -v wget >/dev/null 2>&1; then
-    wget -qO "$2" "$1"
-  else
-    echo "Error: Neither curl nor wget is installed." >&2
-    return 3
-  fi
+  for _try in 1 2 3; do
+    [ "$_try" = 1 ] || sleep 2
+    _status=0
+    if command -v curl >/dev/null 2>&1; then
+      curl -fsSL "$1" -o "$2" || _status=$?
+    elif command -v wget >/dev/null 2>&1; then
+      wget -qO "$2" "$1" || _status=$?
+    else
+      echo "Error: Neither curl nor wget is installed." >&2
+      return 3
+    fi
+    [ "$_status" != 0 ] || return 0
+  done
+  return "$_status"
 }
 
 DEVELOPER=0
