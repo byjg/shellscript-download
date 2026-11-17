@@ -61,16 +61,18 @@ fi
 # shellcheck source=lib/dokku.sh
 source "$SHARED_LIB"
 
-STATE_DIR="${SHELLSCRIPT_HOME}/dokku-docker"
-# What the container was created with: the options a run again does not give keep it
-CONFIG_FILE="${STATE_DIR}/config"
+# What the container was created with: the options a run again does not give keep it.
+# One container for the machine: in the system state, for every user.
+CONFIG_FILE="$(system_state dokku-docker)/config"
+# Where an older version kept it: read from there until it moves, after the options
+OLD_CONFIG_FILE="${SHELLSCRIPT_HOME}/dokku-docker/config"
 CONTAINER="dokku"
 IMAGE="dokku/dokku"
 
 # What the last run used: the options given below change it, the defaults fill the rest
 VERSION="" DOMAIN="" DATA_DIR="" SSH_PORT="" HTTP_PORT="" HTTPS_PORT=""
 # shellcheck source=/dev/null
-[[ -f "$CONFIG_FILE" ]] && source "$CONFIG_FILE"
+if [[ -f "$CONFIG_FILE" ]]; then source "$CONFIG_FILE"; elif [[ -f "$OLD_CONFIG_FILE" ]]; then source "$OLD_CONFIG_FILE"; fi
 
 # Parse flags
 DRY_RUN=0
@@ -109,12 +111,13 @@ HTTP_PORT="${HTTP_PORT:-8080}"
 HTTPS_PORT="${HTTPS_PORT:-8443}"
 
 # Dokku is installed on the system, or Docker run, with sudo
-require_cmd sudo
+[[ -z "$SUDO" ]] || require_cmd sudo
+system_state_migrate dokku-docker config
 
 # docker of the user, or with sudo while the user is not in the 'docker' group yet (a
 # group given by 'load.sh docker' only counts after logging in again)
 DOCKER="docker"
-docker info >/dev/null 2>&1 || DOCKER="sudo docker"
+docker info >/dev/null 2>&1 || DOCKER="${SUDO:+$SUDO }docker"
 
 # The configuration of the container, as a label on it: the same means nothing to do
 container_config() {
@@ -122,17 +125,20 @@ container_config() {
 }
 
 # Internal hook, not part of the user interface: executed by 'load.sh remove --
-# dokku-docker' through the UNINSTALL_CMD manifest key.
+# dokku-docker' through the UNINSTALL_CMD manifest key. The container is there for every
+# user: only root takes it out, with --force.
 if [[ "$UNINSTALL" == "1" ]]; then
-  if [[ ! -f "$CONFIG_FILE" ]]; then
-    log "Dokku was not started by this script — leaving it in place."
-    exit 0
+  if system_release dokku-docker; then
+    if [[ -f "$CONFIG_FILE" ]]; then
+      log "Removing the container '${CONTAINER}' and its image"
+      run "${DOCKER} rm -f ${CONTAINER} || true"
+      run "${DOCKER} rmi ${IMAGE}:${VERSION} || true"
+      log "The data of Dokku stays in ${DATA_DIR}: remove it with 'sudo rm -rf ${DATA_DIR}'"
+    else
+      log "Dokku was not started by this script — leaving it in place."
+    fi
+    system_forget dokku-docker
   fi
-  log "Removing the container '${CONTAINER}' and its image"
-  run "${DOCKER} rm -f ${CONTAINER} || true"
-  run "${DOCKER} rmi ${IMAGE}:${VERSION} || true"
-  log "The data of Dokku stays in ${DATA_DIR}: remove it with 'sudo rm -rf ${DATA_DIR}'"
-  [[ "$DRY_RUN" == "1" ]] || rm -f "$CONFIG_FILE"
   exit 0
 fi
 
@@ -144,7 +150,7 @@ fi
 
 # 1. Docker
 if declare -F require_script >/dev/null; then require_script docker; else require_cmd docker; fi
-docker info >/dev/null 2>&1 || DOCKER="sudo docker"
+docker info >/dev/null 2>&1 || DOCKER="${SUDO:+$SUDO }docker"
 
 if [[ -z "$VERSION" ]]; then
   VERSION="$(github_latest_tag dokku/dokku)" || { err "Could not find the latest version of Dokku"; exit 1; }
@@ -156,11 +162,11 @@ fi
 PLUGIN_LIST="${DATA_DIR}/plugin-list"
 for plugin in ${PLUGINS[@]+"${PLUGINS[@]}"}; do
   line="${plugin%%=*}: ${plugin#*=}"
-  if sudo grep -qxF "$line" "$PLUGIN_LIST" 2>/dev/null; then
+  if ${SUDO} grep -qxF "$line" "$PLUGIN_LIST" 2>/dev/null; then
     continue
   fi
   log "Adding plugin '${plugin%%=*}' to ${PLUGIN_LIST}"
-  run "sudo mkdir -p ${DATA_DIR}; printf '%s\n' '${line}' | sudo tee -a ${PLUGIN_LIST} >/dev/null"
+  run "${SUDO} mkdir -p ${DATA_DIR}; printf '%s\n' '${line}' | ${SUDO} tee -a ${PLUGIN_LIST} >/dev/null"
 done
 
 # 3. The container
@@ -200,10 +206,7 @@ ${IMAGE}:${VERSION} >/dev/null"
     log "Read the migration guides first: https://dokku.com/docs/getting-started/upgrading/"
   fi
 fi
-if [[ "$DRY_RUN" != "1" ]]; then
-  mkdir -p "$STATE_DIR"
-  printf '%s\n' "$CONFIG" > "$CONFIG_FILE"
-fi
+printf '%s\n' "$CONFIG" | system_state_write "$CONFIG_FILE"
 
 # 4. Ready: its first start makes keys and installs the plugins, which takes minutes
 DOKKU_CMD="${DOCKER} exec -i ${CONTAINER} dokku"
@@ -222,5 +225,7 @@ dokku_add_ssh_keys "$SSH_KEY_FILE"
 for plugin in ${PLUGINS[@]+"${PLUGINS[@]}"}; do
   dokku_install_plugin "$plugin"
 done
+
+system_user_add dokku-docker
 
 log "Done. Deploy an app with: git push ssh://dokku@<server>:${SSH_PORT}/<app> main"

@@ -41,6 +41,26 @@ assert_output "$(in_new_session 'docker run --rm hello-world')" "Hello from Dock
 step "docker: install again finds the user in the group"
 load docker
 assert_log "is already in the 'docker' group"
+assert_output "cat '${SYSTEM_STATE}/docker/installed-by'" "$user"
+
+step "docker: as root, puts the user who ran sudo in the 'docker' group"
+sudo gpasswd -d "$user" docker >/dev/null
+assert_exit 0 "${ROOT_LOADER} docker"
+assert_log "Adding '${user}' to 'docker' group"
+assert_output "id -nG ${user}" "docker"
+assert_output "cat '${SYSTEM_STATE}/docker/installed-by'" "root"
+
+step "docker: as root, --user names the user to add"
+sudo useradd -m e2e-other
+assert_exit 0 "${ROOT_LOADER} docker -- --user e2e-other"
+assert_log "Adding 'e2e-other' to 'docker' group"
+assert_output "id -nG e2e-other" "docker"
+assert_exit 2 "${ROOT_LOADER} docker -- --user e2e-nobody"
+assert_log "No such user: e2e-nobody"
+
+step "docker: as root with no user who ran sudo, nobody is added"
+assert_exit 0 "sudo env -u SUDO_USER ${LOADER_PATH} --developer ${SCRIPTS_DIR} docker"
+assert_log "there is nobody to add to the 'docker' group"
 
 step "docker: the configuration folder belongs to the user alone"
 assert_output "stat -c '%a %U' ${HOME}/.docker" "700 ${user}"

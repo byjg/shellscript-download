@@ -14,12 +14,18 @@ Options:
   -h, --help        Show this help and exit
   --dry-run         Print actions without executing them
   --no-group        Skip creating 'docker' group and user membership changes
+  --user NAME       The user to add to the 'docker' group (default: you; as root,
+                    the user who ran sudo)
   --channel CH      Pass a channel to the installer (e.g., 'stable', 'test', 'nightly')
   --manifest        Print installation manifest and exit
+
+Docker is installed for every user of the machine: 'load.sh remove -- docker' leaves
+it in place.
 
 Examples:
   load.sh docker
   load.sh docker -- --dry-run
+  sudo ~/.shellscript/bin/load.sh docker -- --user alice
 USAGE
 }
 
@@ -35,6 +41,7 @@ MANIFEST
 DRY_RUN=0
 NO_GROUP=0
 CHANNEL=""
+GROUP_USER=""
 while [[ ${1-} ]]; do
   case "$1" in
     -h|--help) print_usage; exit 0 ;;
@@ -42,16 +49,24 @@ while [[ ${1-} ]]; do
     --dry-run) DRY_RUN=1 ;;
     --no-group) NO_GROUP=1 ;;
     --channel) CHANNEL=${2-}; shift || true ;;
+    --user) GROUP_USER=${2-}; [[ -n "$GROUP_USER" ]] || { err "--user requires a name"; exit 2; }; shift ;;
     *) err "Unknown option: $1"; print_usage; exit 2 ;;
   esac
   shift || true
 done
 
+# The system state helpers come from load.sh: an older one does not have them
+if ! declare -F system_user_add >/dev/null; then
+  echo "Error: this script needs a newer load.sh: run 'load.sh --update'" >&2
+  exit 3
+fi
+
+SUDO="sudo"
+[[ "$(id -u)" == "0" ]] && SUDO=""
+
 # Preconditions
 require_downloader
-if [[ $EUID -ne 0 ]]; then
-  require_cmd sudo
-fi
+[[ -z "$SUDO" ]] || require_cmd sudo
 
 # Linux check (the get.docker.com script is Linux-specific)
 if [[ "${OSTYPE:-}" != linux* ]]; then
@@ -72,34 +87,40 @@ else
   log "Reusing existing installer: $INSTALLER"
 fi
 
-# Compose installer command
+# Run the installer as root
 INSTALL_CMD="sh \"$INSTALLER\""
 if [[ -n "$CHANNEL" ]]; then
   INSTALL_CMD="CHANNEL=$CHANNEL $INSTALL_CMD"
 fi
+run "${SUDO} $INSTALL_CMD"
 
-# Run installer (with sudo if not root)
-if [[ $EUID -ne 0 ]]; then
-  run "sudo $INSTALL_CMD"
-else
-  run "$INSTALL_CMD"
+# Who goes in the 'docker' group: the caller, or as root the user who ran sudo. Root
+# itself needs no group to use Docker.
+if [[ -z "$GROUP_USER" ]]; then
+  if [[ -n "$SUDO" ]]; then GROUP_USER=$(id -un); else GROUP_USER="${SUDO_USER:-}"; fi
+  [[ "$GROUP_USER" != "root" ]] || GROUP_USER=""
+fi
+if [[ -n "$GROUP_USER" ]] && ! id "$GROUP_USER" >/dev/null 2>&1; then
+  err "No such user: ${GROUP_USER}"
+  exit 2
 fi
 
 # Group setup (optional)
-if [[ "$NO_GROUP" != "1" ]]; then
+if [[ "$NO_GROUP" != "1" && -z "$GROUP_USER" ]]; then
+  log "As root, there is nobody to add to the 'docker' group: name the user with --user <name>"
+elif [[ "$NO_GROUP" != "1" ]]; then
   if getent group docker >/dev/null 2>&1; then
     log "Group 'docker' already exists"
   else
     log "Creating group 'docker'"
-    if [[ $EUID -ne 0 ]]; then run "sudo groupadd docker"; else run "groupadd docker"; fi
+    run "${SUDO} groupadd docker"
   fi
 
-  USER_NAME=$(id -un)
-  if id -nG "$USER_NAME" | grep -qw docker; then
-    log "User '$USER_NAME' is already in the 'docker' group"
+  if id -nG "$GROUP_USER" | grep -qw docker; then
+    log "User '$GROUP_USER' is already in the 'docker' group"
   else
-    log "Adding '$USER_NAME' to 'docker' group"
-    if [[ $EUID -ne 0 ]]; then run "sudo usermod -aG docker \"$USER_NAME\""; else run "usermod -aG docker \"$USER_NAME\""; fi
+    log "Adding '$GROUP_USER' to 'docker' group"
+    run "${SUDO} usermod -aG docker \"$GROUP_USER\""
     log "You may need to log out and log back in for group changes to take effect."
   fi
 fi
@@ -108,5 +129,7 @@ fi
 run "mkdir -p \"$HOME/.docker\""
 run "chmod 700 \"$HOME/.docker\" -R"
 run "chown \"$(id -un)\":\"$(id -gn)\" \"$HOME/.docker\" -R" || true
+
+system_user_add docker
 
 log "Done."

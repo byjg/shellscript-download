@@ -263,7 +263,8 @@ require_script() {
 # until root removes it with --force (system_release). Nothing is written with --dry-run.
 SHELLSCRIPT_SYSTEM_HOME="/var/lib/shellscript"
 export SHELLSCRIPT_SYSTEM_HOME
-# as_root <command> [args]: runs it as root, through sudo unless it is root already
+# as_root <command> [args]: runs it as root, through sudo unless it is root already. For
+# the helpers below: a script calls sudo with its own ${SUDO}, empty for root
 as_root() { if [[ "$(id -u)" == "0" ]]; then "$@"; else sudo "$@"; fi; }
 # system_state <script>: the folder of its system state
 system_state() { printf '%s/%s\n' "$SHELLSCRIPT_SYSTEM_HOME" "$1"; }
@@ -279,6 +280,16 @@ system_state_add() {
   { cat "$file" 2>/dev/null || true; [[ $# -eq 0 ]] || printf '%s\n' "$@"; } \
     | sed '/^$/d' | sort -u | as_root tee "${file}.new" >/dev/null
   as_root mv "${file}.new" "$file"
+}
+# system_state_write <file>: the file of the system state holds what comes on stdin, in
+# place of what it held. Nothing is written (no sudo) when it holds that already.
+system_state_write() {
+  local content
+  content="$(cat)"
+  [[ "${DRY_RUN:-0}" != "1" ]] || return 0
+  if [[ -f "$1" && "$(cat "$1")" == "$content" ]]; then return 0; fi
+  as_root mkdir -p "$(dirname "$1")"
+  printf '%s\n' "$content" | as_root tee "$1" >/dev/null
 }
 # system_state_del <file> <line>: takes the line out of a file of the system state
 system_state_del() {
@@ -404,7 +415,7 @@ download_signed() {
   return "$status"
 }
 export -f log err run require_cmd github_auth_header fetch download require_downloader final_url remote_stamp already_installed record_installed github_latest_tag require_script \
-  as_root system_state system_state_add system_state_del system_user_add system_state_migrate system_release system_forget
+  as_root system_state system_state_add system_state_write system_state_del system_user_add system_state_migrate system_release system_forget
 
 # installed_state <script>: prints the installed version of what a script installs, or
 # "yes" when it has no version to show, and nothing when it is not on this machine.

@@ -122,9 +122,9 @@ root removes it with `load.sh remove -- <script> --force`.
 
 | Function | Behaviour |
 |---|---|
-| `as_root <command>` | Runs it as root: through sudo, unless the script runs as root already |
 | `system_state podman` | The folder of the system state of a script: `/var/lib/shellscript/podman` |
 | `system_state_add <file> [line...]` | Adds lines to a file of the system state (with none, the file only has to be there). Writes nothing, and asks no sudo, when the file has them |
+| `printf '%s\n' "$CONFIG" \| system_state_write <file>` | The file of the system state holds what comes on stdin, in place of what it held (a configuration). Writes nothing when it holds that already |
 | `system_state_del <file> <line>` | Takes a line out of a file of the system state |
 | `system_user_add podman` | After an install: the caller is one of the users of the script (`installed-by`) |
 | `system_state_migrate podman <file>...` | Moves what an older version recorded in `~/.shellscript/podman/<file>` into the system state |

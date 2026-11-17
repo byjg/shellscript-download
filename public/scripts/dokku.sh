@@ -85,11 +85,11 @@ done
 VERSION="${VERSION#v}"
 
 # Dokku is installed on the system, or Docker run, with sudo
-require_cmd sudo
+[[ -z "$SUDO" ]] || require_cmd sudo
 
-STATE_DIR="${SHELLSCRIPT_HOME}/dokku"
 # Present when this script installed Dokku: only then does the removal take it out
-INSTALL_STATE="${STATE_DIR}/installed"
+INSTALL_STATE="$(system_state dokku)/installed"
+system_state_migrate dokku installed
 
 APT_KEY="/etc/apt/keyrings/dokku.asc"
 APT_SOURCE="/etc/apt/sources.list.d/dokku.sources"
@@ -103,16 +103,19 @@ installed_version() {
 }
 
 # Internal hook, not part of the user interface: executed by 'load.sh remove -- dokku'
-# through the UNINSTALL_CMD manifest key.
+# through the UNINSTALL_CMD manifest key. Dokku is there for every user: only root takes
+# it out, with --force.
 if [[ "$UNINSTALL" == "1" ]]; then
-  if [[ ! -e "$INSTALL_STATE" ]]; then
-    log "Dokku was not installed by this script — leaving it in place."
-    exit 0
+  if system_release dokku; then
+    if [[ -e "$INSTALL_STATE" ]]; then
+      log "Removing Dokku and its repository (Docker stays: 'load.sh remove -- docker')"
+      run "${SUDO} DEBIAN_FRONTEND=noninteractive apt-get purge -y dokku herokuish"
+      run "${SUDO} rm -f ${APT_SOURCE} ${APT_KEY}; ${SUDO} apt-get update || true"
+    else
+      log "Dokku was not installed by this script — leaving it in place."
+    fi
+    system_forget dokku
   fi
-  log "Removing Dokku and its repository (Docker stays: 'load.sh remove -- docker')"
-  run "sudo DEBIAN_FRONTEND=noninteractive apt-get purge -y dokku herokuish"
-  run "sudo rm -f ${APT_SOURCE} ${APT_KEY}; sudo apt-get update || true"
-  [[ "$DRY_RUN" == "1" ]] || rm -f "$INSTALL_STATE"
   exit 0
 fi
 
@@ -155,10 +158,10 @@ Signed-By: ${APT_KEY}"
     TEMP_DIR=$(mktemp -d)
     trap 'rm -rf "$TEMP_DIR"' EXIT
     run "download \"${REPO_URL}/gpgkey\" \"${TEMP_DIR}/dokku.asc\""
-    run "sudo install -D -m 644 \"${TEMP_DIR}/dokku.asc\" ${APT_KEY}"
-    run "printf '%s\n' \"${SOURCE_CONTENT}\" | sudo tee ${APT_SOURCE} >/dev/null"
+    run "${SUDO} install -D -m 644 \"${TEMP_DIR}/dokku.asc\" ${APT_KEY}"
+    run "printf '%s\n' \"${SOURCE_CONTENT}\" | ${SUDO} tee ${APT_SOURCE} >/dev/null"
     # An index of another source that fails to update does not stop the install
-    run "sudo apt-get update || true"
+    run "${SUDO} apt-get update || true"
   fi
 fi
 
@@ -170,23 +173,20 @@ else
   PACKAGE="dokku${VERSION:+=${VERSION}}"
   log "Installing ${PACKAGE}"
   # The SSH keys are added below, not by the package from root's key file
-  run "printf 'dokku dokku/skip_key_file boolean true\n' | sudo debconf-set-selections"
+  run "printf 'dokku dokku/skip_key_file boolean true\n' | ${SUDO} debconf-set-selections"
   if [[ -z "$CURRENT" ]]; then
-    run "sudo apt-get update || true"
+    run "${SUDO} apt-get update || true"
   fi
-  run "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ${PACKAGE}"
-  run "sudo dokku plugin:install-dependencies --core"
-  if [[ -z "$CURRENT" && "$DRY_RUN" != "1" ]]; then
-    mkdir -p "$STATE_DIR"
-    : > "$INSTALL_STATE"
-  fi
+  run "${SUDO} DEBIAN_FRONTEND=noninteractive apt-get install -y ${PACKAGE}"
+  run "${SUDO} dokku plugin:install-dependencies --core"
+  [[ -n "$CURRENT" ]] || system_state_add "$INSTALL_STATE"
   if [[ -n "$CURRENT" ]]; then
     log "Dokku changed from ${CURRENT}: rebuild the apps with 'sudo dokku ps:rebuild --all'"
     log "Read the migration guides first: https://dokku.com/docs/getting-started/upgrading/"
   fi
 fi
 
-DOKKU_CMD="sudo dokku"
+DOKKU_CMD="${SUDO:+$SUDO }dokku"
 DOKKU_RUNNING=""
 command -v dokku >/dev/null 2>&1 && DOKKU_RUNNING=1
 
@@ -201,5 +201,7 @@ dokku_add_ssh_keys "$SSH_KEY_FILE"
 for plugin in ${PLUGINS[@]+"${PLUGINS[@]}"}; do
   dokku_install_plugin "$plugin"
 done
+
+system_user_add dokku
 
 log "Done. Deploy an app with: git push dokku@<server>:<app> main"

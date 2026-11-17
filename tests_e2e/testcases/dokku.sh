@@ -5,6 +5,7 @@
 source "$(dirname "${BASH_SOURCE[0]}")/../shared/lib.sh"
 
 tool_home="${SHELLSCRIPT_HOME}/dokku"
+state="${SYSTEM_STATE}/dokku"
 apt_source="/etc/apt/sources.list.d/dokku.sources"
 older="0.38.33"
 plugin="maintenance=https://github.com/dokku/dokku-maintenance.git"
@@ -23,7 +24,8 @@ step "dokku: --version installs that version, Docker with it, and the user's SSH
 load dokku -- --version "$older" --plugin "$plugin"
 assert_command docker
 assert_exists "$apt_source"
-assert_exists "${tool_home}/installed"
+assert_exists "${state}/installed"
+assert_output "cat '${state}/installed-by'" "$(id -un)"
 assert_output "dpkg-query -W -f='\${Version}' dokku" "$older"
 assert_output "sudo dokku ssh-keys:list" 'NAME="admin"'
 keys="$(grep -c '^ssh-' "${HOME}/.ssh/authorized_keys")"
@@ -52,11 +54,17 @@ assert_output "sudo cat /home/dokku/VHOST" "apps.example.test"
 assert_exit 0 "sudo dokku apps:create e2e-app"
 assert_output "sudo dokku domains:report e2e-app --domains-app-vhosts" "e2e-app.apps.example.test"
 
-step "dokku: remove takes out Dokku and its repository, keeps the folder and Docker"
+step "dokku: a user's remove keeps Dokku, there for every user"
 load remove -- dokku
+assert_log "Root removes it with 'load.sh remove -- dokku --force'"
+assert_command dokku
+assert_exists "$apt_source"
+
+step "dokku: root's remove --force takes out Dokku and its repository, keeps Docker"
+assert_exit 0 "${ROOT_LOADER} remove -- dokku --force"
 assert_no_command dokku
 assert_missing "$apt_source"
-assert_exists "$tool_home"
+assert_missing "$state"
 assert_command docker
 
 step "dokku: purge removes the folder"
