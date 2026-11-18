@@ -270,6 +270,7 @@ test_system_package() {
   assert_output "cat '${state}/installed-packages.conf'" "$name"
   assert_output "cat '${state}/installed-by'" "$(id -un)"
   assert_output "${LOADER} --installed 2>/dev/null | grep '^${name} ' | awk '{print \$2}'" "yes"
+  assert_output "${LOADER} --installed 2>/dev/null | grep '^${name} ' | awk '{print \$3}'" "system"
   [[ -z "$check" ]] || "$check"
 
   step "${name}: another user sees it installed system-wide, and leaves its upgrade to who installed it"

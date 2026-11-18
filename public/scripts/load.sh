@@ -38,6 +38,19 @@ if [[ "${EUID:-$(id -u)}" -eq 0 && ! -O "${HOME:-}" ]]; then
   exit 1
 fi
 
+# 'sudo load.sh': root installs for itself, in its own HOME, and not for the user who ran
+# sudo, who most likely did not mean that. Said, and asked when there is someone to
+# answer. Not asked of root itself: a root login, a container, a 'sudo -i' shell.
+if [[ "${EUID:-$(id -u)}" -eq 0 && -n "${SUDO_USER:-}" && "${SUDO_USER}" != root \
+    && "${SUDO_COMMAND:-}" == *load.sh* ]]; then
+  echo "Warning: load.sh runs as root, through sudo: it installs for root, in ${HOME}/.shellscript, not for ${SUDO_USER}." >&2
+  echo "Run it as ${SUDO_USER}, without sudo: the scripts call sudo for what they change on the system." >&2
+  if [[ -t 0 ]]; then
+    read -r -p "Continue as root? [Y/n] " answer
+    case "$answer" in [nN]*) exit 1 ;; esac
+  fi
+fi
+
 # The banner goes to stderr: stdout is the script's own output, which a caller
 # may capture, e.g. ip=$(load.sh qemu -- address vm1)
 echo ">_ load.sh" >&2
@@ -45,11 +58,15 @@ echo >&2
 
 print_usage() {
   cat <<'USAGE'
-load.sh [--update] [--upgrade] [--dont-run] [--list] [--installed] [--completion] [--developer <path>] <script> [optional args...]
+load.sh [--update] [--update-system] [--upgrade] [--dont-run] [--list] [--installed] [--completion] [--developer <path>] <script> [optional args...]
 
 Options:
   --update           Update the loader and the local cached copies of the scripts.
-                     With a script: update only that script, then run it
+                     With a script: update only that script, then run it. Never calls
+                     sudo: a script shared on the system that has a newer version is
+                     skipped, and says so
+  --update-system    The same, and the scripts shared on the system: asks for sudo,
+                     only for what changed. Run it as yourself, not with sudo
   --upgrade          Install again what is installed, each script with the arguments it
                      was last installed with, so that a tool follows its latest version
                      and one that was given a version keeps it. With a script: only
@@ -57,7 +74,8 @@ Options:
   --dont-run         Do not execute the script after ensuring it is downloaded
   --list             List all available scripts from shellscript.download, with the
                      version of the ones installed on this machine
-  --installed        List only the scripts installed on this machine
+  --installed        List only the scripts installed on this machine, and where: the
+                     user's alone, or on the system, for every user
   --completion       Install/update bash completion for load.sh into ~/.shellscript/shellrc/
   --developer <path> Use a local directory instead of downloading (for development)
   -h, --help         Show this help message
@@ -78,6 +96,7 @@ USAGE
 }
 
 UPDATE=false
+UPDATE_SYSTEM=false
 DONT_RUN=false
 LIST=false
 INSTALLED=false
@@ -92,6 +111,11 @@ while [[ $# -gt 0 ]]; do
   case "${1}" in
     --update)
       UPDATE=true
+      shift
+      ;;
+    --update-system)
+      UPDATE=true
+      UPDATE_SYSTEM=true
       shift
       ;;
     --dont-run)
@@ -558,26 +582,30 @@ system_users() {
   [[ ! -s "$file" ]] || paste -sd, - < "$file"
 }
 
-# What is installed, from the scripts this machine has: it needs no network. What another
-# user installed on the system is there for this one too: "system (by <users>)".
+# What is installed, from the scripts this machine has: it needs no network. WHERE says
+# whether it is the user's alone, or on the system, for every user (a script with
+# SYSTEM_SCRIPT=yes); what another user installed there is listed too: "system (by jg)".
+INSTALLED_FORMAT="%-16s %-10s %-8s %s\n"
 list_installed() {
-  local file name state users desc any=""
+  local file name state where users desc any=""
   while IFS= read -r name <&3; do
     file="$(script_path "$name")"
+    where="user"
+    grep -qx 'SYSTEM_SCRIPT=yes' "$file" && where="system"
     state="$(installed_state "$name")"
     if [[ -z "$state" ]]; then
       users="$(system_users "$name")"
-      [[ -z "$users" ]] || state="system (by ${users})"
+      [[ -z "$users" ]] || { state="yes"; where="system (by ${users})"; }
     fi
     [[ -n "$state" ]] || continue
     if [[ -z "$any" ]]; then
       # shellcheck disable=SC2059  # the format is a constant
-      printf "$LIST_FORMAT" "SCRIPT" "INSTALLED" "DESCRIPTION"
-      printf "$LIST_FORMAT" "----------------" "----------" "-----------"
+      printf "$INSTALLED_FORMAT" "SCRIPT" "INSTALLED" "WHERE" "DESCRIPTION"
+      printf "$INSTALLED_FORMAT" "----------------" "----------" "--------" "-----------"
       any=yes
     fi
     desc="$(sed -n '2s/^# *//p' "$file")"
-    printf "$LIST_FORMAT" "$name" "$state" "${desc#"${name}.sh: "}"
+    printf "$INSTALLED_FORMAT" "$name" "$state" "$where" "${desc#"${name}.sh: "}"
   done 3< <(script_names)
   [[ -n "$any" ]] || echo "Nothing installed with load.sh on this machine." >&2
 }
@@ -619,8 +647,9 @@ fi
 # a newer version by running its script, which this does not do.
 update_all() {
   local base="https://shellscript.download" home="$HOME/.shellscript"
-  local loader="${home}/bin/load.sh" file name before state
+  local loader="${home}/bin/load.sh" file name before state code update="--update"
   local format="%-22s %s\n"
+  [[ "$UPDATE_SYSTEM" != true ]] || update="--update-system"
 
   # shellcheck disable=SC2059  # the format is a constant
   if state="$(replace_file "${base}/scripts/load.sh" "$loader")"; then
@@ -636,13 +665,16 @@ update_all() {
   fi
 
   # Each script goes through the loader just updated, which also downloads the file it
-  # shares with other scripts
-  # A script that changes the system, found in the cache of the user, moves where every
-  # user has it: the cksum is of the file wherever it is
+  # shares with other scripts. A script shared on the system may move, with
+  # --update-system: the cksum is of the file wherever it is.
   while IFS= read -r name <&3; do
     before="$(cksum < "$(script_path "$name")")"
-    if "$loader" --update --dont-run "$name" >/dev/null 2>&1; then
+    code=0
+    "$loader" "$update" --dont-run "$name" >/dev/null 2>&1 || code=$?
+    if [[ "$code" == 0 ]]; then
       if [[ "$(cksum < "$(script_path "$name")")" == "$before" ]]; then state="up to date"; else state="updated"; fi
+    elif [[ "$code" == 4 ]]; then
+      state="skipped, use 'load.sh --update-system' to update: requires admin"
     else
       # A script that left the catalog, or a download that failed: the same answer
       state="could not be downloaded, kept as it is"
@@ -715,7 +747,7 @@ fi
 
 if [[ "${UPDATE}" == true && -z "${SCRIPT_NAME}" ]]; then
   if [[ -n "${DEVELOPER_PATH}" ]]; then
-    echo "Error: --update without a script downloads what is published: not with --developer." >&2
+    echo "Error: --update or --update-system without a script downloads what is published: not with --developer." >&2
     exit 2
   fi
   update_all
@@ -734,7 +766,6 @@ if [[ -z "${SCRIPT_NAME}" ]]; then
   exit 2
 fi
 
-DOWNLOADED=false
 if [[ -n "${DEVELOPER_PATH}" ]]; then
   DEST_PATH="${DEVELOPER_PATH}/${SCRIPT_NAME}.sh"
   if [[ ! -f "${DEST_PATH}" ]]; then
@@ -742,52 +773,86 @@ if [[ -n "${DEVELOPER_PATH}" ]]; then
     exit 3
   fi
 else
-  # Downloaded to the cache of the user, where its signature is checked; a script that
-  # changes the system then goes where every user has it (script_path)
+  # A script that changes the system (SYSTEM_SCRIPT=yes) is there once for every user,
+  # owned by root (script_path); any other one is in the cache of the user
   DEST_DIR="$USER_SCRIPTS_DIR"
   DEST_PATH="$(script_path "$SCRIPT_NAME")"
+  USER_PATH="${DEST_DIR}/${SCRIPT_NAME}.sh"
+  SYSTEM_PATH="${SYSTEM_SCRIPTS_DIR}/${SCRIPT_NAME}.sh"
   URL="https://shellscript.download/scripts/${SCRIPT_NAME}.sh"
 
-  ensure_downloaded() {
-    # Download if missing or update requested
-    if [[ "${UPDATE}" == true || ! -f "${DEST_PATH}" ]]; then
-      echo "Fetching: ${URL}" >&2
-      DEST_PATH="${DEST_DIR}/${SCRIPT_NAME}.sh"
-      download_signed "${URL}" "${DEST_PATH}" || exit 3
-      chmod +x "${DEST_PATH}" || true
-      DOWNLOADED=true
+  # shared_lib_of <script>: the file it shares with other scripts (public/scripts/lib),
+  # named by its SHARED_LIB line, or nothing
+  shared_lib_of() { sed -n 's|^SHARED_LIB=.*/\(lib/[a-z0-9-]*\.sh\)"$|\1|p' "$1"; }
+  # same_file <a> <b>: both there, with the same content (cksum: no diffutils needed)
+  same_file() { [[ -f "$1" && -f "$2" && "$(cksum < "$1")" == "$(cksum < "$2")" ]]; }
+
+  # A system script just downloaded, and checked, in NEW_DIR. Nothing is written when it
+  # is the one this machine has. Otherwise it goes where every user has it, with sudo:
+  # on its first install, and with --update-system; --update never calls sudo, and says
+  # what it skipped (exit 4 with --dont-run, for update_all).
+  share_downloaded() {
+    local current="$SYSTEM_PATH" root_cmd
+    root_cmd="$(sudo_cmd)"
+    # One in the cache of the user, from before, until it is shared
+    [[ -f "$current" ]] || current="$USER_PATH"
+    if same_file "${NEW_DIR}/script.sh" "$current" \
+        && { [[ -z "$shared_lib" ]] || same_file "${NEW_DIR}/${shared_lib}" "$(dirname "$current")/${shared_lib}"; }; then
+      if [[ "$current" == "$SYSTEM_PATH" ]]; then
+        rm -f "$USER_PATH"
+        DEST_PATH="$SYSTEM_PATH"
+        return 0
+      fi
+      if [[ -n "$root_cmd" && "$UPDATE_SYSTEM" != true ]]; then
+        DEST_PATH="$USER_PATH"
+        return 0
+      fi
+    elif [[ -n "$root_cmd" && "$UPDATE" == true && "$UPDATE_SYSTEM" != true && -f "$current" ]]; then
+      echo "${SCRIPT_NAME}.sh has a newer version, for every user of this machine: 'load.sh --update-system' updates it (requires admin)." >&2
+      [[ "$DONT_RUN" != true ]] || exit 4
+      DEST_PATH="$current"
+      return 0
     fi
+    [[ -z "$root_cmd" ]] || require_cmd sudo
+    echo "Sharing ${SCRIPT_NAME}.sh with every user of this machine: ${SYSTEM_SCRIPTS_DIR}" >&2
+    $root_cmd install -D -m 755 "${NEW_DIR}/script.sh" "$SYSTEM_PATH" || exit 3
+    if [[ -n "$shared_lib" ]]; then
+      $root_cmd install -D -m 644 "${NEW_DIR}/${shared_lib}" "${SYSTEM_SCRIPTS_DIR}/${shared_lib}" || exit 3
+    fi
+    rm -f "$USER_PATH"
+    DEST_PATH="$SYSTEM_PATH"
   }
 
-  ensure_downloaded
-
-  # The file the script shares with other scripts (public/scripts/lib), named by its
-  # SHARED_LIB line: downloaded with the script, and again when it is missing next to it
-  shared_lib="$(sed -n 's|^SHARED_LIB=.*/\(lib/[a-z0-9-]*\.sh\)"$|\1|p' "${DEST_PATH}")"
-  LIB_DOWNLOADED=false
-  if [[ -n "${shared_lib}" && ( "${DOWNLOADED}" == true || ! -f "$(dirname "${DEST_PATH}")/${shared_lib}" ) ]]; then
-    download_signed "https://shellscript.download/scripts/${shared_lib}" "${DEST_DIR}/${shared_lib}" || exit 3
-    LIB_DOWNLOADED=true
-  fi
-
-  # A script that changes the system: one copy for every user, owned by root. What was
-  # just downloaded, and checked, goes there, and the copy of the user goes away. One
-  # in the cache of the user from before stays there, and runs, until --update.
-  if [[ "$DEST_PATH" == "${SYSTEM_SCRIPTS_DIR}/"* ]] \
-      || { [[ "$DOWNLOADED" == true ]] && grep -qx 'SYSTEM_SCRIPT=yes' "$DEST_PATH"; }; then
-    root_cmd="$(sudo_cmd)"
-    if [[ "$DOWNLOADED" == true || "$LIB_DOWNLOADED" == true ]]; then
-      [[ -z "$root_cmd" ]] || require_cmd sudo
-      echo "Sharing ${SCRIPT_NAME}.sh with every user of this machine: ${SYSTEM_SCRIPTS_DIR}" >&2
+  if [[ "${UPDATE}" == true || ! -f "${DEST_PATH}" ]]; then
+    # Downloaded, with the file it shares, and checked, before anything is replaced
+    echo "Fetching: ${URL}" >&2
+    NEW_DIR="$(mktemp -d)"
+    trap 'rm -rf "$NEW_DIR"' EXIT
+    download_signed "${URL}" "${NEW_DIR}/script.sh" || exit 3
+    chmod +x "${NEW_DIR}/script.sh"
+    shared_lib="$(shared_lib_of "${NEW_DIR}/script.sh")"
+    if [[ -n "${shared_lib}" ]]; then
+      download_signed "https://shellscript.download/scripts/${shared_lib}" "${NEW_DIR}/${shared_lib}" || exit 3
     fi
-    if [[ "$DOWNLOADED" == true ]]; then
-      $root_cmd install -D -m 755 "${DEST_DIR}/${SCRIPT_NAME}.sh" "${SYSTEM_SCRIPTS_DIR}/${SCRIPT_NAME}.sh" || exit 3
-      rm -f "${DEST_DIR}/${SCRIPT_NAME}.sh"
+    if grep -qx 'SYSTEM_SCRIPT=yes' "${NEW_DIR}/script.sh"; then
+      share_downloaded
+    else
+      mkdir -p "${DEST_DIR}/lib"
+      mv "${NEW_DIR}/script.sh" "$USER_PATH"
+      [[ -z "${shared_lib}" ]] || mv "${NEW_DIR}/${shared_lib}" "${DEST_DIR}/${shared_lib}"
+      DEST_PATH="$USER_PATH"
     fi
-    if [[ "$LIB_DOWNLOADED" == true ]]; then
-      $root_cmd install -D -m 644 "${DEST_DIR}/${shared_lib}" "${SYSTEM_SCRIPTS_DIR}/${shared_lib}" || exit 3
+  else
+    # The file it shares, missing next to it: downloaded again
+    shared_lib="$(shared_lib_of "${DEST_PATH}")"
+    if [[ -n "${shared_lib}" && ! -f "$(dirname "${DEST_PATH}")/${shared_lib}" ]]; then
+      download_signed "https://shellscript.download/scripts/${shared_lib}" "${DEST_DIR}/${shared_lib}" || exit 3
+      if [[ "$DEST_PATH" == "$SYSTEM_PATH" ]]; then
+        root_cmd="$(sudo_cmd)"
+        [[ -z "$root_cmd" ]] || require_cmd sudo
+        $root_cmd install -D -m 644 "${DEST_DIR}/${shared_lib}" "${SYSTEM_SCRIPTS_DIR}/${shared_lib}" || exit 3
+      fi
     fi
-    DEST_PATH="${SYSTEM_SCRIPTS_DIR}/${SCRIPT_NAME}.sh"
   fi
 fi
 

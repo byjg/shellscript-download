@@ -16,7 +16,7 @@ Every file the loader downloads from the site, each with its signature next to i
 
 | File | Downloaded by |
 |---|---|
-| `scripts/<script>.sh` | `load.sh <script>`, `load.sh --update` |
+| `scripts/<script>.sh` | `load.sh <script>`, `load.sh --update`, `load.sh --update-system` |
 | `scripts/lib/<file>.sh`, the code a script shares with others | `load.sh`, with the script that needs it |
 | `scripts/load.sh`, the loader itself | the installer, `load.sh --update` |
 | `install/load-completion.sh` | the installer, `load.sh --completion`, `load.sh --update` |
