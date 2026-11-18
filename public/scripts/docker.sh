@@ -91,14 +91,11 @@ else
   DEST_FOLDER="${SHELLSCRIPT_DOWNLOADS}"
   run "mkdir -p \"$DEST_FOLDER\""
 
-  # Download installer script
+  # The installer of Docker, downloaded each time it runs: Docker changes it, and an old
+  # one could install what Docker no longer publishes
   INSTALLER="$DEST_FOLDER/get-docker.sh"
-  if [[ ! -s "$INSTALLER" ]]; then
-    log "Downloading Docker installer..."
-    run "download https://get.docker.com \"$INSTALLER\""
-  else
-    log "Reusing existing installer: $INSTALLER"
-  fi
+  log "Downloading Docker installer..."
+  run "download https://get.docker.com \"$INSTALLER\""
 
   # Run the installer as root
   INSTALL_CMD="sh \"$INSTALLER\""

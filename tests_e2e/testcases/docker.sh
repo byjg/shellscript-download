@@ -45,8 +45,11 @@ load docker
 assert_log "is already in the 'docker' group"
 assert_output "cat '${SYSTEM_STATE}/docker/installed-by'" "$user"
 
-step "docker: --force runs the installer of Docker again"
+step "docker: --force runs the installer of Docker again, downloaded again"
+echo "# stale-e2e" >> "${SHELLSCRIPT_HOME}/downloads/get-docker.sh"
 load docker -- --force
+assert_log "Downloading Docker installer"
+assert_no_output "cat '${SHELLSCRIPT_HOME}/downloads/get-docker.sh'" "stale-e2e"
 assert_log "Executing docker install script"
 assert_exit 0 "sudo docker run --rm hello-world"
 
