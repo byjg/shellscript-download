@@ -603,6 +603,10 @@ installed="${SHELLSCRIPT_HOME}/bin/load.sh"
 cached="${SHELLSCRIPT_HOME}/downloads"
 working_copy="/tmp/e2e-load.sh"
 cp "$installed" "$working_copy"
+# Only what these steps check: jq and the file it shares, and a script that is not
+# published. Every other script would be one more download of the same kind, through
+# the same download() (its retries have a step of their own).
+find "$cached" -maxdepth 1 -name '*.sh' ! -name jq.sh -delete
 echo "# stale-e2e" >> "$installed"
 echo "# stale-e2e" >> "${cached}/jq.sh"
 echo "# stale-e2e" >> "${cached}/lib/binary-install.sh"
