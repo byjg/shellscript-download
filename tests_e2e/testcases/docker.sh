@@ -45,12 +45,13 @@ load docker
 assert_log "is already in the 'docker' group"
 assert_output "cat '${SYSTEM_STATE}/docker/installed-by'" "$user"
 
-step "docker: --force runs the installer of Docker again, downloaded again"
-echo "# stale-e2e" >> "${SHELLSCRIPT_HOME}/downloads/get-docker.sh"
+step "docker: --force runs the installer of Docker again, downloaded to a folder that goes away"
+# Where an older version kept it, in the cache of the loader: taken out
+echo "# stale-e2e" > "${SHELLSCRIPT_HOME}/downloads/get-docker.sh"
 load docker -- --force
 assert_log "Downloading Docker installer"
-assert_no_output "cat '${SHELLSCRIPT_HOME}/downloads/get-docker.sh'" "stale-e2e"
 assert_log "Executing docker install script"
+assert_missing "${SHELLSCRIPT_HOME}/downloads/get-docker.sh"
 assert_exit 0 "sudo docker run --rm hello-world"
 
 step "docker: as root, puts the user who ran sudo in the 'docker' group"

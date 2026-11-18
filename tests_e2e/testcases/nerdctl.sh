@@ -18,6 +18,12 @@ runs_containers() {
   assert_output "nerdctl build -q -t e2e-build /tmp/e2e-build >/dev/null 2>&1 && nerdctl run --rm e2e-build" "built"
 }
 
+# The archive is downloaded to a folder that goes away, in the folder of nerdctl, and
+# not in the cache of the loader
+assert_no_download_left() {
+  assert_output "{ find '${SHELLSCRIPT_HOME}/downloads' -maxdepth 1 -type d -name 'nerdctl.*'; find '${tool_home}' -maxdepth 1 -name '.download.*'; } 2>/dev/null | wc -l" "0"
+}
+
 # Alpine has no systemd: the services are refused, the commands alone are not
 if on_image alpine; then
   step "nerdctl: without systemd, the services are refused and --no-services is not"
@@ -25,6 +31,7 @@ if on_image alpine; then
   assert_log "needs a systemd user session"
   load nerdctl -- --no-services --version 2.4.0
   assert_output "nerdctl --version" "nerdctl version 2.4.0"
+  assert_no_download_left
 
   step "nerdctl: --no-services again updates to the latest"
   load nerdctl -- --no-services --docker
@@ -95,6 +102,7 @@ fi
 step "nerdctl: --no-rootless installs to /opt/nerdctl and starts the system services"
 load nerdctl -- --no-rootless
 assert_output "stat -c '%U' /opt/nerdctl/bin/nerdctl" "root"
+assert_no_download_left
 assert_exit 0 "systemctl is-active --quiet containerd.service buildkit.service"
 assert_exists "${SYSTEM_STATE}/nerdctl/installed-stamp"
 runs_containers

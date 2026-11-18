@@ -106,10 +106,14 @@ java_install() {
   local install_dir="${home_base}/${JAVA_VERSION}"
   local current_link="${SHELLSCRIPT_HOME}/java/current"
   local shellrc_file="${SHELLSCRIPT_SHELLRC}/java-init.sh"
-  local temp_archive="/tmp/${name}.tar.gz"
+  # A folder of its own, that goes away: a fixed name in /tmp would be the same for two
+  # runs, or two users, at once
+  local temp_dir temp_archive
+  temp_dir="$(mktemp -d)"
+  temp_archive="${temp_dir}/${name}.tar.gz"
 
-  # shellcheck disable=SC2064  # expanded now on purpose: temp_archive is local
-  trap "rm -f '${temp_archive}'" EXIT
+  # shellcheck disable=SC2064  # expanded now on purpose: temp_dir is local
+  trap "rm -rf '${temp_dir}'" EXIT
 
   log "Installing ${JAVA_LABEL} ${JAVA_VERSION}"
 

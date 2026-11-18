@@ -344,8 +344,12 @@ test_java_vendor() {
   local shellrc="${SHELLSCRIPT_HOME}/shellrc/java-init.sh"
   local java="${java_home}/current/bin/java"
 
-  step "${name}: install with the defaults (Java ${default})"
+  step "${name}: install with the defaults (Java ${default}), downloaded to a folder of its own"
+  # Where an older version downloaded it, a fixed name in /tmp: another user's file there
+  # stopped the download
+  sudo sh -c "echo e2e > '/tmp/${name}.tar.gz'; chmod 600 '/tmp/${name}.tar.gz'"
   load "$name"
+  sudo rm -f "/tmp/${name}.tar.gz"
   assert_exists "${vendor_home}/${default}/bin/java"
   assert_output "${java} -version" "version \"${default}."
   assert_output ". '${shellrc}'; echo \$JAVA_HOME; java -version" "version \"${default}."
