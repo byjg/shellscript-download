@@ -20,10 +20,13 @@ Options:
   --user NAME       The user to add to the 'docker' group (default: you; as root,
                     the user who ran sudo)
   --channel CH      Pass a channel to the installer (e.g., 'stable', 'test', 'nightly')
+  --force           Run the installer of Docker even when Docker is installed
   --manifest        Print installation manifest and exit
 
 Docker is installed for every user of the machine: 'load.sh remove -- docker' leaves
-it in place.
+it in place. Run again, the installer does not run when Docker is installed: the
+package manager upgrades it (apt upgrade, dnf upgrade). The 'docker' group is set up
+each time.
 
 Examples:
   load.sh docker
@@ -45,6 +48,7 @@ DRY_RUN=0
 NO_GROUP=0
 CHANNEL=""
 GROUP_USER=""
+FORCE=0
 while [[ ${1-} ]]; do
   case "$1" in
     -h|--help) print_usage; exit 0 ;;
@@ -53,6 +57,7 @@ while [[ ${1-} ]]; do
     --no-group) NO_GROUP=1 ;;
     --channel) CHANNEL=${2-}; shift || true ;;
     --user) GROUP_USER=${2-}; [[ -n "$GROUP_USER" ]] || { err "--user requires a name"; exit 2; }; shift ;;
+    --force) FORCE=1 ;;
     *) err "Unknown option: $1"; print_usage; exit 2 ;;
   esac
   shift || true
@@ -76,25 +81,29 @@ if [[ "${OSTYPE:-}" != linux* ]]; then
   exit 1
 fi
 
-# Prepare destination folder for downloaded installer
-DEST_FOLDER="${SHELLSCRIPT_DOWNLOADS}"
-run "mkdir -p \"$DEST_FOLDER\""
+# Docker installed: its packages come from its repository, and the package manager
+# upgrades them. The installer would install them again, and reset the configuration of
+# the repository, after a warning and 20 seconds of wait: not without --force.
+if [[ "$FORCE" != "1" ]] && command -v docker >/dev/null 2>&1; then
+  log "$(docker --version) is already installed: the package manager upgrades it (apt upgrade, dnf upgrade). --force runs its installer again."
+else
+  # Prepare destination folder for downloaded installer
+  DEST_FOLDER="${SHELLSCRIPT_DOWNLOADS}"
+  run "mkdir -p \"$DEST_FOLDER\""
 
-# Download installer script
-INSTALLER="$DEST_FOLDER/get-docker.sh"
-if [[ ! -s "$INSTALLER" ]]; then
+  # The installer of Docker, downloaded each time it runs: Docker changes it, and an old
+  # one could install what Docker no longer publishes
+  INSTALLER="$DEST_FOLDER/get-docker.sh"
   log "Downloading Docker installer..."
   run "download https://get.docker.com \"$INSTALLER\""
-else
-  log "Reusing existing installer: $INSTALLER"
-fi
 
-# Run the installer as root
-INSTALL_CMD="sh \"$INSTALLER\""
-if [[ -n "$CHANNEL" ]]; then
-  INSTALL_CMD="CHANNEL=$CHANNEL $INSTALL_CMD"
+  # Run the installer as root
+  INSTALL_CMD="sh \"$INSTALLER\""
+  if [[ -n "$CHANNEL" ]]; then
+    INSTALL_CMD="CHANNEL=$CHANNEL $INSTALL_CMD"
+  fi
+  run "${SUDO} $INSTALL_CMD"
 fi
-run "${SUDO} $INSTALL_CMD"
 
 # Who goes in the 'docker' group: the caller, or as root the user who ran sudo. Root
 # itself needs no group to use Docker.

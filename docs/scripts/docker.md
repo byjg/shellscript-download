@@ -25,10 +25,13 @@ Options:
   --user NAME       The user to add to the 'docker' group (default: you; as root,
                     the user who ran sudo)
   --channel CH      Pass a channel to the installer (e.g., 'stable', 'test', 'nightly')
+  --force           Run the installer of Docker even when Docker is installed
   --manifest        Print installation manifest and exit
 
 Docker is installed for every user of the machine: 'load.sh remove -- docker' leaves
-it in place.
+it in place. Run again, the installer does not run when Docker is installed: the
+package manager upgrades it (apt upgrade, dnf upgrade). The 'docker' group is set up
+each time.
 
 Examples:
   load.sh docker
