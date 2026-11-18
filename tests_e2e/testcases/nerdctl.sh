@@ -21,7 +21,7 @@ runs_containers() {
 # The archive is downloaded to a folder that goes away, in the folder of nerdctl, and
 # not in the cache of the loader
 assert_no_download_left() {
-  assert_output "ls -d '${SHELLSCRIPT_HOME}'/downloads/nerdctl.* '${tool_home}'/.download.* 2>/dev/null | wc -l" "0"
+  assert_output "{ find '${SHELLSCRIPT_HOME}/downloads' -maxdepth 1 -type d -name 'nerdctl.*'; find '${tool_home}' -maxdepth 1 -name '.download.*'; } 2>/dev/null | wc -l" "0"
 }
 
 # Alpine has no systemd: the services are refused, the commands alone are not

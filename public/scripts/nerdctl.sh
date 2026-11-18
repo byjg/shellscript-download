@@ -254,10 +254,15 @@ if [[ "$FORCE" != "1" && -x "${INSTALL_DIR}/bin/nerdctl" ]] \
   log "nerdctl ${NERDCTL_VERSION} is already installed. Skipping download (use --force to re-download)."
 else
   # Close to 1 GB with the archive: on the home disk, since /tmp is often a small tmpfs,
-  # in the folder of nerdctl (not in the cache of the loader), and gone at the end
-  mkdir -p "${NERDCTL_HOME}"
-  TEMP_DIR=$(mktemp -d "${NERDCTL_HOME}/.download.XXXXXX")
-  trap 'rm -rf "$TEMP_DIR"' EXIT
+  # in the folder of nerdctl (not in the cache of the loader), and gone at the end. A dry
+  # run creates nothing: it only says where.
+  if [[ "$DRY_RUN" == "1" ]]; then
+    TEMP_DIR="${NERDCTL_HOME}/.download.XXXXXX"
+  else
+    mkdir -p "${NERDCTL_HOME}"
+    TEMP_DIR=$(mktemp -d "${NERDCTL_HOME}/.download.XXXXXX")
+    trap 'rm -rf "$TEMP_DIR"' EXIT
+  fi
 
   log "Installing nerdctl ${NERDCTL_VERSION} to ${INSTALL_DIR}"
   log "Downloading ${DOWNLOAD_URL}"
