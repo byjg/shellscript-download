@@ -29,8 +29,10 @@ assert_exit 1 "docker ps"
 assert_log "permission denied"
 assert_output "sudo docker run --rm hello-world" "Hello from Docker"
 
-step "docker: install with the defaults puts the user in the 'docker' group"
+step "docker: install with the defaults puts the user in the 'docker' group, and leaves the installed Docker alone"
 load docker
+assert_log "is already installed: the package manager upgrades it"
+assert_no_output "cat '$LOG_FILE'" "Executing docker install script"
 assert_log "Adding '${user}' to 'docker' group"
 assert_log "log out and log back in"
 assert_output "id -nG ${user}" "docker"
@@ -42,6 +44,11 @@ step "docker: install again finds the user in the group"
 load docker
 assert_log "is already in the 'docker' group"
 assert_output "cat '${SYSTEM_STATE}/docker/installed-by'" "$user"
+
+step "docker: --force runs the installer of Docker again"
+load docker -- --force
+assert_log "Executing docker install script"
+assert_exit 0 "sudo docker run --rm hello-world"
 
 step "docker: as root, puts the user who ran sudo in the 'docker' group"
 sudo gpasswd -d "$user" docker >/dev/null
