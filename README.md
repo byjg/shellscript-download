@@ -84,6 +84,9 @@ load.sh php-docker -- --help
   system (`system`), and shows what another user installed there as `system (by <user>)`;
   `load.sh --upgrade` leaves that to them.
 
+`shs` is a shortcut for `load.sh`: `shs podman` is `load.sh podman`. The installer creates it,
+and `load.sh --update` creates it for a loader installed before it.
+
 All its options are in the [load](docs/scripts/load.md) page.
 
 ## Remove what a script installed

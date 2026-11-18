@@ -658,6 +658,12 @@ update_all() {
   else
     printf "$format" "load.sh" "could not be downloaded, kept as it is"
   fi
+  # shs, the shortcut for load.sh, for a loader installed before it: a link, by its name.
+  # A command already named shs is left alone.
+  if [[ ! -e "${home}/bin/shs" && ! -L "${home}/bin/shs" ]]; then
+    ln -s load.sh "${home}/bin/shs"
+    printf "$format" "shs" "created, a shortcut for load.sh"
+  fi
   if state="$(replace_file "${base}/install/load-completion.sh" "${home}/shellrc/01-load-completion.sh")"; then
     printf "$format" "completion" "$state"
   else

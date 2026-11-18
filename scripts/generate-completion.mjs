@@ -82,7 +82,7 @@ ${cases}
   esac
 }
 
-complete -F _load_sh_completion load.sh
+complete -F _load_sh_completion load.sh shs
 `
 
   await fs.writeFile(path.join(repoRoot, 'public', 'install', 'load-completion.sh'), completion, 'utf8')

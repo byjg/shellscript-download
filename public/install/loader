@@ -163,7 +163,10 @@ else
   download_signed "https://shellscript.download/scripts/load.sh" "$HOME/.shellscript/bin/load.sh" || exit 3
 fi
 chmod a+x "$HOME/.shellscript/bin/load.sh"
-echo "✓ Shell script download loader successfully installed!"
+# shs: a shortcut for load.sh. A link to it, by its name, so that it follows its updates;
+# a command already named shs is left alone.
+[ -e "$HOME/.shellscript/bin/shs" ] || [ -L "$HOME/.shellscript/bin/shs" ] || ln -s load.sh "$HOME/.shellscript/bin/shs"
+echo "✓ Shell script download loader successfully installed! (shs is a shortcut for load.sh)"
 
 COMPLETION_DEST="$HOME/.shellscript/shellrc/01-load-completion.sh"
 if [ "$DEVELOPER" = "1" ]; then

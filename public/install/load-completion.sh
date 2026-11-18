@@ -48,4 +48,4 @@ _load_sh_completion() {
   esac
 }
 
-complete -F _load_sh_completion load.sh
+complete -F _load_sh_completion load.sh shs
