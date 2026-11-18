@@ -9,6 +9,12 @@ assert_output "bash -ic 'command -v load.sh' 2>/dev/null" "$LOADER_PATH"
 assert_exists "${SHELLSCRIPT_HOME}/shellrc/00-setup.sh"
 assert_exists "${SHELLSCRIPT_HOME}/shellrc/01-load-completion.sh"
 
+step "load: shs is a shortcut for it, on the PATH of a new shell, with its completion"
+assert_output "readlink '${SHELLSCRIPT_HOME}/bin/shs'" "load.sh"
+assert_output "bash -ic 'command -v shs' 2>/dev/null" "${SHELLSCRIPT_HOME}/bin/shs"
+assert_output "bash -ic 'complete -p shs' 2>/dev/null" "_load_sh_completion"
+assert_output "shs --help 2>/dev/null" "--update-system"
+
 step "load: as root, installs for root, and never in the HOME of another user"
 assert_exit 0 "sudo ${LOADER_PATH} --developer ${SCRIPTS_DIR} jq"
 assert_exit 0 "sudo test -x /root/.shellscript/bin/jq"
@@ -17,6 +23,46 @@ assert_missing "${SHELLSCRIPT_HOME}/bin/jq"
 assert_exit 1 "sudo env HOME=${HOME} ${LOADER_PATH} --developer ${SCRIPTS_DIR} jq"
 assert_log "is not owned by root"
 assert_missing "${SHELLSCRIPT_HOME}/bin/jq"
+
+step "load: 'sudo load.sh' says it installs for root, and asks when there is a terminal"
+# Without a terminal (a script, CI): said, not asked
+assert_exit 0 "sudo ${LOADER_PATH} --developer ${SCRIPTS_DIR} --dont-run jq < /dev/null"
+assert_log "it installs for root, in /root/.shellscript, not for $(id -un)"
+assert_no_output "cat '${LOG_FILE}'" "Continue as root?"
+# As root itself, with no sudo in between: nothing to say
+assert_exit 0 "sudo env -u SUDO_USER -u SUDO_COMMAND ${LOADER_PATH} --developer ${SCRIPTS_DIR} --dont-run jq"
+assert_no_output "cat '${LOG_FILE}'" "Warning"
+# in_terminal <answer> <command...>: runs it in a terminal, answers the question, and
+# exits as it did
+sys_install python3
+in_terminal() {
+  python3 -c '
+import os, pty, sys
+pid, fd = pty.fork()
+if pid == 0:
+    os.execvp(sys.argv[2], sys.argv[2:])
+out, sent = b"", False
+while True:
+    try:
+        data = os.read(fd, 1024)
+    except OSError:
+        break
+    if not data:
+        break
+    out += data
+    if not sent and b"[Y/n]" in out:
+        os.write(fd, sys.argv[1].encode() + b"\n")
+        sent = True
+sys.stdout.write(out.decode(errors="replace"))
+sys.exit(os.waitstatus_to_exitcode(os.waitpid(pid, 0)[1]))
+' "$@"
+}
+export -f in_terminal
+assert_exit 1 "in_terminal n sudo ${LOADER_PATH} --developer ${SCRIPTS_DIR} --dont-run jq"
+assert_log "Continue as root? [Y/n]"
+assert_no_output "cat '${LOG_FILE}'" "Script ensured at"
+assert_exit 0 "in_terminal '' sudo ${LOADER_PATH} --developer ${SCRIPTS_DIR} --dont-run jq"
+assert_log "Script ensured at"
 
 step "load: usage and wrong calls"
 assert_exit 0 "${LOADER} --help"
@@ -261,6 +307,7 @@ load jq -- --version 1.7.1
 load ssh-agent-e2e
 assert_output "${LOADER} --list 2>/dev/null | grep '^jq ' | awk '{print \$2}'" "1.7.1"
 assert_output "${LOADER} --installed 2>/dev/null | grep '^jq '" "1.7.1"
+assert_output "${LOADER} --installed 2>/dev/null | grep '^jq ' | awk '{print \$3}'" "user"
 assert_output "${LOADER} --installed 2>/dev/null | grep '^ssh-agent-e2e ' | awk '{print \$2}'" "yes"
 assert_no_output "${LOADER} --installed 2>/dev/null" "yq"
 assert_output "${LOADER} --installed 2>/dev/null | grep -c ." "4"
@@ -470,19 +517,53 @@ assert_missing "${cached}/shared-e2e.sh"
 assert_exit 0 "${signed_loader} shared-e2e"
 assert_log "ran from ${shared}"
 assert_no_output "cat '${LOG_FILE}'" "Fetching"
+# --update never calls sudo: a sudo first on the PATH says if it is called
+nosudo="$(mktemp -d)"
+printf '#!/bin/sh\ntouch /tmp/e2e-sudo-called\nexit 1\n' > "${nosudo}/sudo"
+chmod +x "${nosudo}/sudo"
+rm -f /tmp/e2e-sudo-called
+# Nothing newer: nothing is written
+shared_date="$(stat -c %Y "${shared}/shared-e2e.sh")"
+sleep 1
+assert_exit 0 "PATH=${nosudo}:\$PATH ${signed_loader} --update --dont-run shared-e2e"
+assert_output "stat -c %Y '${shared}/shared-e2e.sh'" "$shared_date"
+assert_missing /tmp/e2e-sudo-called
 # Changed after it was signed: refused, and the shared copy stays
 echo "# tampered-e2e" >> "${site}/scripts/shared-e2e.sh"
 assert_exit 3 "${signed_loader} --update --dont-run shared-e2e"
 assert_no_output "cat '${shared}/shared-e2e.sh'" "tampered-e2e"
 sign "${site}/scripts/shared-e2e.sh"
-# One in the cache of the user, from an older loader: runs from there, until --update
-# moves it where every user has it
+# Newer, and signed: --update leaves the shared copy, says how to update it, and runs
+# the one it has
+assert_exit 4 "PATH=${nosudo}:\$PATH ${signed_loader} --update --dont-run shared-e2e"
+assert_log "'load.sh --update-system' updates it (requires admin)"
+assert_no_output "cat '${shared}/shared-e2e.sh'" "tampered-e2e"
+assert_exit 0 "PATH=${nosudo}:\$PATH ${signed_loader} --update shared-e2e"
+assert_log "ran from ${shared}"
+assert_missing /tmp/e2e-sudo-called
+# --update alone says it too, on the line of the script. In a HOME of its own: the
+# scripts of the test would all be asked for to the site of the test.
+update_home="$(mktemp -d)"
+mkdir -p "${update_home}/.shellscript/bin"
+cp "$signed_loader" "${update_home}/.shellscript/bin/load.sh"
+assert_exit 0 "HOME=${update_home} PATH=${nosudo}:\$PATH bash ${update_home}/.shellscript/bin/load.sh --update 2>/dev/null"
+assert_output "grep '^shared-e2e.sh ' '${LOG_FILE}'" "skipped, use 'load.sh --update-system' to update: requires admin"
+assert_missing /tmp/e2e-sudo-called
+# --update-system updates it, with sudo
+assert_exit 0 "${signed_loader} --update-system --dont-run shared-e2e"
+assert_output "cat '${shared}/shared-e2e.sh'" "tampered-e2e"
+# One in the cache of the user, from an older loader: runs from there. --update leaves
+# it there; --update-system moves it where every user has it.
 sudo rm -f "${shared}/shared-e2e.sh"
 cp "${site}/scripts/shared-e2e.sh" "${cached}/shared-e2e.sh"
 chmod +x "${cached}/shared-e2e.sh"
 assert_exit 0 "${signed_loader} shared-e2e"
 assert_log "ran from ${cached}"
-assert_exit 0 "${signed_loader} --update --dont-run shared-e2e"
+assert_exit 0 "PATH=${nosudo}:\$PATH ${signed_loader} --update --dont-run shared-e2e"
+assert_missing "${shared}/shared-e2e.sh"
+assert_exists "${cached}/shared-e2e.sh"
+assert_missing /tmp/e2e-sudo-called
+assert_exit 0 "${signed_loader} --update-system --dont-run shared-e2e"
 assert_exists "${shared}/shared-e2e.sh"
 assert_missing "${cached}/shared-e2e.sh"
 sudo rm -rf "$shared"
@@ -522,10 +603,16 @@ installed="${SHELLSCRIPT_HOME}/bin/load.sh"
 cached="${SHELLSCRIPT_HOME}/downloads"
 working_copy="/tmp/e2e-load.sh"
 cp "$installed" "$working_copy"
+# Only what these steps check: jq and the file it shares, and a script that is not
+# published. Every other script would be one more download of the same kind, through
+# the same download() (its retries have a step of their own).
+find "$cached" -maxdepth 1 -name '*.sh' ! -name jq.sh -delete
 echo "# stale-e2e" >> "$installed"
 echo "# stale-e2e" >> "${cached}/jq.sh"
 echo "# stale-e2e" >> "${cached}/lib/binary-install.sh"
 rm -f "${SHELLSCRIPT_HOME}/shellrc/01-load-completion.sh"
+# As a loader installed before shs: --update creates it
+rm -f "${SHELLSCRIPT_HOME}/bin/shs"
 fixture only-here-e2e <<'PROBE'
 #!/usr/bin/env bash
 touch "$HOME/e2e-update-ran-a-script"
@@ -535,6 +622,8 @@ assert_exit 0 "${LOADER} --update 2>/dev/null"
 cp "$LOG_FILE" /tmp/e2e-update.log
 assert_output "grep '^load.sh ' /tmp/e2e-update.log" "updated"
 assert_output "grep '^completion ' /tmp/e2e-update.log" "updated"
+assert_output "grep '^shs ' /tmp/e2e-update.log" "created, a shortcut for load.sh"
+assert_output "readlink '${SHELLSCRIPT_HOME}/bin/shs'" "load.sh"
 assert_output "grep '^jq.sh ' /tmp/e2e-update.log" "updated"
 assert_output "grep '^only-here-e2e.sh ' /tmp/e2e-update.log" "could not be downloaded, kept as it is"
 assert_no_output "cat '${installed}' '${cached}/jq.sh' '${cached}/lib/binary-install.sh'" "stale-e2e"
@@ -544,8 +633,12 @@ assert_exists "${cached}/only-here-e2e.sh"
 assert_missing "${SHELLSCRIPT_HOME}/bin/jq"
 assert_missing "${HOME}/e2e-update-ran-a-script"
 
-step "load: --update again finds everything up to date"
+step "load: --update again finds everything up to date, and leaves a command of its own named shs"
+rm -f "${SHELLSCRIPT_HOME}/bin/shs"
+printf '#!/bin/sh\necho mine-e2e\n' > "${SHELLSCRIPT_HOME}/bin/shs"
 assert_exit 0 "bash ${working_copy} --update 2>/dev/null"
+assert_output "cat '${SHELLSCRIPT_HOME}/bin/shs'" "mine-e2e"
+assert_no_output "cat '${LOG_FILE}'" "a shortcut for load.sh"
 cp "$LOG_FILE" /tmp/e2e-update.log
 assert_output "grep '^load.sh ' /tmp/e2e-update.log" "up to date"
 assert_output "grep '^completion ' /tmp/e2e-update.log" "up to date"
