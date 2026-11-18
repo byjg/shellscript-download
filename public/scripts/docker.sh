@@ -84,16 +84,18 @@ fi
 # Docker installed: its packages come from its repository, and the package manager
 # upgrades them. The installer would install them again, and reset the configuration of
 # the repository, after a warning and 20 seconds of wait: not without --force.
+# An older version kept the installer in the cache of the loader, where it is not a
+# script of the catalog
+[[ ! -f "${SHELLSCRIPT_DOWNLOADS}/get-docker.sh" ]] || run "rm -f \"${SHELLSCRIPT_DOWNLOADS}/get-docker.sh\""
+
 if [[ "$FORCE" != "1" ]] && command -v docker >/dev/null 2>&1; then
   log "$(docker --version) is already installed: the package manager upgrades it (apt upgrade, dnf upgrade). --force runs its installer again."
 else
-  # Prepare destination folder for downloaded installer
-  DEST_FOLDER="${SHELLSCRIPT_DOWNLOADS}"
-  run "mkdir -p \"$DEST_FOLDER\""
-
-  # The installer of Docker, downloaded each time it runs: Docker changes it, and an old
-  # one could install what Docker no longer publishes
-  INSTALLER="$DEST_FOLDER/get-docker.sh"
+  # The installer of Docker, downloaded each time it runs (Docker changes it, and an old
+  # one could install what Docker no longer publishes), to a folder that goes away
+  TEMP_DIR=$(mktemp -d)
+  trap 'rm -rf "$TEMP_DIR"' EXIT
+  INSTALLER="${TEMP_DIR}/get-docker.sh"
   log "Downloading Docker installer..."
   run "download https://get.docker.com \"$INSTALLER\""
 

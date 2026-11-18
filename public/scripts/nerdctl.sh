@@ -253,9 +253,10 @@ if [[ "$FORCE" != "1" && -x "${INSTALL_DIR}/bin/nerdctl" ]] \
     && declare -F already_installed >/dev/null && already_installed "$DOWNLOAD_URL" "$STAMP_FILE"; then
   log "nerdctl ${NERDCTL_VERSION} is already installed. Skipping download (use --force to re-download)."
 else
-  # Close to 1 GB with the archive: on the home disk, since /tmp is often a small tmpfs
-  mkdir -p "${SHELLSCRIPT_DOWNLOADS}"
-  TEMP_DIR=$(mktemp -d "${SHELLSCRIPT_DOWNLOADS}/nerdctl.XXXXXX")
+  # Close to 1 GB with the archive: on the home disk, since /tmp is often a small tmpfs,
+  # in the folder of nerdctl (not in the cache of the loader), and gone at the end
+  mkdir -p "${NERDCTL_HOME}"
+  TEMP_DIR=$(mktemp -d "${NERDCTL_HOME}/.download.XXXXXX")
   trap 'rm -rf "$TEMP_DIR"' EXIT
 
   log "Installing nerdctl ${NERDCTL_VERSION} to ${INSTALL_DIR}"
