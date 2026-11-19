@@ -4,6 +4,18 @@ source "$(dirname "${BASH_SOURCE[0]}")/../shared/lib.sh"
 
 shellrc="${SHELLSCRIPT_HOME}/shellrc/ssh-agent-init.sh"
 
+# The running agents, from /proc: the images do not all have pgrep. A killed agent stays
+# a zombie, since nothing in the container reaps it, and is not counted.
+running_agents() {
+  local p
+  for p in /proc/[0-9]*; do
+    [[ "$(cat "$p/comm" 2>/dev/null)" == "ssh-agent" ]] || continue
+    grep -q '^State:.*Z' "$p/status" 2>/dev/null || echo "${p#/proc/}"
+  done
+}
+export -f running_agents
+kill_agents() { running_agents | xargs -r kill; }
+
 step "ssh-agent: needs the OpenSSH client, and says so"
 load_fails ssh-agent
 assert_log "Required command 'ssh-agent' not found"
@@ -40,6 +52,28 @@ load ssh-agent -- --key ~/.ssh/work_key
 assert_output "cat '${shellrc}'" "ssh-add \"${HOME}/.ssh/work_key\""
 assert_no_output "cat '${shellrc}'" "id_ed25519"
 assert_output "unset SSH_AUTH_SOCK; . '${shellrc}'; ssh-add -l | wc -l; ssh-agent -k >/dev/null" "1"
+
+step "ssh-agent: a --key that does not exist stops, and keeps the shell init"
+before="$(cat "$shellrc")"
+load_fails ssh-agent -- --key ~/.ssh/no_such_key
+assert_log "Key not found: ${HOME}/.ssh/no_such_key"
+if [[ "$(cat "$shellrc")" == "$before" ]]; then pass "the shell init is the same"; else fail "the shell init changed"; fi
+
+step "ssh-agent: new shells share one agent, and add the key once"
+new_shell="bash -c 'unset SSH_AUTH_SOCK SSH_AGENT_PID; . ${shellrc}' 2>&1"
+assert_output "$new_shell" "Identity added: ${HOME}/.ssh/work_key"
+assert_no_output "$new_shell" "Identity added"
+assert_output "running_agents | wc -l" "1"
+assert_output "SSH_AUTH_SOCK=${HOME}/.ssh/agent.sock ssh-add -l | wc -l" "1"
+
+step "ssh-agent: a key that is gone is warned about, and starts no other agent"
+mv ~/.ssh/work_key ~/.ssh/work_key.bak
+kill_agents
+assert_output "$new_shell" "ssh-agent-init: key not found: ${HOME}/.ssh/work_key"
+assert_output "$new_shell" "ssh-agent-init: key not found"
+assert_output "running_agents | wc -l" "1"
+kill_agents
+mv ~/.ssh/work_key.bak ~/.ssh/work_key
 
 step "ssh-agent: remove takes the shell init out"
 load remove -- ssh-agent
